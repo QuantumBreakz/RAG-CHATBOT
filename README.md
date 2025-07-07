@@ -1,87 +1,177 @@
-# PITB RAG Model - Government Edition
+# PITB RAG Chatbot – Secure, Offline, Multi-Document Q&A
 
-A fully offline, secure Streamlit app for Retrieval-Augmented Generation (RAG) that allows you to upload multiple PDF or DOCX files, ask questions, and get the most relevant document chunks using local language models and vector search. Designed for governmental and sensitive environments—no internet required.
+A robust, production-ready, fully offline RAG (Retrieval-Augmented Generation) chatbot for document Q&A, built with Streamlit, ChromaDB, and Ollama. Designed for governmental and sensitive environments—no internet required after setup.
+
+---
 
 ## Features
-- Upload and process multiple PDF or DOCX files
-- Automatic document chunking for semantic search
-- Query interface for asking questions about your documents
-- All AI inference and vector search runs locally (Ollama + ChromaDB)
-- Clean, modern Streamlit UI with PITB branding
-- Telemetry and usage stats are disabled by default
 
-## Requirements
-- Python 3.9+
-- See `requirements.txt` for all dependencies
+- Upload and query multiple PDF/DOCX files in a single chat
+- Real-time, streaming LLM responses (word-by-word)
+- Persistent, multi-chat history with context and uploads
+- Efficient, cached vector storage (ChromaDB)
+- Per-chat and global embedding management
+- Robust error handling, duplicate prevention, and UI state management
+- PITB branding, dark/light theme, and modern UX
+- Fully local: no internet required after setup
 
-## Installation
-1. **Clone the repository:**
+---
+
+## Architecture
+
+![Architecture Diagram](assets/architecture.png)
+
+- **Frontend:** Streamlit app with sidebar, chat, upload, and settings UI
+- **Backend:**
+  - **Document Processing:** PDF/DOCX chunking, metadata, and hashing
+  - **Vector Store:** ChromaDB for persistent, local vector search
+  - **LLM:** Ollama for local language model inference and embeddings
+  - **Cache:** Per-chat and global embedding cache (by file hash)
+  - **History:** Persistent chat/context storage per chat
+- **Assets:** PITB branding, architecture diagrams
+- **Logs:** All chat, context, and embedding data is stored locally
+
+---
+
+## Directory Structure
+
+```
+.
+├── app.py                  # Streamlit entrypoint
+├── rag_core/               # Core RAG logic (vectorstore, LLM, document, cache, UI)
+├── assets/                 # Branding and architecture images
+├── log/                    # Chat history, embeddings, and logs
+├── demo-rag-chroma/        # ChromaDB persistent storage
+├── requirements.txt        # Python dependencies
+├── .env.example            # Environment variable template
+├── LICENSE
+├── README.md
+├── GUIDE.md
+└── ...
+```
+
+---
+
+## Quickstart
+
+1. **Clone and setup:**
    ```bash
    git clone https://github.com/QuantumBreakz/PITB-RAG.git
    cd PITB-RAG
-   ```
-2. **Create and activate a virtual environment:**
-   ```bash
    python3 -m venv venv
    source venv/bin/activate
-   ```
-3. **Install dependencies:**
-   ```bash
    pip install -r requirements.txt
-   ```
-4. **Configure environment variables:**
-   ```bash
    cp .env.example .env
-   # Edit .env file with your preferred settings
+   # Edit .env as needed
    ```
 
-## Usage
-1. **Start the Streamlit app:**
+2. **Run the app:**
    ```bash
    streamlit run app.py
    ```
-2. **Open your browser** to the local Streamlit URL (usually http://localhost:8501).
-3. **Upload one or more PDF or DOCX files** using the sidebar.
-4. **Enter your question/query** in the chat interface and click "Send".
-5. **View the top relevant chunks** as retrieved by the local vector search.
 
-## How It Works
-- Uploaded documents are split into semantic chunks using `langchain_text_splitters`.
-- Chunks are embedded and stored locally in ChromaDB.
-- When you enter a query, relevant chunks are retrieved using vector similarity.
-- The answer is generated using a local LLM via Ollama.
+3. **Upload documents, chat, and manage knowledge base via the sidebar.**
 
-## Security & Offline Operation
-- **No internet connection required** after initial setup and model download.
-- **Streamlit telemetry is disabled** via `.streamlit/config.toml`.
-- For production, run the app behind a secure reverse proxy (e.g., NGINX).
-- Add authentication if required for sensitive deployments.
+---
 
-## Environment Variables
-The application uses environment variables for configuration. Copy `.env.example` to `.env` and modify as needed:
+## Configuration
 
-- `OLLAMA_BASE_URL`: Ollama server URL (default: http://localhost:11434)
-- `OLLAMA_EMBEDDING_MODEL`: Embedding model name (default: nomic-embed-text:latest)
-- `OLLAMA_LLM_MODEL`: LLM model name (default: llama3.2:3b)
-- `MAX_FILE_SIZE`: Maximum file size in bytes (default: 10485760 = 10MB)
-- `CHUNK_SIZE`: Document chunk size (default: 400)
-- `CHUNK_OVERLAP`: Chunk overlap (default: 100)
-- `N_RESULTS`: Number of results to retrieve (default: 10)
-- `CHROMA_DB_PATH`: ChromaDB storage path (default: ./demo-rag-chroma)
-- `CHROMA_COLLECTION_NAME`: Collection name (default: pitb_rag_app_demo)
+All settings are via `.env` (see `.env.example`).
 
-## Customization
-- To support additional file types, extend the `process_documents` function.
-- Modify environment variables in `.env` file for different configurations.
+### Key Environment Variables
+
+| Variable                  | Description                                      | Default                        |
+|--------------------------|--------------------------------------------------|--------------------------------|
+| OLLAMA_BASE_URL          | Ollama server URL                                | http://localhost:11434         |
+| OLLAMA_EMBEDDING_MODEL   | Embedding model name                             | nomic-embed-text:latest        |
+| OLLAMA_LLM_MODEL         | LLM model name                                   | llama3.2:3b                    |
+| MAX_FILE_SIZE            | Max file size in bytes                           | 10485760 (10MB)                |
+| CHUNK_SIZE               | Document chunk size                              | 600                            |
+| CHUNK_OVERLAP            | Chunk overlap                                    | 200                            |
+| N_RESULTS                | Number of results to retrieve                    | 10                             |
+| CHROMA_DB_PATH           | ChromaDB storage path                            | ./demo-rag-chroma              |
+| CHROMA_COLLECTION_NAME   | ChromaDB collection name                         | pitb_rag_app_demo              |
+| CACHE_TTL                | Embedding cache time-to-live (seconds)           | 86400                          |
+| EMBEDDINGS_CACHE_PATH    | Path for embedding cache                         | ./log/global_embeddings        |
+| LOG_FILE                 | Log file path                                    | ./log/pitb_rag_app.log         |
+| LOG_LEVEL                | Logging level (DEBUG, INFO, etc.)                | INFO                           |
+
+---
+
+## Advanced Usage
+
+### Streaming LLM Output
+- Answers appear word-by-word in the chat for fast, interactive feedback.
+- Uses Ollama’s streaming API and Streamlit’s dynamic UI updates.
+
+### Multi-Document Q&A
+- Upload multiple documents; queries search all by default.
+- If only one document is uploaded, retrieval is restricted to that document.
+- All document chunks are stored with metadata for precise filtering.
+
+### Knowledge Base Reset
+- Use the sidebar “Reset Knowledge Base” button to clear all embeddings and uploads.
+- Ensures no cross-document contamination between sessions.
+
+### Persistent Chat History
+- All chats, uploads, and context are saved per chat in `log/conversations/`.
+- Reload any chat, edit user messages, and manage uploads per chat.
+
+### Robust Error Handling
+- User-friendly error messages for missing context, LLM errors, or file issues.
+- Debug logs are written to `log/pitb_rag_app.log` for troubleshooting.
+
+---
 
 ## Troubleshooting
-- **Imports not resolved in IDE:**
-  - Ensure your IDE is using the correct Python interpreter from your virtual environment.
-  - Restart your IDE after installing dependencies.
+
+- **No response or slow answers:**
+  - Ensure Ollama and ChromaDB are running and accessible.
+  - Check logs in `log/pitb_rag_app.log` for errors.
 - **CUDA/torch errors:**
   - If you have a GPU, install the appropriate torch version for CUDA. Otherwise, use CPU-only mode.
 - **Large PDF files:**
   - Processing very large PDFs may be slow or memory-intensive. Consider splitting them before upload.
+- **Streamlit widget errors:**
+  - Ensure all widget keys are unique. If you see duplicate key errors, clear browser cache or reset the app.
+- **Session state errors:**
+  - The app auto-initializes session state, but if you see missing key errors, restart the app.
+
+---
+
+## Customization & Extension
+
+- **Add new file types:**
+  - Extend `DocumentProcessor` in `rag_core/document.py`.
+- **Add new vector backends:**
+  - Implement a new `VectorStore` in `rag_core/vectorstore.py`.
+- **Add new LLMs:**
+  - Update `rag_core/llm.py` with new API logic.
+- **Change chunking or retrieval:**
+  - Adjust `CHUNK_SIZE`, `CHUNK_OVERLAP`, and `N_RESULTS` in `.env` or via the UI settings.
+- **Branding:**
+  - Replace images in `assets/` for your organization’s branding.
+
+---
+
+## For Developers & Contributors
+
+- All core logic is in `rag_core/` (see its README for details).
+- Code is modular and extensible for new file types, LLMs, or vector stores.
+- All persistent data is stored in `log/` and `demo-rag-chroma/`.
+- Use `GUIDE.md` for advanced deployment, backup, and migration instructions.
+- PRs and issues are welcome! Please follow the contribution guidelines in `GUIDE.md`.
+
+---
+
+## Security & Privacy
+
+- All data, embeddings, and chat logs are stored locally.
+- No telemetry, no external API calls after setup.
+- For production, use HTTPS and add authentication as needed.
+- Review and secure the `.env` file for sensitive deployments.
+
+---
 
 ## License
 MIT License
