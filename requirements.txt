@@ -1,0 +1,9 @@
+streamlit==1.46.1
+langchain-community==0.3.27
+langchain-core==0.3.68
+langchain-text-splitters==0.3.8
+sentence-transformers==5.0.0
+pymupdf==1.26.3
+sqlite-utils==3.38
+chromadb==1.0.15
+ollama==0.5.1 
