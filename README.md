@@ -19,7 +19,11 @@ A robust, production-ready, fully offline RAG (Retrieval-Augmented Generation) c
 
 ## Architecture
 
-![Architecture Diagram](assets/architecture.png)
+<p align="center">
+  <img src="assets/architecture.png" alt="System Architecture Diagram" width="600"/>
+</p>
+
+**Figure:** System architecture showing the flow between Streamlit UI, document processing, ChromaDB vector store, Ollama LLM, and local storage. All components run locally for full offline operation.
 
 - **Frontend:** Streamlit app with sidebar, chat, upload, and settings UI
 - **Backend:**
