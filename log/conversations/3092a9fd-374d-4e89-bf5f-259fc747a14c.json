@@ -1,0 +1,28 @@
+{
+  "id": "3092a9fd-374d-4e89-bf5f-259fc747a14c",
+  "title": "RAG Chatbot",
+  "created_at": "2025-07-07T17:47:33",
+  "messages": [
+    {
+      "role": "user",
+      "content": "tell me what is real time database and what kind of dbs we can use?",
+      "timestamp": "2025-07-07T17:45:45"
+    },
+    {
+      "role": "ai",
+      "content": "Real-time databases are designed to handle high-performance, low-latency transactions that require immediate response times. They typically offer the following characteristics:\n\n* **High availability**: Real-time databases ensure that data remains consistent across all nodes in the system.\n* **Low latency**: Transactions are processed quickly, often in milliseconds or microseconds.\n* **Scalability**: Real-time databases can handle large volumes of data and scale horizontally to meet increasing demands.\n\nSome examples of real-time databases include:\n\n* **Cassandra**: A distributed NoSQL database designed for handling high-performance, low-latency transactions.\n* **RocksDB**: An open-source, embeddable NoSQL database optimized for performance and scalability.\n* **LevelDB**: A lightweight, embedded NoSQL database that provides a simple and efficient storage solution.\n\nFor the context of storing document text or embeddings for semantic retrieval, real-time databases may not be the best choice. Instead, consider using:\n\n* **Vector databases** (e.g., FAISS): Ideal for RAG, enabling fast similarity searches.\n* **Full-text search databases** (e.g., PostgreSQL, SQLite): Suitable for traditional database queries but less effective for semantic queries.\n\nIn your case, storing embeddings in a vector database like FAISS would be an efficient and scalable solution.",
+      "timestamp": "2025-07-07T17:47:17"
+    }
+  ],
+  "uploads": [
+    {
+      "filename": "RAG Chatbot.pdf",
+      "file_hash": "9bfb4dc59f64c7f0965494b888172c5469a666df3907e736f2e6133594d8e75e",
+      "metadata": {
+        "size": 51374,
+        "type": "application/pdf",
+        "uploaded_at": "2025-07-07T17:45:29"
+      }
+    }
+  ]
+}

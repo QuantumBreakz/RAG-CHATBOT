@@ -46,7 +46,7 @@ env/
 # VSCode/IDE
 .vscode/
 .idea/
-*.swp
+*.swp 
 
 # Environment variables
 .env
