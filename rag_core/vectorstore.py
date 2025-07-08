@@ -42,22 +42,21 @@ class VectorStore:
             for i in range(0, total_chunks, batch_size):
                 batch_end = min(i + batch_size, total_chunks)
                 batch_splits = all_splits[i:batch_end]
-                
+
                 documents, metadatas, ids = [], [], []
                 for idx, split in enumerate(batch_splits):
                     documents.append(split.page_content)
                     metadatas.append(split.metadata)
                     ids.append(f"{file_name}_{i + idx}")
-                
+
                 # Add batch with timeout handling
                 try:
                     collection.upsert(documents=documents, metadatas=metadatas, ids=ids)
                     logger.info(f"Added batch {i//batch_size + 1} ({len(documents)} chunks) for {file_name}")
-                    
+
                     # Small delay between batches to prevent overwhelming the system
                     if batch_end < total_chunks:
                         time.sleep(0.5)
-                        
                 except Exception as batch_error:
                     logger.error(f"Error adding batch {i//batch_size + 1} for {file_name}: {str(batch_error)}")
                     raise batch_error

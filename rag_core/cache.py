@@ -20,7 +20,7 @@ def save_embeddings_to_cache(file_hash, embeddings):
 # Load embeddings from cache
 def load_embeddings_from_cache(file_hash):
     with open(get_cache_path(file_hash), "rb") as f:
-        return pickle.load(f)
+        return pickle.load(f) 
 
 # --- Global embedding cache ---
 GLOBAL_EMBEDDINGS_PATH = os.path.join(os.path.dirname(__file__), '..', 'log', 'global_embeddings')

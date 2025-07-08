@@ -13,6 +13,39 @@ from datetime import datetime
 import base64
 import logging
 
+# ================= UI/UX Improvements Roadmap =================
+#
+# Visual Conversation Threading:
+#   - Visually group follow-up questions and answers.
+#   - Highlight when a user references a previous answer.
+#
+# Message Editing/Resending:
+#   - Allow users to edit and resend previous questions.
+#   - Clearly show which AI answer corresponds to which user message.
+#
+# Context Preview:
+#   - Show a summary/preview of the context/chunks used for each answer.
+#   - Let users see what the bot is referencing.
+#
+# History Navigation:
+#   - Enable scrolling, searching, or filtering previous messages.
+#   - Allow jumping to relevant points in the conversation.
+#
+# Feedback on Context Use:
+#   - After each answer, show a note: "This answer used X previous messages for context."
+#
+# File-by-File Recommendations:
+#   - rag_core/llm.py: Structured message list, history windowing, context window management.
+#   - rag_core/ui.py: Threading, context preview, message-level actions, history window size setting.
+#   - rag_core/document.py: Chunk linking, section headers.
+#   - rag_core/history.py: Message threads, summarization.
+#   - rag_core/vectorstore.py: Contextual retrieval, smarter chunk expansion.
+#   - rag_core/utils.py: Text summarization, context formatting.
+#
+# General Codebase Improvements:
+#   - Type annotations, modular prompt construction, unit tests, granular error handling.
+# ==============================================================
+
 # Helper to sync session state with persistent conversation
 
 def load_conversation_to_session(conv):
@@ -272,7 +305,7 @@ def main():
                         status_text.text("📄 Loading document...")
                         progress_bar.progress(20)
                         all_splits = DocumentProcessor.process_document(uploaded_file, file_bytes)
-                    if all_splits:
+                        if all_splits:
                             status_text.text(f"🔍 Creating embeddings for {len(all_splits)} chunks...")
                             progress_bar.progress(50)
                             success = VectorStore.add_to_vector_collection(all_splits, uploaded_file.name)
@@ -319,15 +352,31 @@ def main():
             st.session_state["n_results"] = n_results
 
     # --- Main Chat Area ---
-        st.markdown("<div style='height:12px'></div>", unsafe_allow_html=True)
-    
+    st.markdown("<div style='height:12px'></div>", unsafe_allow_html=True)
+
+    # Conversation History Navigation
+    with st.expander("🗂️ Conversation History", expanded=False):
+        search_query = st.text_input("Search messages", key="history_search")
+        filtered_history = [
+            (i, msg) for i, msg in enumerate(st.session_state.get("conversation_history", []))
+            if search_query.lower() in msg["content"].lower()
+        ] if search_query else list(enumerate(st.session_state.get("conversation_history", [])))
+        for i, msg in filtered_history:
+            role = "🧑‍💼 User" if msg["role"] == "user" else "🤖 AI"
+            snippet = msg["content"][:60] + ("..." if len(msg["content"]) > 60 else "")
+            ts = msg.get("timestamp", "")[:19]
+            highlight_style = "background:#ffe082; border-radius:6px;" if st.session_state.get("highlight_msg", -1) == i else ""
+            if st.button(f"{role} | {ts} | {snippet}", key=f"history_btn_{i}"):
+                st.session_state["highlight_msg"] = i
+        st.caption("Click a message to highlight it in the chat below.")
+
     # Chat header with current conversation info
     if st.session_state.get('conversation_title'):
         st.markdown(f"### 💬 {st.session_state.get('conversation_title')}")
-    
+
     # Chat container with better styling
-        chat_container = st.container()
-        with chat_container:
+    chat_container = st.container()
+    with chat_container:
         chat_placeholder = st.empty()
         with chat_placeholder.container():
             # Improved chat bubbles with better styling
@@ -336,6 +385,10 @@ def main():
                 is_user = msg["role"] == "user"
                 edit_key = f"edit_msg_{i}"
                 editing = st.session_state.get(edit_key, False)
+                is_followup = msg.get("followup_to") is not None
+                followup_badge = "<span style='color:#1976D2; font-size:13px; margin-left:8px;'>↩️ Follow-up</span>" if is_followup else ""
+                highlight = st.session_state.get("highlight_msg", -1) == i
+                highlight_box = "box-shadow: 0 0 0 3px #ffe082;" if highlight else ""
                 if is_user and editing:
                     new_text = st.text_area("Edit your message:", value=msg["content"], key=f"edit_input_{i}")
                     col1, col2 = st.columns(2)
@@ -362,161 +415,166 @@ def main():
                     if is_user:
                         col1, col2 = st.columns([8,1])
                         with col1:
-                    st.markdown(
+                            st.markdown(
                                 f"""
-                                <div style=\"display: flex; justify-content: flex-end; margin-bottom: 15px; padding: 0 10px;\">
+                                <div style=\"display: flex; justify-content: flex-end; margin-bottom: 15px; padding: 0 10px; {highlight_box}\">
                                     <div style=\"background: linear-gradient(135deg, #DCF8C6 0%, #C8E6C9 100%); color: #2E7D32; border-radius: 18px 18px 4px 18px; padding: 12px 18px; max-width: 70%; box-shadow: 0 2px 8px rgba(0,0,0,0.1); border: 1px solid #A5D6A7;\">
-                                        <div style=\"font-weight: 600; margin-bottom: 4px;\">You</div>
+                                        <div style=\"font-weight: 600; margin-bottom: 4px;\">You {followup_badge}</div>
                                         <div style=\"line-height: 1.4;\">{msg['content']}</div>
                                         <div style=\"font-size: 11px; color: #666; margin-top: 6px; text-align: right;\">{msg.get('timestamp', '')[:19]}</div>
                                     </div>
                                 </div>
                                 """,
-                        unsafe_allow_html=True
-                    )
+                                unsafe_allow_html=True
+                            )
                         with col2:
                             if st.button("✏️", key=f"edit_btn_{i}"):
                                 st.session_state[edit_key] = True
                                 st.rerun()
-                else:
-                    st.markdown(
+                    else:
+                        st.markdown(
                             f"""
-                            <div style=\"display: flex; justify-content: flex-start; margin-bottom: 15px; padding: 0 10px;\">
+                            <div style=\"display: flex; justify-content: flex-start; margin-bottom: 15px; padding: 0 10px; {highlight_box}\">
                                 <div style=\"background: linear-gradient(135deg, #F5F5F5 0%, #E0E0E0 100%); color: #424242; border-radius: 18px 18px 18px 4px; padding: 12px 18px; max-width: 70%; box-shadow: 0 2px 8px rgba(0,0,0,0.1); border: 1px solid #D0D0D0;\">
-                                    <div style=\"font-weight: 600; margin-bottom: 4px; color: #1976D2;\">AI Assistant</div>
+                                    <div style=\"font-weight: 600; margin-bottom: 4px; color: #1976D2;\">AI Assistant {followup_badge}</div>
                                     <div style=\"line-height: 1.4;\">{msg['content']}</div>
                                     <div style=\"font-size: 11px; color: #666; margin-top: 6px; text-align: right;\">{msg.get('timestamp', '')[:19]}</div>
                                 </div>
                             </div>
                             """,
-                        unsafe_allow_html=True
-                    )
-    
-    # Chat input with better styling
-    st.markdown("---")
-    # Disable chat input while processing
-    is_processing = st.session_state.get('is_processing', False)
-    chat_input_key = f"chat_input_{st.session_state.get('conversation_id', '')}_{len(st.session_state.get('conversation_history', []))}"
+                            unsafe_allow_html=True
+                        )
+                if not is_user and msg.get("context_preview"):
+                    with st.expander("Context Used", expanded=False):
+                        st.markdown(f"<div style='font-size:13px; color:#333; background:#f9f9f9; border-radius:8px; padding:8px 12px; margin-bottom:4px;'>{msg['context_preview']}</div>", unsafe_allow_html=True)
+        # End of chat rendering loop
 
-    # Use a form to ensure only Enter submits the chat input
-    with st.form(key="chat_input_form", clear_on_submit=False):
-        chat_input = st.text_input(
-            "💬 Type your question and press Enter", 
-            key=chat_input_key, 
-            value=st.session_state.get('chat_input_value', ''),
-            placeholder="Ask about your uploaded documents...",
-            disabled=is_processing
-        )
-        submitted = st.form_submit_button("Send", use_container_width=True)
+        # Chat input with better styling
+        st.markdown("---")
+        # Disable chat input while processing
+        is_processing = st.session_state.get('is_processing', False)
+        chat_input_key = f"chat_input_{st.session_state.get('conversation_id', '')}_{len(st.session_state.get('conversation_history', []))}"
 
-    # If no chat is loaded, prompt user to start/select a chat
-    if 'conversation_id' not in st.session_state or not st.session_state.get('conversation_id'):
-        st.info("No active chat. Please start a new chat or select one from the sidebar.")
-    elif submitted and chat_input and not is_processing:
-        st.session_state['is_processing'] = True
+        # Use a form to ensure only Enter submits the chat input
+        with st.form(key="chat_input_form", clear_on_submit=False):
+            chat_input = st.text_input(
+                "💬 Type your question and press Enter", 
+                key=chat_input_key, 
+                value=st.session_state.get('chat_input_value', ''),
+                placeholder="Ask about your uploaded documents...",
+                disabled=is_processing
+            )
+            submitted = st.form_submit_button("Send", use_container_width=True)
+
+        # If no chat is loaded, prompt user to start/select a chat
+        if 'conversation_id' not in st.session_state or not st.session_state.get('conversation_id'):
+            st.info("No active chat. Please start a new chat or select one from the sidebar.")
+        elif submitted and chat_input and not is_processing:
+            st.session_state['is_processing'] = True
             sanitized_prompt = sanitize_input(chat_input.strip())
             if "conversation_history" not in st.session_state:
                 st.session_state["conversation_history"] = []
-        # Guard: Prevent duplicate user messages
-        if len(st.session_state["conversation_history"]) > 0 and st.session_state["conversation_history"][-1]["role"] == "user" and st.session_state["conversation_history"][-1]["content"] == sanitized_prompt:
-            st.session_state['is_processing'] = False
-            st.session_state['chat_input_value'] = ''
-            st.experimental_set_query_params(**{})  # Clear widget value
-            st.warning("Duplicate message ignored.")
-        else:
-            # Add user message
-            st.session_state["conversation_history"].append({
-                "role": "user", 
-                "content": sanitized_prompt, 
-                "timestamp": datetime.now().isoformat(timespec='seconds')
-            })
-            st.session_state['chat_input_value'] = ''
-            # Save to disk immediately
-            save_session_to_disk()
-            # Save context after user message
-            history.save_chat_context(st.session_state['conversation_id'], st.session_state['conversation_history'])
-            # Always save conversation history for all chats
-            history.save_conversation({
-                'id': st.session_state['conversation_id'],
-                'title': st.session_state.get('conversation_title', ''),
-                'created_at': st.session_state.get('conversation_created_at', datetime.now().isoformat(timespec='seconds')),
-                'messages': st.session_state.get('conversation_history', []),
-                'uploads': st.session_state.get('uploads', [])
-            })
-            with st.spinner("🤔 Thinking..."):
-                # Allow retrieval from all uploaded documents if more than one is present
-                uploads = st.session_state.get('uploads', [])
-                if len(uploads) == 1:
-                    selected_filename = uploads[0]['filename']
-                else:
-                    selected_filename = None  # Search all documents
-                results = VectorStore.query_with_expanded_context(
-                        sanitized_prompt,
-                    n_results=st.session_state.get("n_results", 3),
-                    expand=2,
-                    filename=selected_filename
-                    )
+            # Guard: Prevent duplicate user messages
+            if len(st.session_state["conversation_history"]) > 0 and st.session_state["conversation_history"][-1]["role"] == "user" and st.session_state["conversation_history"][-1]["content"] == sanitized_prompt:
+                st.session_state['is_processing'] = False
+                st.session_state['chat_input_value'] = ''
+                st.experimental_set_query_params(**{})  # Clear widget value
+                st.warning("Duplicate message ignored.")
+            else:
+                # Add user message
+                st.session_state["conversation_history"].append({
+                    "role": "user", 
+                    "content": sanitized_prompt, 
+                    "timestamp": datetime.now().isoformat(timespec='seconds')
+                })
+                st.session_state['chat_input_value'] = ''
+                # Save to disk immediately
+                save_session_to_disk()
+                # Save context after user message
+                history.save_chat_context(st.session_state['conversation_id'], st.session_state['conversation_history'])
+                # Always save conversation history for all chats
+                history.save_conversation({
+                    'id': st.session_state['conversation_id'],
+                    'title': st.session_state.get('conversation_title', ''),
+                    'created_at': st.session_state.get('conversation_created_at', datetime.now().isoformat(timespec='seconds')),
+                    'messages': st.session_state.get('conversation_history', []),
+                    'uploads': st.session_state.get('uploads', [])
+                })
+                with st.spinner("🤔 Thinking..."):
+                    # Allow retrieval from all uploaded documents if more than one is present
+                    uploads = st.session_state.get('uploads', [])
+                    if len(uploads) == 1:
+                        selected_filename = uploads[0]['filename']
+                    else:
+                        selected_filename = None  # Search all documents
+                    results = VectorStore.query_with_expanded_context(
+                            sanitized_prompt,
+                        n_results=st.session_state.get("n_results", 3),
+                        expand=2,
+                        filename=selected_filename
+                        )
                     context = results.get("documents", [[]])[0] if results.get("documents") else []
                     context_str = " ".join(context)
-                logging.info(f"[DEBUG] context_str: {context_str}")
-                if not context_str.strip():
-                    st.session_state["conversation_history"].append({
-                        "role": "ai", 
-                        "content": "[No relevant context found for your query. Please try rephrasing or uploading more documents.]", 
-                        "timestamp": datetime.now().isoformat(timespec='seconds')
-                    })
-                    save_session_to_disk()
-                    history.save_chat_context(st.session_state['conversation_id'], st.session_state['conversation_history'])
-                    st.session_state['is_processing'] = False
-                    st.session_state['chat_input_value'] = ''
-                    st.experimental_set_query_params(**{})
-                    st.rerun()
-                else:
-                    try:
-                        # Stream the LLM response word by word
-                        response_placeholder = st.empty()
-                        streamed_response = ""
-                        def stream_callback(word):
-                            nonlocal streamed_response
-                            streamed_response += word
-                            response_placeholder.markdown(
-                                f"""
-                                <div style=\"display: flex; justify-content: flex-start; margin-bottom: 15px; padding: 0 10px;\">
-                                    <div style=\"background: linear-gradient(135deg, #F5F5F5 0%, #E0E0E0 100%); color: #424242; border-radius: 18px 18px 18px 4px; padding: 12px 18px; max-width: 70%; box-shadow: 0 2px 8px rgba(0,0,0,0.1); border: 1px solid #D0D0D0;\">
-                                        <div style=\"font-weight: 600; margin-bottom: 4px; color: #1976D2;\">AI Assistant</div>
-                                        <div style=\"line-height: 1.4;\">{streamed_response}</div>
-                                        <div style=\"font-size: 11px; color: #666; margin-top: 6px; text-align: right;\">{datetime.now().isoformat(timespec='seconds')[:19]}</div>
+                    logging.info(f"[DEBUG] context_str: {context_str}")
+                    if not context_str.strip():
+                        st.session_state["conversation_history"].append({
+                            "role": "ai", 
+                            "content": "[No relevant context found for your query. Please try rephrasing or uploading more documents.]", 
+                            "timestamp": datetime.now().isoformat(timespec='seconds')
+                        })
+                        save_session_to_disk()
+                        history.save_chat_context(st.session_state['conversation_id'], st.session_state['conversation_history'])
+                        st.session_state['is_processing'] = False
+                        st.session_state['chat_input_value'] = ''
+                        st.experimental_set_query_params(**{})
+                        st.rerun()
+                    else:
+                        try:
+                            # Stream the LLM response word by word
+                            response_placeholder = st.empty()
+                            streamed_response = ""
+                            def stream_callback(word):
+                                nonlocal streamed_response
+                                streamed_response += word
+                                response_placeholder.markdown(
+                                    f"""
+                                    <div style=\"display: flex; justify-content: flex-start; margin-bottom: 15px; padding: 0 10px;\">
+                                        <div style=\"background: linear-gradient(135deg, #F5F5F5 0%, #E0E0E0 100%); color: #424242; border-radius: 18px 18px 18px 4px; padding: 12px 18px; max-width: 70%; box-shadow: 0 2px 8px rgba(0,0,0,0.1); border: 1px solid #D0D0D0;\">
+                                            <div style=\"font-weight: 600; margin-bottom: 4px; color: #1976D2;\">AI Assistant</div>
+                                            <div style=\"line-height: 1.4;\">{streamed_response}</div>
+                                            <div style=\"font-size: 11px; color: #666; margin-top: 6px; text-align: right;\">{datetime.now().isoformat(timespec='seconds')[:19]}</div>
+                                        </div>
                                     </div>
-                                </div>
-                                """,
-                                unsafe_allow_html=True
-                            )
-                        response = LLMHandler.call_llm(sanitized_prompt, context_str, stream_callback=stream_callback)
-                    except Exception as llm_exc:
-                        logging.error(f"[LLM ERROR] {llm_exc}")
-                        response = "[Error: Could not answer the question. LLM error: {}]".format(str(llm_exc))
-                        streamed_response = response
-                    st.session_state["conversation_history"].append({
-                        "role": "ai", 
-                        "content": streamed_response, 
-                        "timestamp": datetime.now().isoformat(timespec='seconds')
-                    })
-                    # Save to disk immediately
-                    save_session_to_disk()
-                    # Save context after AI message
-                    history.save_chat_context(st.session_state['conversation_id'], st.session_state['conversation_history'])
-                    # Always save conversation history for all chats
-                    history.save_conversation({
-                        'id': st.session_state['conversation_id'],
-                        'title': st.session_state.get('conversation_title', ''),
-                        'created_at': st.session_state.get('conversation_created_at', datetime.now().isoformat(timespec='seconds')),
-                        'messages': st.session_state.get('conversation_history', []),
-                        'uploads': st.session_state.get('uploads', [])
-                    })
-                    st.session_state['is_processing'] = False
-                    st.session_state['chat_input_value'] = ''
-                    st.experimental_set_query_params(**{})
-                    st.rerun()
+                                    """,
+                                    unsafe_allow_html=True
+                                )
+                            response = LLMHandler.call_llm(sanitized_prompt, context_str, stream_callback=stream_callback)
+                        except Exception as llm_exc:
+                            logging.error(f"[LLM ERROR] {llm_exc}")
+                            response = "[Error: Could not answer the question. LLM error: {}]".format(str(llm_exc))
+                            streamed_response = response
+                        st.session_state["conversation_history"].append({
+                            "role": "ai", 
+                            "content": streamed_response, 
+                            "timestamp": datetime.now().isoformat(timespec='seconds'),
+                            "context_preview": context_str
+                        })
+                        # Save to disk immediately
+                        save_session_to_disk()
+                        # Save context after AI message
+                        history.save_chat_context(st.session_state['conversation_id'], st.session_state['conversation_history'])
+                        # Always save conversation history for all chats
+                        history.save_conversation({
+                            'id': st.session_state['conversation_id'],
+                            'title': st.session_state.get('conversation_title', ''),
+                            'created_at': st.session_state.get('conversation_created_at', datetime.now().isoformat(timespec='seconds')),
+                            'messages': st.session_state.get('conversation_history', []),
+                            'uploads': st.session_state.get('uploads', [])
+                        })
+                        st.session_state['is_processing'] = False
+                        st.session_state['chat_input_value'] = ''
+                        st.experimental_set_query_params(**{})
+                        st.rerun()
 
     # --- Footer ---
     st.markdown(
