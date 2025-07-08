@@ -1,4 +1,4 @@
-# PITB RAG Chatbot – Secure, Offline, Multi-Document Q&A
+# XOR RAG Chatbot – Secure, Offline, Multi-Document Q&A
 
 A robust, production-ready, fully offline RAG (Retrieval-Augmented Generation) chatbot for document Q&A, built with Streamlit, ChromaDB, and Ollama. Designed for governmental and sensitive environments—no internet required after setup.
 
