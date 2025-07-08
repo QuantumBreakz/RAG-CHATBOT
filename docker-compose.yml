@@ -1,0 +1,38 @@
+version: '3.8'
+
+services:
+  rag-bot:
+    build: .
+    container_name: pitb-rag-bot
+    ports:
+      - "8501:8501"
+    environment:
+      - OLLAMA_BASE_URL=http://ollama:11434
+      - STREAMLIT_SERVER_PORT=8501
+      - STREAMLIT_SERVER_HEADLESS=true
+      - STREAMLIT_SERVER_ENABLECORS=false
+    volumes:
+      - ./log:/app/log
+      - ./assets:/app/assets
+      - ./demo-rag-chroma:/app/demo-rag-chroma
+      - ./rag_core:/app/rag_core
+      - ./requirements.txt:/app/requirements.txt
+      - ./app.py:/app/app.py
+      - ./README.md:/app/README.md
+      - ./INSTRUCTIONS.md:/app/INSTRUCTIONS.md
+    depends_on:
+      - ollama
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    # Optionally preload a model (uncomment and set your model)
+    # environment:
+    #   - OLLAMA_MODELS=llama3.2:3b
+
+volumes:
+  ollama_data: 
