@@ -124,23 +124,12 @@ def main():
         </style>
         """, unsafe_allow_html=True)
 
-    # --- Header with PITB Logo ---
-    # Get base64 encoded image
-    image_base64 = get_image_base64("assets/pitb.png")
-    if image_base64:
-        header_html = f"""
-        <div style='width:100%; background:#003366; padding:16px 0 8px 0; text-align:center; margin-bottom:20px;'>
-            <img src='data:image/png;base64,{image_base64}' width='80' style='vertical-align:middle; margin-right:16px;'>
-            <span style='color:white; font-size:2rem; font-weight:bold; vertical-align:middle;'>PITB - RAG CHATBOT</span>
-        </div>
-        """
-    else:
-        header_html = """
-        <div style='width:100%; background:#003366; padding:16px 0 8px 0; text-align:center; margin-bottom:20px;'>
-            <span style='color:white; font-size:2rem; font-weight:bold; vertical-align:middle;'>PITB - RAG CHATBOT</span>
-        </div>
-        """
-    
+    # --- Header with ROX Chatbot Name (no logo) ---
+    header_html = """
+    <div style='width:100%; background:#003366; padding:16px 0 8px 0; text-align:center; margin-bottom:20px;'>
+        <span style='color:white; font-size:2rem; font-weight:bold; vertical-align:middle;'>XOR CHATBOT</span>
+    </div>
+    """
     st.markdown(header_html, unsafe_allow_html=True)
 
     # --- Sidebar: Conversation List ---
@@ -374,52 +363,69 @@ def main():
     if st.session_state.get('conversation_title'):
         st.markdown(f"### 💬 {st.session_state.get('conversation_title')}")
 
-    # Chat container with better styling
-    chat_container = st.container()
-    with chat_container:
-        chat_placeholder = st.empty()
-        with chat_placeholder.container():
-            # Improved chat bubbles with better styling
-            for i, msg in enumerate(st.session_state.get("conversation_history", [])):
-                # --- Edit user message logic ---
-                is_user = msg["role"] == "user"
-                edit_key = f"edit_msg_{i}"
-                editing = st.session_state.get(edit_key, False)
-                is_followup = msg.get("followup_to") is not None
-                followup_badge = "<span style='color:#1976D2; font-size:13px; margin-left:8px;'>↩️ Follow-up</span>" if is_followup else ""
-                highlight = st.session_state.get("highlight_msg", -1) == i
-                highlight_box = "box-shadow: 0 0 0 3px #ffe082;" if highlight else ""
-                if is_user and editing:
-                    new_text = st.text_area("Edit your message:", value=msg["content"], key=f"edit_input_{i}")
-                    col1, col2 = st.columns(2)
-                    with col1:
-                        if st.button("💾 Save", key=f"save_edit_{i}"):
-                            # Replace message and truncate history after this point
-                            st.session_state["conversation_history"] = st.session_state["conversation_history"][:i] + [{
-                                "role": "user",
-                                "content": new_text,
-                                "timestamp": datetime.now().isoformat(timespec='seconds')
-                            }]
-                            save_session_to_disk()
-                            history.save_chat_context(st.session_state['conversation_id'], st.session_state['conversation_history'])
-                            st.session_state[edit_key] = False
-                            st.session_state['chat_input_value'] = ''
-                            st.session_state['is_processing'] = False
-                            st.rerun()
-                    with col2:
-                        if st.button("❌ Cancel", key=f"cancel_edit_{i}"):
-                            st.session_state[edit_key] = False
-                            st.session_state['is_processing'] = False
-                            st.rerun()
-                else:
-                    if is_user:
-                        col1, col2 = st.columns([8,1])
+        # Chat container with better styling
+        chat_container = st.container()
+        with chat_container:
+            chat_placeholder = st.empty()
+            with chat_placeholder.container():
+                # Improved chat bubbles with better styling
+                for i, msg in enumerate(st.session_state.get("conversation_history", [])):
+                    # --- Edit user message logic ---
+                    is_user = msg["role"] == "user"
+                    edit_key = f"edit_msg_{i}"
+                    editing = st.session_state.get(edit_key, False)
+                    is_followup = msg.get("followup_to") is not None
+                    followup_badge = "<span style='color:#1976D2; font-size:13px; margin-left:8px;'>↩️ Follow-up</span>" if is_followup else ""
+                    highlight = st.session_state.get("highlight_msg", -1) == i
+                    highlight_box = "box-shadow: 0 0 0 3px #ffe082;" if highlight else ""
+                    if is_user and editing:
+                        new_text = st.text_area("Edit your message:", value=msg["content"], key=f"edit_input_{i}")
+                        col1, col2 = st.columns(2)
                         with col1:
+                            if st.button("💾 Save", key=f"save_edit_{i}"):
+                                # Replace message and truncate history after this point
+                                st.session_state["conversation_history"] = st.session_state["conversation_history"][:i] + [{
+                                    "role": "user",
+                                    "content": new_text,
+                                    "timestamp": datetime.now().isoformat(timespec='seconds')
+                                }]
+                                save_session_to_disk()
+                                history.save_chat_context(st.session_state['conversation_id'], st.session_state['conversation_history'])
+                                st.session_state[edit_key] = False
+                                st.session_state['chat_input_value'] = ''
+                                st.session_state['is_processing'] = False
+                                st.rerun()
+                        with col2:
+                            if st.button("❌ Cancel", key=f"cancel_edit_{i}"):
+                                st.session_state[edit_key] = False
+                                st.session_state['is_processing'] = False
+                                st.rerun()
+                    else:
+                        if is_user:
+                            col1, col2 = st.columns([8,1])
+                            with col1:
+                                st.markdown(
+                                    f"""
+                                    <div style=\"display: flex; justify-content: flex-end; margin-bottom: 15px; padding: 0 10px; {highlight_box}\">
+                                        <div style=\"background: linear-gradient(135deg, #DCF8C6 0%, #C8E6C9 100%); color: #2E7D32; border-radius: 18px 18px 4px 18px; padding: 12px 18px; max-width: 70%; box-shadow: 0 2px 8px rgba(0,0,0,0.1); border: 1px solid #A5D6A7;\">
+                                            <div style=\"font-weight: 600; margin-bottom: 4px;\">You {followup_badge}</div>
+                                            <div style=\"line-height: 1.4;\">{msg['content']}</div>
+                                            <div style=\"font-size: 11px; color: #666; margin-top: 6px; text-align: right;\">{msg.get('timestamp', '')[:19]}</div>
+                                        </div>
+                                    </div>
+                                    """,
+                                    unsafe_allow_html=True
+                                )
+                            with col2:
+                                if st.button("✏️", key=f"edit_btn_{i}"):
+                                    st.session_state[edit_key] = True
+                                    st.rerun()
+                        else:
                             st.markdown(
                                 f"""
-                                <div style=\"display: flex; justify-content: flex-end; margin-bottom: 15px; padding: 0 10px; {highlight_box}\">
-                                    <div style=\"background: linear-gradient(135deg, #DCF8C6 0%, #C8E6C9 100%); color: #2E7D32; border-radius: 18px 18px 4px 18px; padding: 12px 18px; max-width: 70%; box-shadow: 0 2px 8px rgba(0,0,0,0.1); border: 1px solid #A5D6A7;\">
-                                        <div style=\"font-weight: 600; margin-bottom: 4px;\">You {followup_badge}</div>
+                                <div style=\"display: flex; justify-content: flex-start; margin-bottom: 15px; padding: 0 10px; {highlight_box}\">
+                                    <div style=\"background: linear-gradient(135deg, #F5F5F5 0%, #E0E0E0 100%); color: #424242; border-radius: 18px 18px 18px 4px; padding: 12px 18px; max-width: 70%; box-shadow: 0 2px 8px rgba(0,0,0,0.1); border: 1px solid #D0D0D0;\">
+                                        <div style=\"font-weight: 600; margin-bottom: 4px; color: #1976D2;\">AI Assistant {followup_badge}</div>
                                         <div style=\"line-height: 1.4;\">{msg['content']}</div>
                                         <div style=\"font-size: 11px; color: #666; margin-top: 6px; text-align: right;\">{msg.get('timestamp', '')[:19]}</div>
                                     </div>
@@ -427,26 +433,9 @@ def main():
                                 """,
                                 unsafe_allow_html=True
                             )
-                        with col2:
-                            if st.button("✏️", key=f"edit_btn_{i}"):
-                                st.session_state[edit_key] = True
-                                st.rerun()
-                    else:
-                        st.markdown(
-                            f"""
-                            <div style=\"display: flex; justify-content: flex-start; margin-bottom: 15px; padding: 0 10px; {highlight_box}\">
-                                <div style=\"background: linear-gradient(135deg, #F5F5F5 0%, #E0E0E0 100%); color: #424242; border-radius: 18px 18px 18px 4px; padding: 12px 18px; max-width: 70%; box-shadow: 0 2px 8px rgba(0,0,0,0.1); border: 1px solid #D0D0D0;\">
-                                    <div style=\"font-weight: 600; margin-bottom: 4px; color: #1976D2;\">AI Assistant {followup_badge}</div>
-                                    <div style=\"line-height: 1.4;\">{msg['content']}</div>
-                                    <div style=\"font-size: 11px; color: #666; margin-top: 6px; text-align: right;\">{msg.get('timestamp', '')[:19]}</div>
-                                </div>
-                            </div>
-                            """,
-                            unsafe_allow_html=True
-                        )
-                if not is_user and msg.get("context_preview"):
-                    with st.expander("Context Used", expanded=False):
-                        st.markdown(f"<div style='font-size:13px; color:#333; background:#f9f9f9; border-radius:8px; padding:8px 12px; margin-bottom:4px;'>{msg['context_preview']}</div>", unsafe_allow_html=True)
+                    if not is_user and msg.get("context_preview"):
+                        with st.expander("Context Used", expanded=False):
+                            st.markdown(f"<div style='font-size:13px; color:#333; background:#f9f9f9; border-radius:8px; padding:8px 12px; margin-bottom:4px;'>{msg['context_preview']}</div>", unsafe_allow_html=True)
         # End of chat rendering loop
 
         # Chat input with better styling
@@ -508,11 +497,11 @@ def main():
                     else:
                         selected_filename = None  # Search all documents
                     results = VectorStore.query_with_expanded_context(
-                            sanitized_prompt,
+                        sanitized_prompt,
                         n_results=st.session_state.get("n_results", 3),
                         expand=2,
                         filename=selected_filename
-                        )
+                    )
                     context = results.get("documents", [[]])[0] if results.get("documents") else []
                     context_str = " ".join(context)
                     logging.info(f"[DEBUG] context_str: {context_str}")
@@ -527,7 +516,6 @@ def main():
                         st.session_state['is_processing'] = False
                         st.session_state['chat_input_value'] = ''
                         st.experimental_set_query_params(**{})
-                        st.rerun()
                     else:
                         try:
                             # Stream the LLM response word by word
@@ -574,13 +562,13 @@ def main():
                         st.session_state['is_processing'] = False
                         st.session_state['chat_input_value'] = ''
                         st.experimental_set_query_params(**{})
-                        st.rerun()
+                    st.rerun()
 
     # --- Footer ---
     st.markdown(
         """
         <div style='width:100%; background:#003366; color:white; text-align:center; padding:8px 0; position:fixed; bottom:0; left:0;'>
-            © 2025 Punjab Information Technology Board. All rights reserved.
+            © 2025 XOR Chatbot. All rights reserved.
         </div>
         """,
         unsafe_allow_html=True
