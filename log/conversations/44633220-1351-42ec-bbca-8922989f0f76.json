@@ -1,0 +1,29 @@
+{
+  "id": "44633220-1351-42ec-bbca-8922989f0f76",
+  "title": "Chat 2025-07-09",
+  "created_at": "2025-07-09T16:38:41",
+  "messages": [
+    {
+      "role": "user",
+      "content": "what is the experience of ali ahmed?",
+      "timestamp": "2025-07-09T16:36:08"
+    },
+    {
+      "role": "ai",
+      "content": "**Ali Ahmed's Professional Experience**\n\nBased on the provided context, here is an overview of Ali Ahmed's professional experience:\n\n**Recent Roles**\n\n* **Head of Cyber Security**, SOFTEC (FAST-NUCES), Lahore, Punjab (Jan 2024 - Apr 2024)\n\t+ Inaugurated the Cyber Security Department and organized the first-ever Capture The Flag (CTF) competition with 45 teams and over 150 participants\n* **Data Scientist**, ML1 (Programmers Force Subsidiary), Lahore, Punjab (Oct 2024 - Nov 2024)\n\t+ Refactored and optimized over 100 ML-related services, enhancing maintainability and performance\n\n**Previous Roles**\n\n* **Head of Cyber Security**, SOFTEC (FAST-NUCES), Lahore, Punjab (Jan 2024 - Apr 2024) **(Note: same role as above, indicating a possible gap in employment)**\n* **Operations Management Associate**, DirAction Skills, Lahore, Punjab (Jun 2023 - Oct 2023)\n\n**Summary**\n\nAli Ahmed has approximately 2.5 years of experience in full-stack development, machine learning, and performance, with expertise in AI deployment, cybersecurity, and data science. He has held various leadership roles, including Head of Cyber Security at SOFTEC (FAST-NUCES), where he inaugurated the Cyber Security Department and organized a large-scale CTF competition.\n\n**GitHub and LinkedIn**\n\nAli Ahmed can be found on GitHub (@QuantumBreakz) and LinkedIn (linkedin.com/in/ali-ahmed-hustletothemax92).",
+      "timestamp": "2025-07-09T16:38:41",
+      "context_preview": "Ali Ahmed\nAllama Iqbal Town, Lahore\n\u0083 +92 322 4267825\n# ali.ahmed.work.dev@gmail.com\n\u00a7 github.com/QuantumBreakz\n\u00ef\nlinkedin.com/in/ali-ahmed-hustletothemax92\nSummary\nResults-driven Software and AI Engineer with over 2 years of experience in full-stack development, machine learning, and performance\n\u2022 Streamlined AI deployment and contributed to scalable, regulatory-compliant identity verification solutions\nML1 (Programmers Force Subsidiary)\nOct 2024 - Nov 2024\nData Scientist\nLahore, Punjab\n\u2022 Refactored and optimized over 100 ML-related services, enhancing maintainability and performance\nSOFTEC (FAST-NUCES)\nJan 2024 - Apr 2024\nHead of Cyber Security\nLahore, Punjab SOFTEC (FAST-NUCES)\nJan 2024 - Apr 2024\nHead of Cyber Security\nLahore, Punjab\n\u2022 Inaugurated the Cyber Security Department in SOFTEC\u2019s 25-year legacy\n\u2022 Organized the first-ever Capture The Flag (CTF) competition with 45 teams and over 150 participants\nDirAction Skills\nJun 2023 - Oct 2023\nOperations Management Associate\nLahore, Punjab"
+    }
+  ],
+  "uploads": [
+    {
+      "filename": "AliAhmed-CV.pdf",
+      "file_hash": "05942ec88e73b888a572409bfb5f27ad9cdc75d1cf81f94d0159714a41871853",
+      "metadata": {
+        "size": 140857,
+        "type": "application/pdf",
+        "uploaded_at": "2025-07-09T16:35:58"
+      }
+    }
+  ]
+}

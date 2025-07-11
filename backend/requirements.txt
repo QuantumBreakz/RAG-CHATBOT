@@ -1,0 +1,15 @@
+fastapi==0.115.12
+uvicorn==0.34.2
+pydantic==1.10.14
+python-multipart==0.0.9
+chromadb==0.4.24
+langchain-community==0.0.30
+langchain-text-splitters==0.0.1
+ollama-embedding-function==0.1.0
+requests==2.31.0
+tenacity==9.1.2
+pandas==2.2.3
+numpy==1.26.4
+python-dotenv==1.0.1
+PyYAML==6.0.1
+streamlit==1.45.0 

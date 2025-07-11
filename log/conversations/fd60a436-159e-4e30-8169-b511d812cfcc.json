@@ -1,0 +1,26 @@
+{
+  "id": "fd60a436-159e-4e30-8169-b511d812cfcc",
+  "title": "Chat 2025-07-10",
+  "created_at": "2025-07-10T15:26:57",
+  "messages": [],
+  "uploads": [
+    {
+      "filename": "RAG Chatbot.pdf",
+      "file_hash": "9bfb4dc59f64c7f0965494b888172c5469a666df3907e736f2e6133594d8e75e",
+      "metadata": {
+        "size": 51374,
+        "type": "application/pdf",
+        "uploaded_at": "2025-07-10T15:25:37"
+      }
+    },
+    {
+      "filename": "test.pdf",
+      "file_hash": "886700a0ca4ccb7253576721f49e5de13c5f472c70af7e3f02e51e1b3acd10cf",
+      "metadata": {
+        "size": 662939,
+        "type": "application/pdf",
+        "uploaded_at": "2025-07-10T15:26:57"
+      }
+    }
+  ]
+}

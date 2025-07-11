@@ -70,6 +70,15 @@ def new_conversation(title=None):
         'uploads': []
     }
 
+def rename_conversation(conv_id, new_title):
+    """Rename a conversation by id."""
+    conv = load_conversation(conv_id)
+    if not conv:
+        return False
+    conv['title'] = new_title
+    save_conversation(conv)
+    return True
+
 def get_chat_context_path(chat_id):
     dir_path = os.path.join(os.path.dirname(__file__), '..', 'log', 'conversations', chat_id)
     os.makedirs(dir_path, exist_ok=True)

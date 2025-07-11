@@ -1,7 +1,6 @@
 from rag_core.config import OLLAMA_BASE_URL, OLLAMA_EMBEDDING_MODEL, CHROMA_DB_PATH, CHROMA_COLLECTION_NAME, CACHE_TTL, logger
 import chromadb
 from chromadb.utils.embedding_functions.ollama_embedding_function import OllamaEmbeddingFunction
-import streamlit as st
 import time
 from tenacity import retry, stop_after_attempt, wait_exponential
 
@@ -23,7 +22,6 @@ class VectorStore:
             )
         except Exception as e:
             logger.error(f"Error initializing vector collection: {str(e)}")
-            st.error(f"Failed to initialize vector collection: {str(e)}")
             return None
 
     @staticmethod
@@ -66,11 +64,9 @@ class VectorStore:
             
         except Exception as e:
             logger.error(f"Error adding to vector collection: {str(e)}")
-            st.error(f"Error adding to vector collection: {str(e)}")
             return False
 
     @staticmethod
-    @st.cache_data(ttl=CACHE_TTL)
     def query_collection(prompt: str, n_results: int):
         """Query the vector collection for relevant chunks."""
         try:
@@ -80,7 +76,6 @@ class VectorStore:
             return collection.query(query_texts=[prompt], n_results=n_results)
         except Exception as e:
             logger.error(f"Error querying vector collection: {str(e)}")
-            st.error(f"Error querying vector collection: {str(e)}")
             return {} 
 
     @staticmethod
@@ -114,4 +109,57 @@ class VectorStore:
                 logger.info("Cleared all embeddings from the vector collection.")
         except Exception as e:
             logger.error(f"Error clearing vector collection: {str(e)}")
-            st.error(f"Failed to clear knowledge base: {str(e)}") 
+            return False 
+
+    @staticmethod
+    def list_files():
+        """List all unique files (by filename) in the vectorstore, with metadata."""
+        try:
+            collection = VectorStore.get_vector_collection()
+            if not collection:
+                return []
+            # Query all metadatas (ChromaDB supports where=None for all)
+            results = collection.get(include=["metadatas", "ids"])
+            files = {}
+            for meta, id_ in zip(results.get("metadatas", []), results.get("ids", [])):
+                if not meta:
+                    continue
+                filename = meta.get("filename")
+                file_hash = meta.get("file_hash", None)
+                if filename:
+                    if filename not in files:
+                        files[filename] = {
+                            "filename": filename,
+                            "file_hash": file_hash,
+                            "size": meta.get("size"),
+                            "chunks": 1,
+                            "uploaded_at": meta.get("uploaded_at"),
+                        }
+                    else:
+                        files[filename]["chunks"] += 1
+            return list(files.values())
+        except Exception as e:
+            logger.error(f"Error listing files in vectorstore: {str(e)}")
+            return []
+
+    @staticmethod
+    def delete_file(filename=None, file_hash=None):
+        """Delete all chunks for a given filename or file_hash from the vectorstore."""
+        try:
+            collection = VectorStore.get_vector_collection()
+            if not collection:
+                return False
+            where = {}
+            if filename:
+                where["filename"] = filename
+            if file_hash:
+                where["file_hash"] = file_hash
+            if not where:
+                logger.warning("No filename or file_hash provided for delete_file.")
+                return False
+            collection.delete(where=where)
+            logger.info(f"Deleted all chunks for {where} from the vector collection.")
+            return True
+        except Exception as e:
+            logger.error(f"Error deleting file from vectorstore: {str(e)}")
+            return False 
