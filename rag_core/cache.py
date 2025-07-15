@@ -2,6 +2,7 @@ import os
 import hashlib
 import pickle
 from rag_core.config import EMBEDDINGS_CACHE_PATH
+from rag_core.redis_cache import redis_get, redis_set
 
 # Hash a file's bytes for unique cache key
 def get_file_hash(file_bytes):
@@ -12,15 +13,29 @@ def get_cache_path(file_hash):
     os.makedirs(EMBEDDINGS_CACHE_PATH, exist_ok=True)
     return f"{EMBEDDINGS_CACHE_PATH}/{file_hash}.pkl"
 
-# Save embeddings to cache
+# Save embeddings to cache (now uses Redis)
 def save_embeddings_to_cache(file_hash, embeddings):
+    # Try Redis first
+    try:
+        redis_set(f'embeddings:{file_hash}', pickle.dumps(embeddings))
+    except Exception:
+        pass
+    # Always save to disk as fallback
     with open(get_cache_path(file_hash), "wb") as f:
         pickle.dump(embeddings, f)
 
-# Load embeddings from cache
+# Load embeddings from cache (now uses Redis)
 def load_embeddings_from_cache(file_hash):
+    # Try Redis first
+    try:
+        data = redis_get(f'embeddings:{file_hash}')
+        if data:
+            return pickle.loads(data.encode('latin1') if isinstance(data, str) else data)
+    except Exception:
+        pass
+    # Fallback to disk
     with open(get_cache_path(file_hash), "rb") as f:
-        return pickle.load(f) 
+        return pickle.load(f)
 
 # --- Global embedding cache ---
 GLOBAL_EMBEDDINGS_PATH = os.path.join(os.path.dirname(__file__), '..', 'log', 'global_embeddings')

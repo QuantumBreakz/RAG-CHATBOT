@@ -3,6 +3,7 @@ import json
 import uuid
 from datetime import datetime
 import pickle
+from rag_core.redis_cache import redis_get, redis_set
 
 CONV_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'log', 'conversations')
 os.makedirs(CONV_DIR, exist_ok=True)
@@ -38,17 +39,34 @@ def list_conversations():
     return sorted(convs, key=lambda x: x['created_at'], reverse=True)
 
 def load_conversation(conv_id):
-    """Load a conversation by id."""
+    """Load a conversation by id, using Redis cache if available."""
+    # Try Redis first
+    try:
+        cached = redis_get(f'history:{conv_id}')
+        if cached:
+            return pickle.loads(cached.encode('latin1') if isinstance(cached, str) else cached)
+    except Exception:
+        pass
     try:
         with open(_conv_path(conv_id), 'r') as f:
-            return json.load(f)
+            conv = json.load(f)
+            # Cache in Redis for 1 hour
+            try:
+                redis_set(f'history:{conv_id}', pickle.dumps(conv), ex=3600)
+            except Exception:
+                pass
+            return conv
     except Exception:
         return None
 
 def save_conversation(conv):
-    """Save a conversation dict to disk."""
+    """Save a conversation dict to disk and cache in Redis."""
     with open(_conv_path(conv['id']), 'w') as f:
         json.dump(conv, f, indent=2)
+    try:
+        redis_set(f'history:{conv["id"]}', pickle.dumps(conv), ex=3600)
+    except Exception:
+        pass
 
 def delete_conversation(conv_id):
     """Delete a conversation by id."""

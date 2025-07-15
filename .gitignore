@@ -44,7 +44,7 @@ env/
 ~*
 
 # VSCode/IDE
-.vscode/
+.vscode/a
 .idea/
 *.swp 
 
@@ -52,3 +52,18 @@ env/
 .env
 .env.local
 .env.*.local 
+
+# React/Vite/Node frontend ignores
+frontend/node_modules/
+frontend/dist/
+frontend/build/
+frontend/.env
+frontend/.env.local
+frontend/.env.development.local
+frontend/.env.test.local
+frontend/.env.production.local
+frontend/.DS_Store
+frontend/npm-debug.log*
+frontend/yarn-debug.log*
+frontend/yarn-error.log*
+frontend/.vite/

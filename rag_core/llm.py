@@ -1,6 +1,5 @@
 from rag_core.config import OLLAMA_LLM_MODEL, OLLAMA_BASE_URL, logger, SYSTEM_PROMPT
 from tenacity import retry, stop_after_attempt, wait_exponential
-import streamlit as st
 
 MAX_HISTORY_MESSAGES = 10  # Number of previous messages to include (excluding system and current user prompt)
 
@@ -8,11 +7,15 @@ class LLMHandler:
     """Handles LLM interactions with retry logic."""
     @staticmethod
     @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=4, max=10))
-    def call_llm(prompt: str, context: str, stream_callback=None):
+    def call_llm(prompt: str, context: str, conversation_history=None, stream_callback=None):
+        """
+        Call the LLM with the given prompt, context, and optional conversation history.
+        conversation_history: list of dicts (role, content, ...), or None for no history.
+        """
         import ollama
         try:
             # Build structured message history for Ollama
-            history = st.session_state.conversation_history
+            history = conversation_history or []
             messages = [
                 {"role": "system", "content": SYSTEM_PROMPT}
             ]
@@ -80,5 +83,4 @@ class LLMHandler:
             logger.error(msg + '\n' + tb_str)
             print(msg)
             print(tb_str)
-            st.error(f"Error communicating with LLM: {msg}")
             return f"[Error: LLM call failed: {msg}]" 

@@ -3,15 +3,14 @@
 Streamlit UI for PITB RAG MVP with sidebar, chat bubbles, header, and footer.
 """
 import streamlit as st
-from rag_core.vectorstore import VectorStore
-from rag_core.document import DocumentProcessor
-from rag_core.llm import LLMHandler
 from rag_core.utils import sanitize_input
 from rag_core import history
 from rag_core import cache
 from datetime import datetime
 import base64
 import logging
+import requests
+import json
 
 # ================= UI/UX Improvements Roadmap =================
 #
@@ -79,6 +78,19 @@ def get_image_base64(image_path):
         return None
 
 def main():
+    # --- Sidebar: Knowledge Base Documents ---
+    def fetch_documents():
+        try:
+            response = requests.get('http://localhost:8000/documents')
+            if response.ok:
+                return response.json().get('documents', [])
+            else:
+                st.error("Failed to fetch documents: " + response.text)
+                return []
+        except Exception as e:
+            st.error(f"Error fetching documents: {str(e)}")
+            return []
+    
     # Ensure required session state keys are initialized
     if 'conversation_id' not in st.session_state:
         conversations = history.list_conversations()
@@ -113,13 +125,75 @@ def main():
         .stSidebar {
             background-color: #2d2d2d !important;
         }
-        .stTextInput > div > div > input {
-            background-color: #3d3d3d !important;
+        /* Text input and text area */
+        input[type="text"], input[type="search"], textarea, .stTextInput input, .stTextArea textarea {
+            background-color: #2d2d2d !important;
+            color: #ffffff !important;
+            border: 1px solid #444 !important;
+        }
+        /* Placeholder text */
+        input[type="text"]::placeholder, textarea::placeholder {
+            color: #bbbbbb !important;
+            opacity: 1 !important;
+        }
+        /* Number input */
+        input[type="number"], .stNumberInput input {
+            background-color: #2d2d2d !important;
+            color: #ffffff !important;
+            border: 1px solid #444 !important;
+        }
+        /* Selectbox and dropdowns */
+        .stSelectbox div[data-baseweb="select"] > div {
+            background-color: #2d2d2d !important;
             color: #ffffff !important;
         }
-        .stButton > button {
-            background-color: #4d4d4d !important;
+        .stSelectbox div[data-baseweb="select"] span {
             color: #ffffff !important;
+        }
+        /* File uploader */
+        .stFileUploader, .stFileUploader > div {
+            background-color: #2d2d2d !important;
+            color: #ffffff !important;
+        }
+        /* Buttons */
+        .stButton > button {
+            background-color: #444 !important;
+            color: #ffffff !important;
+            border: 1px solid #666 !important;
+        }
+        .stButton > button:active, .stButton > button:focus {
+            background-color: #666 !important;
+            color: #fff !important;
+        }
+        /* Expander */
+        .stExpander > div {
+            background-color: #232323 !important;
+            color: #ffffff !important;
+        }
+        /* Info, success, warning, error boxes */
+        .stAlert, .stInfo, .stSuccess, .stWarning, .stError {
+            background-color: #232323 !important;
+            color: #ffffff !important;
+        }
+        /* Markdown, text, captions */
+        .stMarkdown, .stText, .stCaption {
+            color: #ffffff !important;
+        }
+        /* General text */
+        p, h1, h2, h3, h4, h5, h6, span, div {
+            color: #ffffff !important;
+        }
+        /* Table headers and cells */
+        th, td {
+            background-color: #232323 !important;
+            color: #ffffff !important;
+        }
+        /* Scrollbar */
+        ::-webkit-scrollbar {
+            background: #232323 !important;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #444 !important;
         }
         </style>
         """, unsafe_allow_html=True)
@@ -131,6 +205,13 @@ def main():
     </div>
     """
     st.markdown(header_html, unsafe_allow_html=True)
+
+    # Detect developer mode from URL path or query param
+    dev_mode = False
+    query_params = st.query_params
+    if 'dev' in query_params and query_params['dev'][0] == '1':
+        dev_mode = True
+    # For path-based (e.g., /developers), Streamlit doesn't natively support path routing, so use query param
 
     # --- Sidebar: Conversation List ---
     with st.sidebar:
@@ -211,10 +292,16 @@ def main():
         st.markdown("---")
         # Add button to clear/reset knowledge base
         if st.button("🧹 Reset Knowledge Base (Clear All Embeddings)", key="reset_kb_btn", use_container_width=True):
-            VectorStore.clear_vector_collection()
-            st.session_state['uploads'] = []
-            save_session_to_disk()
-            st.success("Knowledge base has been reset. All embeddings cleared.")
+            try:
+                response = requests.post('http://localhost:8000/reset_kb')
+                if response.ok:
+                    st.session_state['uploads'] = []
+                    save_session_to_disk()
+                    st.success("Knowledge base has been reset. All embeddings cleared.")
+                else:
+                    st.error("Failed to reset knowledge base: " + response.text)
+            except Exception as e:
+                st.error(f"Error resetting knowledge base: {str(e)}")
             st.rerun()
         
         # Current Chat Management
@@ -257,72 +344,73 @@ def main():
                             st.rerun()
             else:
                 st.info("No files uploaded yet.")
+            
+            # Download Chat History Button
+            export_url = f"http://localhost:8000/history/export/{selected_id}"
+            st.markdown(f"[⬇️ Download Chat History]({export_url})", unsafe_allow_html=True)
         
         st.markdown("---")
         
         # File Upload Section
         st.markdown("## 📄 Upload Documents")
+
+        # Helper function to upload file to backend
+
+        def upload_file_to_backend(uploaded_file):
+            files = {'file': (uploaded_file.name, uploaded_file.getvalue())}
+            response = requests.post('http://localhost:8000/upload', files=files)
+            if response.ok:
+                return response.json()
+            else:
+                st.error("Upload failed: " + response.text)
+                return None
+
+        # Helper function to query backend
+        def query_backend(question, n_results=3, expand=2, filename=None, conversation_history=None):
+            """Query the backend API for RAG responses."""
+            try:
+                data = {
+                    'question': question,
+                    'n_results': n_results,
+                    'expand': expand,
+                    'conversation_history': json.dumps(conversation_history or [])
+                }
+                if filename:
+                    data['filename'] = filename
+                
+                response = requests.post('http://localhost:8000/query', data=data)
+                if response.ok:
+                    return response.json()
+                else:
+                    st.error(f"Query failed: {response.text}")
+                    return None
+            except Exception as e:
+                st.error(f"Error calling backend: {str(e)}")
+                return None
+
         uploaded_files = st.file_uploader(
-            "Upload PDF or DOCX files",
-            type=["pdf", "docx"],
+            "Upload PDF, DOCX, CSV, or Excel files",
+            type=["pdf", "docx", "csv", "xlsx", "xls"],
             accept_multiple_files=True,
             key="file_uploader"
         )
 
-        # Only process files that are not already in uploads (by file_hash)
         if uploaded_files:
-            existing_hashes = {u['file_hash'] for u in st.session_state.get('uploads', [])}
             for uploaded_file in uploaded_files:
-                file_bytes = uploaded_file.read()
-                file_hash = cache.get_file_hash(file_bytes)
-                if file_hash in existing_hashes:
-                    continue  # Skip files already processed
-                chat_id = st.session_state.get('conversation_id')
-                # Check if we have a valid chat_id
-                if chat_id is None:
-                    st.error("No active conversation. Please start a new chat or select an existing one.")
-                    continue
-                with st.spinner(f"Processing {uploaded_file.name}..."):
-                    import tempfile
-                    suffix = ".pdf" if uploaded_file.type == "application/pdf" else ".docx"
-                    temp_file = tempfile.NamedTemporaryFile("wb", suffix=suffix, delete=False)
-                    temp_file.write(file_bytes)
-                    temp_file.close()
-                    progress_bar = st.progress(0)
-                    status_text = st.empty()
-                    try:
-                        status_text.text("📄 Loading document...")
-                        progress_bar.progress(20)
-                        all_splits = DocumentProcessor.process_document(uploaded_file, file_bytes)
-                        if all_splits:
-                            status_text.text(f"🔍 Creating embeddings for {len(all_splits)} chunks...")
-                            progress_bar.progress(50)
-                            success = VectorStore.add_to_vector_collection(all_splits, uploaded_file.name)
-                            if success:
-                                progress_bar.progress(80)
-                                status_text.text("💾 Saving to knowledge base...")
-                                if 'uploads' not in st.session_state:
-                                    st.session_state['uploads'] = []
-                                if not any(u['file_hash'] == file_hash for u in st.session_state['uploads']):
-                                    st.session_state['uploads'].append({
-                                        'filename': uploaded_file.name,
-                                        'file_hash': file_hash,
-                                        'metadata': {'size': uploaded_file.size, 'type': uploaded_file.type, 'uploaded_at': datetime.now().isoformat(timespec='seconds')}
-                                    })
-                                    save_session_to_disk()
-                                progress_bar.progress(100)
-                                status_text.text("✅ Complete!")
-                                st.success(f"✅ {uploaded_file.name} processed and added to knowledge base!")
-                            else:
-                                st.error(f"❌ Failed to add {uploaded_file.name} to vector collection. Please try again.")
-                        else:
-                            st.error(f"❌ Failed to process {uploaded_file.name}. The file might be corrupted or empty.")
-                    except Exception as e:
-                        st.error(f"❌ Error processing {uploaded_file.name}: {str(e)}")
-                        logging.error(f"Error processing {uploaded_file.name}: {str(e)}")
-                    finally:
-                        progress_bar.empty()
-                        status_text.empty()
+                with st.spinner(f"Uploading and processing {uploaded_file.name}..."):
+                    upload_result = upload_file_to_backend(uploaded_file)
+                if upload_result:
+                    if hasattr(st, 'toast'):
+                        st.toast(f"{uploaded_file.name} processed! Chunks created: {upload_result['num_chunks']}", icon="✅")
+                    else:
+                        st.success(f"{uploaded_file.name} processed! Chunks created: {upload_result['num_chunks']}")
+                    # Refresh document list after upload
+                    st.session_state['documents_list'] = fetch_documents()
+                else:
+                    if hasattr(st, 'toast'):
+                        st.toast(f"Upload failed for {uploaded_file.name}", icon="❌")
+                    else:
+                        st.error(f"Upload failed for {uploaded_file.name}")
         
         # Settings Section
         with st.expander("⚙️ Settings", expanded=False):
@@ -339,25 +427,92 @@ def main():
             st.session_state["chunk_size"] = chunk_size
             st.session_state["chunk_overlap"] = chunk_overlap
             st.session_state["n_results"] = n_results
+            # --- Developer/User View Switch ---
+            st.markdown("---")
+            if dev_mode:
+                st.success("Developer mode is ON. Timestamps and context will be shown.")
+                if st.button("Switch to User View", key="switch_user_view"):
+                    st.query_params.clear()  # Remove dev param
+                    st.rerun()
+            else:
+                st.info("User mode is ON. Timestamps and context are hidden.")
+                if st.button("Switch to Developer View", key="switch_dev_view"):
+                    st.query_params["dev"] = "1"
+                    st.rerun()
 
     # --- Main Chat Area ---
     st.markdown("<div style='height:12px'></div>", unsafe_allow_html=True)
 
-    # Conversation History Navigation
-    with st.expander("🗂️ Conversation History", expanded=False):
-        search_query = st.text_input("Search messages", key="history_search")
-        filtered_history = [
-            (i, msg) for i, msg in enumerate(st.session_state.get("conversation_history", []))
-            if search_query.lower() in msg["content"].lower()
-        ] if search_query else list(enumerate(st.session_state.get("conversation_history", [])))
-        for i, msg in filtered_history:
-            role = "🧑‍💼 User" if msg["role"] == "user" else "🤖 AI"
-            snippet = msg["content"][:60] + ("..." if len(msg["content"]) > 60 else "")
-            ts = msg.get("timestamp", "")[:19]
-            highlight_style = "background:#ffe082; border-radius:6px;" if st.session_state.get("highlight_msg", -1) == i else ""
-            if st.button(f"{role} | {ts} | {snippet}", key=f"history_btn_{i}"):
-                st.session_state["highlight_msg"] = i
-        st.caption("Click a message to highlight it in the chat below.")
+    # Responsive CSS for mobile/tablet
+    st.markdown("""
+    <style>
+    @media (max-width: 900px) {
+        .stApp { font-size: 15px !important; }
+        .stSidebar { width: 100vw !important; }
+        .stButton > button, .stTextInput input, .stTextArea textarea {
+            font-size: 1rem !important;
+        }
+    }
+    @media (max-width: 600px) {
+        .stApp { font-size: 14px !important; }
+        .stSidebar { width: 100vw !important; }
+        .stButton > button, .stTextInput input, .stTextArea textarea {
+            font-size: 0.95rem !important;
+        }
+    }
+    /* Visually distinct buttons */
+    .stButton > button {
+        border-radius: 12px !important;
+        box-shadow: 0 2px 8px rgba(44,62,80,0.10) !important;
+        transition: box-shadow 0.2s, background 0.2s;
+        font-weight: 600;
+    }
+    .stButton > button:hover {
+        box-shadow: 0 4px 16px rgba(44,62,80,0.18) !important;
+        background: #e3f2fd !important;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+    # --- Floating Chat Input Area ---
+    st.markdown("""
+    <style>
+    .floating-chat-input {
+        position: sticky;
+        bottom: 0;
+        left: 0;
+        width: 100%;
+        background: #fff;
+        box-shadow: 0 0 16px rgba(44,62,80,0.10);
+        border-radius: 18px 18px 0 0;
+        padding: 18px 24px 12px 24px;
+        z-index: 100;
+        margin-top: 24px;
+    }
+    .send-btn {
+        background: linear-gradient(135deg, #1976D2 0%, #64B5F6 100%);
+        color: #fff;
+        border: none;
+        border-radius: 50%;
+        width: 48px;
+        height: 48px;
+        font-size: 1.5rem;
+        box-shadow: 0 2px 8px rgba(25,118,210,0.10);
+        cursor: pointer;
+        margin-left: 12px;
+        transition: box-shadow 0.2s, background 0.2s;
+    }
+    .send-btn:hover {
+        box-shadow: 0 4px 16px rgba(25,118,210,0.18);
+        background: #1565c0;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+    # --- Scroll to Latest Button ---
+    if len(st.session_state.get("conversation_history", [])) > 8:
+        if st.button("⬇️ Scroll to Latest", key="scroll_latest_btn", use_container_width=True):
+            st.experimental_rerun()
 
     # Chat header with current conversation info
     if st.session_state.get('conversation_title'):
@@ -370,7 +525,6 @@ def main():
             with chat_placeholder.container():
                 # Improved chat bubbles with better styling
                 for i, msg in enumerate(st.session_state.get("conversation_history", [])):
-                    # --- Edit user message logic ---
                     is_user = msg["role"] == "user"
                     edit_key = f"edit_msg_{i}"
                     editing = st.session_state.get(edit_key, False)
@@ -378,6 +532,8 @@ def main():
                     followup_badge = "<span style='color:#1976D2; font-size:13px; margin-left:8px;'>↩️ Follow-up</span>" if is_followup else ""
                     highlight = st.session_state.get("highlight_msg", -1) == i
                     highlight_box = "box-shadow: 0 0 0 3px #ffe082;" if highlight else ""
+                    avatar_svg_user = '''<svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="16" cy="16" r="16" fill="#DCF8C6"/><text x="16" y="21" text-anchor="middle" font-size="16" fill="#2E7D32" font-family="Arial" font-weight="bold">U</text></svg>'''
+                    avatar_svg_ai = '''<svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="16" cy="16" r="16" fill="#E0E0E0"/><text x="16" y="21" text-anchor="middle" font-size="16" fill="#1976D2" font-family="Arial" font-weight="bold">A</text></svg>'''
                     if is_user and editing:
                         new_text = st.text_area("Edit your message:", value=msg["content"], key=f"edit_input_{i}")
                         col1, col2 = st.columns(2)
@@ -402,49 +558,51 @@ def main():
                                 st.rerun()
                     else:
                         if is_user:
-                            col1, col2 = st.columns([8,1])
-                            with col1:
-                                st.markdown(
-                                    f"""
-                                    <div style=\"display: flex; justify-content: flex-end; margin-bottom: 15px; padding: 0 10px; {highlight_box}\">
-                                        <div style=\"background: linear-gradient(135deg, #DCF8C6 0%, #C8E6C9 100%); color: #2E7D32; border-radius: 18px 18px 4px 18px; padding: 12px 18px; max-width: 70%; box-shadow: 0 2px 8px rgba(0,0,0,0.1); border: 1px solid #A5D6A7;\">
-                                            <div style=\"font-weight: 600; margin-bottom: 4px;\">You {followup_badge}</div>
-                                            <div style=\"line-height: 1.4;\">{msg['content']}</div>
-                                            <div style=\"font-size: 11px; color: #666; margin-top: 6px; text-align: right;\">{msg.get('timestamp', '')[:19]}</div>
-                                        </div>
-                                    </div>
-                                    """,
-                                    unsafe_allow_html=True
-                                )
-                            with col2:
-                                if st.button("✏️", key=f"edit_btn_{i}"):
-                                    st.session_state[edit_key] = True
-                                    st.rerun()
-                        else:
                             st.markdown(
                                 f"""
-                                <div style=\"display: flex; justify-content: flex-start; margin-bottom: 15px; padding: 0 10px; {highlight_box}\">
-                                    <div style=\"background: linear-gradient(135deg, #F5F5F5 0%, #E0E0E0 100%); color: #424242; border-radius: 18px 18px 18px 4px; padding: 12px 18px; max-width: 70%; box-shadow: 0 2px 8px rgba(0,0,0,0.1); border: 1px solid #D0D0D0;\">
-                                        <div style=\"font-weight: 600; margin-bottom: 4px; color: #1976D2;\">AI Assistant {followup_badge}</div>
-                                        <div style=\"line-height: 1.4;\">{msg['content']}</div>
-                                        <div style=\"font-size: 11px; color: #666; margin-top: 6px; text-align: right;\">{msg.get('timestamp', '')[:19]}</div>
+                                <div style='display: flex; justify-content: flex-end; margin-bottom: 24px; padding: 0 10px; {highlight_box}'>
+                                    <div style='display: flex; flex-direction: row-reverse; align-items: flex-end;'>
+                                        <div style='margin-left: 12px;'>{avatar_svg_user}</div>
+                                        <div style="background: linear-gradient(135deg, #DCF8C6 0%, #C8E6C9 100%); color: #2E7D32; border-radius: 18px 18px 4px 18px; padding: 18px 22px; max-width: 70%; box-shadow: 0 4px 16px rgba(44, 62, 80, 0.10); border: 1px solid #A5D6A7; font-size: 1.08rem; line-height: 1.6; margin-bottom: 2px;">
+                                            <div style="font-weight: 600; margin-bottom: 4px;">You {followup_badge}</div>
+                                            <div>{msg['content']}</div>
+                                            {f'<div style=\'font-size: 11px; color: #666; margin-top: 8px; text-align: right;\'>{msg.get('timestamp', '')[:19]}</div>' if dev_mode else ''}
+                                        </div>
                                     </div>
                                 </div>
                                 """,
                                 unsafe_allow_html=True
                             )
-                    if not is_user and msg.get("context_preview"):
+                            if st.button("✏️", key=f"edit_btn_{i}"):
+                                st.session_state[edit_key] = True
+                                st.rerun()
+                        else:
+                            st.markdown(
+                                f"""
+                                <div style='display: flex; justify-content: flex-start; margin-bottom: 24px; padding: 0 10px; {highlight_box}'>
+                                    <div style='display: flex; flex-direction: row; align-items: flex-end;'>
+                                        <div style='margin-right: 12px;'>{avatar_svg_ai}</div>
+                                        <div style="background: linear-gradient(135deg, #F5F5F5 0%, #E0E0E0 100%); color: #1976D2; border-radius: 18px 18px 18px 4px; padding: 18px 22px; max-width: 70%; box-shadow: 0 4px 16px rgba(44, 62, 80, 0.10); border: 1px solid #D0D0D0; font-size: 1.08rem; line-height: 1.6; margin-bottom: 2px;">
+                                            <div style="font-weight: 600; margin-bottom: 4px; color: #1976D2;">AI Assistant {followup_badge}</div>
+                                            <div>{msg['content']}</div>
+                                            {f'<div style=\'font-size: 11px; color: #666; margin-top: 8px; text-align: right;\'>{msg.get('timestamp', '')[:19]}</div>' if dev_mode else ''}
+                                        </div>
+                                    </div>
+                                </div>
+                                """,
+                                unsafe_allow_html=True
+                            )
+                    # Only show context preview in dev mode
+                    if not is_user and msg.get("context_preview") and dev_mode:
                         with st.expander("Context Used", expanded=False):
                             st.markdown(f"<div style='font-size:13px; color:#333; background:#f9f9f9; border-radius:8px; padding:8px 12px; margin-bottom:4px;'>{msg['context_preview']}</div>", unsafe_allow_html=True)
         # End of chat rendering loop
 
-        # Chat input with better styling
-        st.markdown("---")
+        # --- Floating Chat Input Area Implementation ---
+        st.markdown('<div class="floating-chat-input">', unsafe_allow_html=True)
         # Disable chat input while processing
         is_processing = st.session_state.get('is_processing', False)
         chat_input_key = f"chat_input_{st.session_state.get('conversation_id', '')}_{len(st.session_state.get('conversation_history', []))}"
-
-        # Use a form to ensure only Enter submits the chat input
         with st.form(key="chat_input_form", clear_on_submit=False):
             chat_input = st.text_input(
                 "💬 Type your question and press Enter", 
@@ -453,116 +611,121 @@ def main():
                 placeholder="Ask about your uploaded documents...",
                 disabled=is_processing
             )
-            submitted = st.form_submit_button("Send", use_container_width=True)
+            send_col1, send_col2 = st.columns([8,1])
+            with send_col1:
+                submitted = st.form_submit_button("Send", use_container_width=True)
+            with send_col2:
+                send_icon = st.form_submit_button("➡️", use_container_width=True)
+        st.markdown('</div>', unsafe_allow_html=True)
 
-        # If no chat is loaded, prompt user to start/select a chat
-        if 'conversation_id' not in st.session_state or not st.session_state.get('conversation_id'):
-            st.info("No active chat. Please start a new chat or select one from the sidebar.")
-        elif submitted and chat_input and not is_processing:
-            st.session_state['is_processing'] = True
-            sanitized_prompt = sanitize_input(chat_input.strip())
-            if "conversation_history" not in st.session_state:
-                st.session_state["conversation_history"] = []
-            # Guard: Prevent duplicate user messages
-            if len(st.session_state["conversation_history"]) > 0 and st.session_state["conversation_history"][-1]["role"] == "user" and st.session_state["conversation_history"][-1]["content"] == sanitized_prompt:
-                st.session_state['is_processing'] = False
-                st.session_state['chat_input_value'] = ''
-                st.experimental_set_query_params(**{})  # Clear widget value
-                st.warning("Duplicate message ignored.")
-            else:
-                # Add user message
-                st.session_state["conversation_history"].append({
-                    "role": "user", 
-                    "content": sanitized_prompt, 
-                    "timestamp": datetime.now().isoformat(timespec='seconds')
-                })
-                st.session_state['chat_input_value'] = ''
-                # Save to disk immediately
-                save_session_to_disk()
-                # Save context after user message
-                history.save_chat_context(st.session_state['conversation_id'], st.session_state['conversation_history'])
-                # Always save conversation history for all chats
-                history.save_conversation({
-                    'id': st.session_state['conversation_id'],
-                    'title': st.session_state.get('conversation_title', ''),
-                    'created_at': st.session_state.get('conversation_created_at', datetime.now().isoformat(timespec='seconds')),
-                    'messages': st.session_state.get('conversation_history', []),
-                    'uploads': st.session_state.get('uploads', [])
-                })
-                with st.spinner("🤔 Thinking..."):
-                    # Allow retrieval from all uploaded documents if more than one is present
-                    uploads = st.session_state.get('uploads', [])
-                    if len(uploads) == 1:
-                        selected_filename = uploads[0]['filename']
-                    else:
-                        selected_filename = None  # Search all documents
-                    results = VectorStore.query_with_expanded_context(
-                        sanitized_prompt,
-                        n_results=st.session_state.get("n_results", 3),
-                        expand=2,
-                        filename=selected_filename
-                    )
-                    context = results.get("documents", [[]])[0] if results.get("documents") else []
-                    context_str = " ".join(context)
-                    logging.info(f"[DEBUG] context_str: {context_str}")
-                    if not context_str.strip():
-                        st.session_state["conversation_history"].append({
-                            "role": "ai", 
-                            "content": "[No relevant context found for your query. Please try rephrasing or uploading more documents.]", 
-                            "timestamp": datetime.now().isoformat(timespec='seconds')
-                        })
-                        save_session_to_disk()
-                        history.save_chat_context(st.session_state['conversation_id'], st.session_state['conversation_history'])
-                        st.session_state['is_processing'] = False
-                        st.session_state['chat_input_value'] = ''
-                        st.experimental_set_query_params(**{})
-                    else:
-                        try:
-                            # Stream the LLM response word by word
-                            response_placeholder = st.empty()
-                            streamed_response = ""
-                            def stream_callback(word):
-                                nonlocal streamed_response
-                                streamed_response += word
-                                response_placeholder.markdown(
-                                    f"""
-                                    <div style=\"display: flex; justify-content: flex-start; margin-bottom: 15px; padding: 0 10px;\">
-                                        <div style=\"background: linear-gradient(135deg, #F5F5F5 0%, #E0E0E0 100%); color: #424242; border-radius: 18px 18px 18px 4px; padding: 12px 18px; max-width: 70%; box-shadow: 0 2px 8px rgba(0,0,0,0.1); border: 1px solid #D0D0D0;\">
-                                            <div style=\"font-weight: 600; margin-bottom: 4px; color: #1976D2;\">AI Assistant</div>
-                                            <div style=\"line-height: 1.4;\">{streamed_response}</div>
-                                            <div style=\"font-size: 11px; color: #666; margin-top: 6px; text-align: right;\">{datetime.now().isoformat(timespec='seconds')[:19]}</div>
-                                        </div>
-                                    </div>
-                                    """,
-                                    unsafe_allow_html=True
-                                )
-                            response = LLMHandler.call_llm(sanitized_prompt, context_str, stream_callback=stream_callback)
-                        except Exception as llm_exc:
-                            logging.error(f"[LLM ERROR] {llm_exc}")
-                            response = "[Error: Could not answer the question. LLM error: {}]".format(str(llm_exc))
-                            streamed_response = response
-                        st.session_state["conversation_history"].append({
-                            "role": "ai", 
-                            "content": streamed_response, 
-                            "timestamp": datetime.now().isoformat(timespec='seconds'),
-                            "context_preview": context_str
-                        })
-                        # Save to disk immediately
-                        save_session_to_disk()
-                        # Save context after AI message
-                        history.save_chat_context(st.session_state['conversation_id'], st.session_state['conversation_history'])
-                        # Always save conversation history for all chats
-                        history.save_conversation({
-                            'id': st.session_state['conversation_id'],
-                            'title': st.session_state.get('conversation_title', ''),
-                            'created_at': st.session_state.get('conversation_created_at', datetime.now().isoformat(timespec='seconds')),
-                            'messages': st.session_state.get('conversation_history', []),
-                            'uploads': st.session_state.get('uploads', [])
-                        })
-                        st.session_state['is_processing'] = False
-                        st.session_state['chat_input_value'] = ''
-                        st.experimental_set_query_params(**{})
+    # If no chat is loaded, prompt user to start/select a chat
+    if 'conversation_id' not in st.session_state or not st.session_state.get('conversation_id'):
+        st.info("No active chat. Please start a new chat or select one from the sidebar.")
+    elif submitted and chat_input and not is_processing:
+        st.session_state['is_processing'] = True
+        sanitized_prompt = sanitize_input(chat_input.strip())
+        if "conversation_history" not in st.session_state:
+            st.session_state["conversation_history"] = []
+        # Guard: Prevent duplicate user messages
+        if len(st.session_state["conversation_history"]) > 0 and st.session_state["conversation_history"][-1]["role"] == "user" and st.session_state["conversation_history"][-1]["content"] == sanitized_prompt:
+            st.session_state['is_processing'] = False
+            st.session_state['chat_input_value'] = ''
+            st.experimental_set_query_params(**{})  # Clear widget value
+            st.warning("Duplicate message ignored.")
+        else:
+            # Add user message
+            st.session_state["conversation_history"].append({
+                "role": "user", 
+                "content": sanitized_prompt, 
+                "timestamp": datetime.now().isoformat(timespec='seconds')
+            })
+            st.session_state['chat_input_value'] = ''
+            # Save to disk immediately
+            save_session_to_disk()
+            # Save context after user message
+            history.save_chat_context(st.session_state['conversation_id'], st.session_state['conversation_history'])
+            # Always save conversation history for all chats
+            history.save_conversation({
+                'id': st.session_state['conversation_id'],
+                'title': st.session_state.get('conversation_title', ''),
+                'created_at': st.session_state.get('conversation_created_at', datetime.now().isoformat(timespec='seconds')),
+                'messages': st.session_state.get('conversation_history', []),
+                'uploads': st.session_state.get('uploads', [])
+            })
+            with st.spinner("🤔 Thinking..."):
+                # Allow retrieval from all uploaded documents if more than one is present
+                uploads = st.session_state.get('uploads', [])
+                if len(uploads) == 1:
+                    selected_filename = uploads[0]['filename']
+                else:
+                    selected_filename = None  # Search all documents
+                
+                # Get conversation history for context
+                conversation_history = st.session_state.get("conversation_history", [])
+                
+                # Query backend API
+                query_result = query_backend(
+                    question=sanitized_prompt,
+                    n_results=st.session_state.get("n_results", 3),
+                    expand=2,
+                    filename=selected_filename,
+                    conversation_history=conversation_history
+                )
+                
+                if query_result is None:
+                    # API call failed
+                    st.session_state["conversation_history"].append({
+                        "role": "ai", 
+                        "content": "[Error: Could not connect to the backend service. Please try again.]", 
+                        "timestamp": datetime.now().isoformat(timespec='seconds')
+                    })
+                    save_session_to_disk()
+                    history.save_chat_context(st.session_state['conversation_id'], st.session_state['conversation_history'])
+                    st.session_state['is_processing'] = False
+                    st.session_state['chat_input_value'] = ''
+                    st.experimental_set_query_params(**{})
                     st.rerun()
+                elif query_result.get('status') == 'no_context':
+                    # No relevant context found
+                    st.session_state["conversation_history"].append({
+                        "role": "ai", 
+                        "content": query_result['answer'], 
+                        "timestamp": datetime.now().isoformat(timespec='seconds')
+                    })
+                    save_session_to_disk()
+                    history.save_chat_context(st.session_state['conversation_id'], st.session_state['conversation_history'])
+                    st.session_state['is_processing'] = False
+                    st.session_state['chat_input_value'] = ''
+                    st.experimental_set_query_params(**{})
+                    st.rerun()
+                else:
+                    # Success - display the response
+                    answer = query_result.get('answer', '')
+                    context_str = query_result.get('context', '')
+                    
+                    # Display the response (for now, non-streaming)
+                    st.session_state["conversation_history"].append({
+                        "role": "ai", 
+                        "content": answer, 
+                        "timestamp": datetime.now().isoformat(timespec='seconds'),
+                        "context_preview": context_str
+                    })
+                    # Save to disk immediately
+                    save_session_to_disk()
+                    # Save context after AI message
+                    history.save_chat_context(st.session_state['conversation_id'], st.session_state['conversation_history'])
+                    # Always save conversation history for all chats
+                    history.save_conversation({
+                        'id': st.session_state['conversation_id'],
+                        'title': st.session_state.get('conversation_title', ''),
+                        'created_at': st.session_state.get('conversation_created_at', datetime.now().isoformat(timespec='seconds')),
+                        'messages': st.session_state.get('conversation_history', []),
+                        'uploads': st.session_state.get('uploads', [])
+                    })
+                    st.session_state['is_processing'] = False
+                    st.session_state['chat_input_value'] = ''
+                    st.experimental_set_query_params(**{})
+                st.rerun()
 
     # --- Footer ---
     st.markdown(
@@ -573,6 +736,102 @@ def main():
         """,
         unsafe_allow_html=True
     )
+
+    # --- Sidebar: Knowledge Base Documents ---
+    st.markdown("---")
+    st.markdown("### 📚 Knowledge Base Documents")
+    if 'documents_list' not in st.session_state:
+        st.session_state['documents_list'] = fetch_documents()
+    if st.button("🔄 Refresh Documents", key="refresh_docs_btn", use_container_width=True):
+        st.session_state['documents_list'] = fetch_documents()
+        st.rerun()
+    docs = st.session_state['documents_list']
+    if not docs:
+        st.info("No documents indexed yet.")
+    else:
+        for doc in docs:
+            with st.container():
+                col1, col2 = st.columns([4,1])
+                with col1:
+                    st.markdown(f"**{doc['filename']}**  ")
+                    st.caption(f"Chunks: {doc['count']}")
+                    if doc.get('examples'):
+                        with st.expander("Show Metadata Examples", expanded=False):
+                            for meta in doc['examples']:
+                                st.json(meta)
+                with col2:
+                    # Modal confirmation for document delete
+                    if st.session_state.get(f"confirm_delete_{doc['filename']}", False):
+                        st.markdown(f"""
+                            <div style='position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(0,0,0,0.25); z-index:10000; display:flex; align-items:center; justify-content:center;'>
+                                <div style='background:#fff; border-radius:16px; box-shadow:0 8px 32px rgba(0,0,0,0.18); padding:32px 40px; min-width:320px; text-align:center;'>
+                                    <div style='font-size:1.2rem; margin-bottom:18px;'>Are you sure you want to delete <b>{doc['filename']}</b>?</div>
+                                    <button style='background:#d32f2f; color:#fff; border:none; border-radius:8px; padding:10px 24px; margin-right:12px; font-size:1rem; box-shadow:0 2px 8px rgba(211,47,47,0.12); cursor:pointer;' onclick="window.location.reload()">Delete</button>
+                                    <button style='background:#eee; color:#333; border:none; border-radius:8px; padding:10px 24px; font-size:1rem; box-shadow:0 2px 8px rgba(0,0,0,0.08); cursor:pointer;' onclick="window.location.reload()">Cancel</button>
+                                </div>
+                            </div>
+                        """, unsafe_allow_html=True)
+                    if st.button("🗑️ Delete", key=f"delete_doc_{doc['filename']}", help="Delete this document", use_container_width=True):
+                        st.session_state[f"confirm_delete_{doc['filename']}"] = True
+                    if st.session_state.get(f"confirm_delete_{doc['filename']}", False):
+                        # Actually delete if confirmed (simulate modal with rerun)
+                        try:
+                            del_resp = requests.delete(f"http://localhost:8000/documents/{doc['filename']}")
+                            if del_resp.ok:
+                                if hasattr(st, 'toast'):
+                                    st.toast(f"Deleted {doc['filename']}", icon="🗑️")
+                                else:
+                                    st.success(f"Deleted {doc['filename']}")
+                                st.session_state['documents_list'] = fetch_documents()
+                                st.session_state[f"confirm_delete_{doc['filename']}"] = False
+                                st.rerun()
+                            else:
+                                if hasattr(st, 'toast'):
+                                    st.toast(f"Failed to delete: {doc['filename']}", icon="❌")
+                                else:
+                                    st.error("Failed to delete: " + del_resp.text)
+                                st.session_state[f"confirm_delete_{doc['filename']}"] = False
+                        except Exception as e:
+                            if hasattr(st, 'toast'):
+                                st.toast(f"Error deleting document: {str(e)}", icon="❌")
+                            else:
+                                st.error(f"Error deleting document: {str(e)}")
+                            st.session_state[f"confirm_delete_{doc['filename']}"] = False
+        # Modal confirmation for knowledge base reset
+        if st.session_state.get('confirm_reset_kb', False):
+            st.markdown("""
+                <div style='position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(0,0,0,0.25); z-index:10000; display:flex; align-items:center; justify-content:center;'>
+                    <div style='background:#fff; border-radius:16px; box-shadow:0 8px 32px rgba(0,0,0,0.18); padding:32px 40px; min-width:320px; text-align:center;'>
+                        <div style='font-size:1.2rem; margin-bottom:18px;'>Are you sure you want to <b>reset the knowledge base</b>?</div>
+                        <button style='background:#d32f2f; color:#fff; border:none; border-radius:8px; padding:10px 24px; margin-right:12px; font-size:1rem; box-shadow:0 2px 8px rgba(211,47,47,0.12); cursor:pointer;' onclick="window.location.reload()">Reset</button>
+                        <button style='background:#eee; color:#333; border:none; border-radius:8px; padding:10px 24px; font-size:1rem; box-shadow:0 2px 8px rgba(0,0,0,0.08); cursor:pointer;' onclick="window.location.reload()">Cancel</button>
+                    </div>
+                </div>
+            """, unsafe_allow_html=True)
+        if st.button("🧹 Reset Knowledge Base (Clear All Embeddings)", key="reset_kb_btn", use_container_width=True):
+            st.session_state['confirm_reset_kb'] = True
+        if st.session_state.get('confirm_reset_kb', False):
+            try:
+                response = requests.post('http://localhost:8000/reset_kb')
+                if response.ok:
+                    st.session_state['uploads'] = []
+                    save_session_to_disk()
+                    if hasattr(st, 'toast'):
+                        st.toast("Knowledge base has been reset. All embeddings cleared.", icon="🧹")
+                    else:
+                        st.success("Knowledge base has been reset. All embeddings cleared.")
+                else:
+                    if hasattr(st, 'toast'):
+                        st.toast("Failed to reset knowledge base: " + response.text, icon="❌")
+                    else:
+                        st.error("Failed to reset knowledge base: " + response.text)
+            except Exception as e:
+                if hasattr(st, 'toast'):
+                    st.toast(f"Error resetting knowledge base: {str(e)}", icon="❌")
+                else:
+                    st.error(f"Error resetting knowledge base: {str(e)}")
+            st.session_state['confirm_reset_kb'] = False
+            st.rerun()
 
 if __name__ == "__main__":
     main()

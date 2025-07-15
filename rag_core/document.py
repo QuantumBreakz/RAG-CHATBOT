@@ -1,44 +1,78 @@
-from rag_core.config import MAX_FILE_SIZE, DEFAULT_CHUNK_SIZE, DEFAULT_CHUNK_OVERLAP, logger
+from rag_core.config import MAX_FILE_SIZE, logger
 from langchain_community.document_loaders import PyMuPDFLoader, UnstructuredWordDocumentLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-import streamlit as st
+from langchain_core.documents import Document
 import tempfile
 import os
+import pandas as pd
+import io
+
+DEFAULT_CHUNK_SIZE = 800
+DEFAULT_CHUNK_OVERLAP = 400
 
 class DocumentProcessor:
     """Handles document loading, validation, and chunking."""
     @staticmethod
-    def process_document(uploaded_file, file_bytes=None):
-        """Process an uploaded file and return split document chunks."""
-        try:
-            # Check file size
-            if uploaded_file.size > MAX_FILE_SIZE:
-                st.error(f"File size exceeds limit of {MAX_FILE_SIZE / (1024 * 1024)} MB")
-                logger.warning(f"File {uploaded_file.name} exceeds size limit")
-                return []
-            
-            # Use provided file_bytes or read from uploaded_file
-            if file_bytes is None:
-                file_bytes = uploaded_file.read()
-            
-            # Save uploaded file to a temp file
-            suffix = ".pdf" if uploaded_file.type == "application/pdf" else ".docx"
+    def process_document(uploaded_file, file_bytes=None, chunk_size=DEFAULT_CHUNK_SIZE, chunk_overlap=DEFAULT_CHUNK_OVERLAP):
+        """Process an uploaded file and return split document chunks. Raises exceptions for errors."""
+        # Check file size
+        if uploaded_file.size > MAX_FILE_SIZE:
+            logger.warning(f"File {uploaded_file.name} exceeds size limit")
+            raise ValueError(f"File size exceeds limit of {MAX_FILE_SIZE / (1024 * 1024)} MB")
+        
+        # Use provided file_bytes or read from uploaded_file
+        if file_bytes is None:
+            file_bytes = uploaded_file.read()
+        
+        # Determine file type (handle both .name and .filename for compatibility)
+        file_basename = getattr(uploaded_file, 'name', None) or getattr(uploaded_file, 'filename', None)
+        if not file_basename:
+            raise ValueError("Uploaded file object must have a .name or .filename attribute.")
+        suffix = os.path.splitext(file_basename)[1].lower()
+
+        if suffix == ".pdf":
             temp_file = tempfile.NamedTemporaryFile("wb", suffix=suffix, delete=False)
             temp_file.write(file_bytes)
             temp_file.close()
-            
-            # Load the file using the appropriate loader
-            if suffix == ".pdf":
-                loader = PyMuPDFLoader(temp_file.name)
-            else:
-                loader = UnstructuredWordDocumentLoader(temp_file.name)
+            loader = PyMuPDFLoader(temp_file.name)
             docs = loader.load()
             os.unlink(temp_file.name)
-            
-            # Split the document into chunks
+        # Handle DOCX
+        elif suffix == ".docx":
+            temp_file = tempfile.NamedTemporaryFile("wb", suffix=suffix, delete=False)
+            temp_file.write(file_bytes)
+            temp_file.close()
+            loader = UnstructuredWordDocumentLoader(temp_file.name)
+            docs = loader.load()
+            os.unlink(temp_file.name)
+        # Handle CSV
+        elif suffix == ".csv":
+            df = pd.read_csv(io.BytesIO(file_bytes))
+            docs = []
+            for idx, row in df.iterrows():
+                content = row.to_json()
+                docs.append(Document(page_content=content, metadata={"filename": file_basename, "row_index": idx}))
+        # Handle Excel
+        elif suffix in [".xlsx", ".xls"]:
+            df = pd.read_excel(io.BytesIO(file_bytes))
+            docs = []
+            for idx, row in df.iterrows():
+                content = row.to_json()
+                docs.append(Document(page_content=content, metadata={"filename": file_basename, "row_index": idx}))
+        else:
+            logger.warning(f"Unsupported file type: {file_basename}")
+            raise ValueError(f"Unsupported file type: {suffix}")
+        
+        # Split the document into chunks (skip for CSV/Excel since each row is a chunk)
+        if suffix in [".csv", ".xlsx", ".xls"]:
+            logger.info(f"Processed {len(docs)} rows from {file_basename}")
+            for i, doc in enumerate(docs[:3]):
+                logger.info(f"Row {i} metadata: {doc.metadata}")
+            return docs
+        else:
             text_splitter = RecursiveCharacterTextSplitter(
-                chunk_size=st.session_state.get("chunk_size", DEFAULT_CHUNK_SIZE),
-                chunk_overlap=st.session_state.get("chunk_overlap", DEFAULT_CHUNK_OVERLAP),
+                chunk_size=chunk_size,
+                chunk_overlap=chunk_overlap,
                 separators=["\n\n", "\n", ".", "!", "?", " ", ""]
             )
             splits = text_splitter.split_documents(docs)
@@ -46,14 +80,9 @@ class DocumentProcessor:
             for idx, split in enumerate(splits):
                 if not hasattr(split, 'metadata') or not isinstance(split.metadata, dict):
                     split.metadata = {}
-                split.metadata['filename'] = uploaded_file.name
+                split.metadata['filename'] = file_basename
                 split.metadata['chunk_index'] = idx
-            logger.info(f"Processed {len(splits)} chunks from {uploaded_file.name}")
-            # Debug: print metadata for first few chunks
+            logger.info(f"Processed {len(splits)} chunks from {file_basename}")
             for i, split in enumerate(splits[:3]):
                 logger.info(f"Chunk {i} metadata: {split.metadata}")
             return splits
-        except Exception as e:
-            logger.error(f"Error processing document {uploaded_file.name}: {str(e)}")
-            st.error(f"Error processing document: {str(e)}")
-            return [] 
