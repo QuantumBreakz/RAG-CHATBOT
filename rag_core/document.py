@@ -6,15 +6,17 @@ import tempfile
 import os
 import pandas as pd
 import io
+# --- Add OCR import ---
+from rag_core.ocr import extract_text_from_pdf, is_scanned_pdf
 
 DEFAULT_CHUNK_SIZE = 800
 DEFAULT_CHUNK_OVERLAP = 400
 
 class DocumentProcessor:
-    """Handles document loading, validation, and chunking."""
+    """Handles document loading, validation, and chunking. Now supports OCR for scanned PDFs."""
     @staticmethod
     def process_document(uploaded_file, file_bytes=None, chunk_size=DEFAULT_CHUNK_SIZE, chunk_overlap=DEFAULT_CHUNK_OVERLAP):
-        """Process an uploaded file and return split document chunks. Raises exceptions for errors."""
+        """Process an uploaded file and return split document chunks. Raises exceptions for errors. Supports OCR for scanned PDFs."""
         # Check file size
         if uploaded_file.size > MAX_FILE_SIZE:
             logger.warning(f"File {uploaded_file.name} exceeds size limit")
@@ -34,8 +36,14 @@ class DocumentProcessor:
             temp_file = tempfile.NamedTemporaryFile("wb", suffix=suffix, delete=False)
             temp_file.write(file_bytes)
             temp_file.close()
-            loader = PyMuPDFLoader(temp_file.name)
-            docs = loader.load()
+            # --- Use OCR for scanned PDFs ---
+            if is_scanned_pdf(temp_file.name):
+                logger.info(f"PDF {file_basename} detected as scanned. Using OCR.")
+                text = extract_text_from_pdf(temp_file.name)
+                docs = [Document(page_content=text, metadata={"filename": file_basename})]
+            else:
+                loader = PyMuPDFLoader(temp_file.name)
+                docs = loader.load()
             os.unlink(temp_file.name)
         # Handle DOCX
         elif suffix == ".docx":
