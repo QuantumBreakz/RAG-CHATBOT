@@ -302,7 +302,7 @@ const ChatInterface: React.FC = () => {
     setInputValue(""); // Clear input for better UX
 
     try {
-      const response = await fetch('/api/query/stream', {
+      const response = await fetch('/query/stream', {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: new URLSearchParams({
