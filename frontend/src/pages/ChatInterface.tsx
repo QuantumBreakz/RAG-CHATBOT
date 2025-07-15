@@ -55,7 +55,7 @@ const ChatInterface: React.FC = () => {
       setIsLoadingDocuments(true);
       setLoading(true);
       try {
-        const response = await fetch('/api/documents');
+        const response = await fetch('/documents');
         const data = await response.json();
         setDocuments(data.documents || []);
       } catch (err) {
@@ -75,7 +75,7 @@ const ChatInterface: React.FC = () => {
       setIsLoadingConversations(true);
       setLoading(true);
       try {
-        const response = await fetch('/api/history/list');
+        const response = await fetch('/history/list');
         const data = await response.json();
         setConversations(data.conversations || []);
       } catch (err) {
@@ -93,7 +93,7 @@ const ChatInterface: React.FC = () => {
   const handleLoadConversation = async (convId: string) => {
     setLoading(true);
     try {
-      const response = await fetch(`/api/history/get/${convId}`);
+      const response = await fetch(`/history/get/${convId}`);
       const data = await response.json();
       setCurrentSessionFromBackend(data.conversation);
     } catch (err) {
@@ -109,7 +109,7 @@ const ChatInterface: React.FC = () => {
     setIsDeletingConversation(convId);
     setLoading(true);
     try {
-      await fetch(`/api/history/delete/${convId}`, { method: 'DELETE' });
+      await fetch(`/history/delete/${convId}`, { method: 'DELETE' });
       setConversations((prev: {id: string, title: string, created_at: string}[]) => prev.filter((conv: {id: string}) => conv.id !== convId));
       setBannerMessage('Conversation deleted.');
       setBannerType('success');
@@ -125,7 +125,7 @@ const ChatInterface: React.FC = () => {
   const handleExportConversation = async (convId: string) => {
     setLoading(true);
     try {
-      const response = await fetch(`/api/history/export/${convId}`);
+      const response = await fetch(`/history/export/${convId}`);
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -147,7 +147,7 @@ const ChatInterface: React.FC = () => {
     setIsLoadingDocuments(true);
     setLoading(true);
     try {
-      const response = await fetch('/api/documents');
+      const response = await fetch('/documents');
       const data = await response.json();
       setDocuments(data.documents || []);
     } catch (err) {
@@ -165,7 +165,7 @@ const ChatInterface: React.FC = () => {
     setIsDeletingDocument(filename);
     setLoading(true);
     try {
-      await fetch(`/api/documents/${encodeURIComponent(filename)}`, {
+      await fetch(`/documents/${encodeURIComponent(filename)}`, {
         method: 'DELETE',
       });
       setBannerMessage(`Document "${filename}" deleted.`);
@@ -186,7 +186,7 @@ const ChatInterface: React.FC = () => {
     setLoading(true);
     setStatusMessage('Resetting knowledge base...');
     try {
-      const response = await fetch('/api/reset_kb', { method: 'POST' });
+      const response = await fetch('/reset_kb', { method: 'POST' });
       if (!response.ok) throw new Error('Reset failed');
       const data = await response.json();
       setStatusMessage(data.status || 'Knowledge base reset.');
@@ -206,7 +206,7 @@ const ChatInterface: React.FC = () => {
     setStatusMessage('Checking backend health...');
     setLoading(true);
     try {
-      const response = await fetch('/api/health');
+      const response = await fetch('/health');
       if (!response.ok) throw new Error('Health check failed');
       const data = await response.json();
       setStatusMessage(data.status === 'ok' ? 'Backend healthy.' : 'Backend not healthy.');
@@ -222,7 +222,7 @@ const ChatInterface: React.FC = () => {
     setStatusMessage('Testing vector store...');
     setLoading(true);
     try {
-      const response = await fetch('/api/test_vectorstore');
+      const response = await fetch('/test_vectorstore');
       if (!response.ok) throw new Error('Vectorstore test failed');
       const data = await response.json();
       setStatusMessage(data.message || data.status);
@@ -238,7 +238,7 @@ const ChatInterface: React.FC = () => {
   useEffect(() => {
     const checkVectorstore = async () => {
       try {
-        const response = await fetch('/api/test_vectorstore');
+        const response = await fetch('/test_vectorstore');
         const data = await response.json();
         setVectorstoreHealthy(data.status === 'ok');
       } catch (err) {
@@ -402,7 +402,7 @@ const ChatInterface: React.FC = () => {
 
       try {
         setUploadProgress(Math.round(((idx + 1) / files.length) * 100));
-        const response = await fetch('/api/upload', {
+        const response = await fetch('/upload', {
           method: 'POST',
           body: formData
         });
@@ -448,7 +448,7 @@ const ChatInterface: React.FC = () => {
     setIsEditingTitle(false);
     // Persist to backend
     try {
-      await fetch('/api/history/save', {
+      await fetch('/history/save', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ...currentSession, title: updatedTitle })
@@ -470,7 +470,7 @@ const ChatInterface: React.FC = () => {
     setIsLoadingConversations(true);
     setLoading(true);
     try {
-      const response = await fetch('/api/history/list');
+      const response = await fetch('/history/list');
       const data = await response.json();
       setConversations(data.conversations || []);
     } catch (err) {

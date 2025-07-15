@@ -129,9 +129,9 @@ async def query_rag_stream(
         if not context_str.strip():
             def empty_stream():
                 yield json.dumps({
-                    "answer": "[No relevant context found for your query. Please try rephrasing or uploading more documents.]",
-                    "context": "",
-                    "status": "no_context"
+                "answer": "[No relevant context found for your query. Please try rephrasing or uploading more documents.]",
+                "context": "",
+                "status": "no_context"
                 })
             return StreamingResponse(empty_stream(), media_type="application/json")
         def word_stream():

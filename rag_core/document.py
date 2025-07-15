@@ -42,8 +42,8 @@ class DocumentProcessor:
                 text = extract_text_from_pdf(temp_file.name)
                 docs = [Document(page_content=text, metadata={"filename": file_basename})]
             else:
-                loader = PyMuPDFLoader(temp_file.name)
-                docs = loader.load()
+            loader = PyMuPDFLoader(temp_file.name)
+            docs = loader.load()
             os.unlink(temp_file.name)
         # Handle DOCX
         elif suffix == ".docx":
