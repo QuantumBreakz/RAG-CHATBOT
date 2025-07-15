@@ -1,25 +1,16 @@
-# Dockerfile for PITB RAG Chatbot (Backend)
+# Use an official Python runtime as a parent image
+FROM python:3.11-slim
 
-# Use official Python base image
-FROM python:3.12-slim
-
-# Set environment variables
-ENV PYTHONDONTWRITEBYTECODE=1
-ENV PYTHONUNBUFFERED=1
-ENV APP_MODE=production  # Set to 'debug' to run Streamlit UI
+# Install system dependencies for OCR and PDF processing
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+    tesseract-ocr \
+    poppler-utils \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
 
 # Set work directory
 WORKDIR /app
-
-# Install system dependencies
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends \
-        build-essential \
-        git \
-        libmagic1 \
-        libgl1-mesa-glx \
-        libglib2.0-0 \
-        && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements
 COPY requirements.txt ./
@@ -28,15 +19,11 @@ COPY requirements.txt ./
 RUN pip install --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
 
-# Copy the rest of the code
+# Copy the rest of the application code
 COPY . .
 
-# Expose FastAPI and Streamlit ports
-EXPOSE 8000 8501
+# Expose backend port
+EXPOSE 8000
 
-# Entrypoint: run FastAPI (production) or Streamlit (debug)
-CMD if [ "$APP_MODE" = "debug" ]; then \
-      streamlit run app.py --server.port=8501 --server.headless=true --server.enableCORS=false; \
-    else \
-      uvicorn backend.main:app --host 0.0.0.0 --port 8000; \
-    fi 
+# Default command
+CMD ["uvicorn", "backend.api:app", "--host", "0.0.0.0", "--port", "8000"] 

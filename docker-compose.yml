@@ -3,62 +3,28 @@ version: '3.8'
 services:
   backend:
     build: .
-    container_name: pitb-rag-backend
+    container_name: rag-backend
     ports:
-      - "8000:8000"   # FastAPI
-      - "8501:8501"   # Streamlit (debug)
-    environment:
-      - OLLAMA_BASE_URL=http://ollama:11434
-      - APP_MODE=production  # Set to 'debug' to run Streamlit UI
-    volumes:
-      - ./log:/app/log
-      - ./assets:/app/assets
-      - ./demo-rag-chroma:/app/demo-rag-chroma
-      - ./rag_core:/app/rag_core
-      - ./requirements.txt:/app/requirements.txt
-      - ./app.py:/app/app.py
-      - ./README.md:/app/README.md
-      - ./INSTRUCTIONS.md:/app/INSTRUCTIONS.md
+      - "8000:8000"
     depends_on:
-      - ollama
       - redis
-      - chromadb
+    environment:
+      - PYTHONUNBUFFERED=1
+      - APP_MODE=production
+      # Add other env vars as needed
+    volumes:
+      - .:/app
 
   frontend:
-    build: ./frontend
-    container_name: pitb-rag-frontend
+    image: node:20
+    container_name: rag-frontend
+    working_dir: /app/frontend
+    volumes:
+      - ./frontend:/app/frontend
     ports:
-      - "3000:3000"   # Vite dev server or React app
+      - "5173:5173"
+    command: sh -c "npm install && npm run dev -- --host"
+    environment:
+      - NODE_ENV=development
     depends_on:
-      - backend
-    environment:
-      - VITE_API_URL=http://localhost:8000/api
-    volumes:
-      - ./frontend:/app
-
-  ollama:
-    image: ollama/ollama:latest
-    container_name: ollama
-    ports:
-      - "11434:11434"
-    volumes:
-      - ollama_data:/root/.ollama
-
-  redis:
-    image: redis:7
-    ports:
-      - "6379:6379"
-    restart: always
-
-  chromadb:
-    image: chromadb/chroma:latest
-    container_name: chromadb
-    ports:
-      - "8001:8000"
-    volumes:
-      - ./demo-rag-chroma:/chroma/chroma
-    environment:
-      - IS_PERSISTENT=TRUE
-
-volumes:
-  ollama_data: 
+      - backend 
