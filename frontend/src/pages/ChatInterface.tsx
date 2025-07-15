@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Upload, FileText, X, Settings, Trash2, Plus, Bot, User, Sparkles } from 'lucide-react';
+import { Send, Upload, FileText, X, Settings, Trash2, Plus, Bot, User, Sparkles, Pencil } from 'lucide-react';
 import { useChat } from '../contexts/ChatContext';
 import Button from '../components/ui/Button';
 import Card from '../components/ui/Card';
@@ -22,6 +22,9 @@ const ChatInterface: React.FC = () => {
   const [bannerMessage, setBannerMessage] = useState<string | null>(null);
   const [bannerType, setBannerType] = useState<'success' | 'error' | null>(null);
   const [vectorstoreHealthy, setVectorstoreHealthy] = useState<boolean | null>(null);
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
+  const [isEditingTitle, setIsEditingTitle] = useState(false);
+  const [editedTitle, setEditedTitle] = useState<string>("");
   
   const {
     sessions,
@@ -291,31 +294,68 @@ const ChatInterface: React.FC = () => {
 
     setIsUploading(true);
     setLoading(true);
+    setUploadProgress(0);
 
-    for (const file of Array.from(files) as File[]) {
+    for (const [idx, file] of Array.from(files).entries()) {
       const formData = new FormData();
       formData.append('file', file);
 
       try {
+        setUploadProgress(Math.round(((idx + 1) / files.length) * 100));
         const response = await fetch('/api/upload', {
           method: 'POST',
           body: formData
         });
-        if (!response.ok) throw new Error('Upload failed');
         const data = await response.json();
+
+        if (data.status?.includes('uploaded and embedded')) {
+          setBannerMessage(`Embeddings created for "${file.name}" (${data.num_chunks} chunks).`);
+          setBannerType('success');
+        } else if (data.status?.includes('already exist')) {
+          setBannerMessage(`Embeddings already exist for "${file.name}".`);
+          setBannerType('success');
+        } else {
+          setBannerMessage(`Embedding failed for "${file.name}": ${data.status}`);
+          setBannerType('error');
+        }
         addDocument(file.name);
       } catch (err) {
         setBannerMessage(`Failed to upload document "${file.name}".`);
         setBannerType('error');
       }
     }
-      setIsUploading(false);
+    setIsUploading(false);
     setLoading(false);
+    setUploadProgress(null);
     await refreshDocuments();
   };
 
   const formatTimestamp = (date: Date) => {
     return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  };
+
+  // Add this function to handle title save
+  const handleSaveTitle = async () => {
+    if (!currentSession) return;
+    const updatedSession = { ...currentSession, title: editedTitle.trim() || 'Untitled Conversation' };
+    setIsEditingTitle(false);
+    // Update in frontend state
+    setCurrentSessionFromBackend(updatedSession);
+    // Persist to backend
+    try {
+      await fetch('/api/history/save', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updatedSession)
+      });
+      setBannerMessage('Conversation renamed.');
+      setBannerType('success');
+      // Optionally refresh conversations list
+      setConversations((prev) => prev.map(conv => conv.id === updatedSession.id ? { ...conv, title: updatedSession.title } : conv));
+    } catch (err) {
+      setBannerMessage('Failed to rename conversation.');
+      setBannerType('error');
+    }
   };
 
   return (
@@ -508,7 +548,34 @@ const ChatInterface: React.FC = () => {
             <div>
               <h2 className="text-xl font-bold text-foreground flex items-center">
                 <Bot className="mr-3 h-6 w-6 text-primary" />
-                {currentSession?.title || 'XOR RAG Assistant'}
+                {isEditingTitle ? (
+                  <input
+                    className="text-xl font-bold bg-surface border-b border-primary focus:outline-none px-2 py-1 rounded"
+                    value={editedTitle}
+                    autoFocus
+                    onChange={e => setEditedTitle(e.target.value)}
+                    onBlur={handleSaveTitle}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') handleSaveTitle();
+                      if (e.key === 'Escape') setIsEditingTitle(false);
+                    }}
+                    style={{ width: '16rem' }}
+                  />
+                ) : (
+                  <>
+                    {currentSession?.title || 'XOR RAG Assistant'}
+                    <button
+                      className="ml-2 text-primary hover:text-primary-dark"
+                      onClick={() => {
+                        setEditedTitle(currentSession?.title || '');
+                        setIsEditingTitle(true);
+                      }}
+                      title="Rename Conversation"
+                    >
+                      <Pencil className="w-4 h-4 inline" />
+                    </button>
+                  </>
+                )}
               </h2>
               <p className="text-sm text-muted-foreground mt-1">
                 {uploadedDocuments.length > 0 
@@ -671,6 +738,14 @@ const ChatInterface: React.FC = () => {
           </div>
         </div>
       </div>
+      {isUploading && (
+        <div className="w-full bg-gray-200 rounded-full h-2.5 mb-4">
+          <div
+            className="bg-primary h-2.5 rounded-full transition-all duration-300"
+            style={{ width: `${uploadProgress || 0}%` }}
+          ></div>
+        </div>
+      )}
     </div>
   );
 };

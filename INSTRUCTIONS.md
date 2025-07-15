@@ -243,3 +243,42 @@ st.session_state = {
 - For bug reports or feature requests, open an issue or pull request on GitHub.
 
 --- 
+
+# Running the Project Locally
+
+## 1. Start Redis
+```
+sudo apt update
+sudo apt install redis-server
+redis-server
+```
+
+## 2. Install OCR Dependencies
+```
+sudo apt install tesseract-ocr poppler-utils
+```
+
+## 3. Backend Setup
+```
+cd /path/to/project
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+uvicorn backend.api:app --reload --host 0.0.0.0 --port 8000
+```
+
+## 4. Frontend Setup
+```
+cd frontend
+npm install
+npm run dev
+```
+
+## 5. Access the App
+- Frontend: http://localhost:5173
+- Backend API: http://localhost:8000
+
+## Notes
+- Make sure your .env file is configured for the backend.
+- OCR (scanned PDF) support requires Tesseract and poppler-utils.
+- If you change ports, update the frontend proxy or API URLs accordingly. 
