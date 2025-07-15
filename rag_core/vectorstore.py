@@ -6,6 +6,9 @@ from tenacity import retry, stop_after_attempt, wait_exponential
 from rag_core.redis_cache import redis_get, redis_set
 import hashlib
 import pickle
+import collections
+from typing import List, Dict, Any
+from Levenshtein import distance as levenshtein_distance
 
 class VectorStore:
     """Handles vector collection operations for ChromaDB."""
@@ -85,6 +88,41 @@ class VectorStore:
             return {} 
 
     @staticmethod
+    def _rerank_and_deduplicate(chunks: List[Dict[str, Any]], top_k: int = 10, fuzzy_threshold: int = 20) -> List[Dict[str, Any]]:
+        """
+        Rerank chunks by similarity, document frequency, and length. Deduplicate using Levenshtein distance.
+        Returns top_k unique chunks.
+        """
+        # Count document frequency for each chunk content
+        content_to_docs = collections.defaultdict(set)
+        for chunk in chunks:
+            content_to_docs[chunk['page_content']].add(chunk['metadata'].get('filename', 'unknown'))
+        
+        # Score each chunk
+        for chunk in chunks:
+            content = chunk['page_content']
+            chunk['score'] = (
+                chunk.get('similarity', 0) +
+                0.2 * len(content_to_docs[content]) +  # document frequency boost
+                0.1 * len(content) / 1000  # length boost
+            )
+        # Sort by score descending
+        chunks = sorted(chunks, key=lambda x: x['score'], reverse=True)
+        # Fuzzy deduplication
+        unique_chunks = []
+        for chunk in chunks:
+            is_duplicate = False
+            for u in unique_chunks:
+                if levenshtein_distance(chunk['page_content'], u['page_content']) < fuzzy_threshold:
+                    is_duplicate = True
+                    break
+            if not is_duplicate:
+                unique_chunks.append(chunk)
+            if len(unique_chunks) >= top_k:
+                break
+        return unique_chunks
+
+    @staticmethod
     def query_with_expanded_context(prompt: str, n_results: int, expand: int = 4, filename: str = None):
         # Redis cache key based on prompt and params
         cache_key = f"query:{hashlib.sha256(f'{prompt}|{n_results}|{expand}|{filename}'.encode()).hexdigest()}"
@@ -100,7 +138,7 @@ class VectorStore:
             return {"documents": [[]], "metadatas": [[]], "ids": [[]]}
         query_kwargs = {
             'query_texts': [prompt],
-            'n_results': n_results,
+            'n_results': n_results * 3,  # fetch more for reranking/dedup
             'include': ['documents', 'metadatas']
         }
         if filename:
@@ -108,72 +146,22 @@ class VectorStore:
         result = collection.query(**query_kwargs)
         docs = result.get('documents', [[]])[0]
         metadatas = result.get('metadatas', [[]])[0]
-        
-        # Generate IDs based on metadata since we can't get them from the query
-        ids = []
-        for i, meta in enumerate(metadatas):
-            filename_meta = meta.get('filename', 'unknown')
-            chunk_idx = meta.get('chunk_index') or meta.get('row_index', i)
-            ids.append(f"{filename_meta}_{chunk_idx}")
-
-        # Expand context by including neighboring chunks
-        expanded_docs, expanded_metas, expanded_ids = [], [], []
-        for idx, meta in enumerate(metadatas):
-            chunk_idx = meta.get('chunk_index') or meta.get('row_index')
-            if chunk_idx is not None and filename:
-                # Try to get neighbors
-                for offset in range(-expand, expand+1):
-                    neighbor_idx = chunk_idx + offset
-                    if neighbor_idx < 0:
-                        continue
-                    # Find the neighbor in the collection (brute force, could be optimized)
-                    for m, d, i in zip(metadatas, docs, ids):
-                        nidx = m.get('chunk_index') or m.get('row_index')
-                        if nidx == neighbor_idx:
-                            if i not in expanded_ids:
-                                expanded_docs.append(d)
-                                expanded_metas.append(m)
-                                expanded_ids.append(i)
-        # Always include the last chunk(s) for 'current/latest' queries
-        keywords = ["current", "latest", "now", "today", "conclusion"]
-        if any(k in prompt.lower() for k in keywords):
-            # Find the last chunk(s) for the file
-            last_chunks = []
-            max_idx = -1
-            for m in metadatas:
-                idx = m.get('chunk_index') or m.get('row_index')
-                if idx is not None and idx > max_idx:
-                    max_idx = idx
-            for m, d, i in zip(metadatas, docs, ids):
-                idx = m.get('chunk_index') or m.get('row_index')
-                if idx is not None and idx >= max_idx - 1:  # last 2 chunks
-                    if i not in expanded_ids:
-                        expanded_docs.append(d)
-                        expanded_metas.append(m)
-                        expanded_ids.append(i)
-        # Heuristic: boost inclusion of chunks with certain keywords
-        boost_keywords = ["however", "in conclusion", "update", "but ", "summary"]
-        for m, d, i in zip(metadatas, docs, ids):
-            content = d.lower() if isinstance(d, str) else str(d).lower()
-            if any(bk in content for bk in boost_keywords):
-                if i not in expanded_ids:
-                    expanded_docs.append(d)
-                    expanded_metas.append(m)
-                    expanded_ids.append(i)
-        # If nothing expanded, fall back to original
-        if not expanded_docs:
-            expanded_docs, expanded_metas, expanded_ids = docs, metadatas, ids
-        out = {
-            "documents": [expanded_docs],
-            "metadatas": [expanded_metas],
-            "ids": [expanded_ids]
-        }
-        # Cache the result in Redis for 10 minutes
-        try:
-            redis_set(cache_key, pickle.dumps(out), ex=600)
-        except Exception:
-            pass
-        return out
+        # Build chunk dicts with similarity (if available)
+        chunks = []
+        for i, (doc, meta) in enumerate(zip(docs, metadatas)):
+            chunk = {
+                'page_content': doc,
+                'metadata': meta,
+                'similarity': meta.get('similarity', 1.0) if isinstance(meta, dict) else 1.0
+            }
+            chunks.append(chunk)
+        # Rerank and deduplicate
+        reranked = VectorStore._rerank_and_deduplicate(chunks, top_k=n_results)
+        # Prepare return format
+        docs_out = [c['page_content'] for c in reranked]
+        metas_out = [c['metadata'] for c in reranked]
+        ids_out = [f"{c['metadata'].get('filename','unknown')}_{c['metadata'].get('chunk_index',0)}" for c in reranked]
+        return {"documents": [docs_out], "metadatas": [metas_out], "ids": [ids_out]}
 
     @staticmethod
     def clear_vector_collection():
