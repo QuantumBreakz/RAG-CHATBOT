@@ -25,6 +25,10 @@ const ChatInterface: React.FC = () => {
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [editedTitle, setEditedTitle] = useState<string>("");
+  // Add state for LLM streaming progress
+  const [llmProgress, setLlmProgress] = useState<number | null>(null);
+  const [llmStreaming, setLlmStreaming] = useState(false);
+  const [embeddingStatus, setEmbeddingStatus] = useState<string | null>(null);
   
   const {
     sessions,
@@ -258,12 +262,15 @@ const ChatInterface: React.FC = () => {
     const userMessage = inputValue.trim();
     setIsSending(true);
     setLoading(true);
+    setLlmStreaming(true);
+    setLlmProgress(0);
 
     // Add user message
     addMessage(userMessage, 'user');
-
+    console.log('addMessage called with user:', userMessage);
     // Add a placeholder for the assistant's streaming message
     addMessage('', 'assistant');
+    console.log('addMessage called with assistant: ""');
 
     try {
       const response = await fetch('/api/query/stream', {
@@ -282,10 +289,22 @@ const ChatInterface: React.FC = () => {
       let decoder = new TextDecoder();
       let done = false;
       let assistantContent = '';
+      let totalLength = 0;
+      let receivedLength = 0;
+      // Try to estimate total length from headers if available
+      if (response.headers.has('content-length')) {
+        totalLength = parseInt(response.headers.get('content-length') || '0', 10);
+      }
       while (!done) {
         const { value, done: doneReading } = await reader.read();
         done = doneReading;
         if (value) {
+          receivedLength += value.length;
+          if (totalLength > 0) {
+            setLlmProgress(Math.round((receivedLength / totalLength) * 100));
+          } else {
+            setLlmProgress(null); // Indeterminate
+          }
           const chunk = decoder.decode(value, { stream: true });
           chunk.split('\n').forEach(line => {
             if (line.trim()) {
@@ -295,6 +314,7 @@ const ChatInterface: React.FC = () => {
                   assistantContent += data.answer;
                   // Update the last assistant message in the session (in place)
                   updateStreamingMessage(assistantContent);
+                  console.log('updateStreamingMessage called with:', assistantContent);
                 }
               } catch (err) {
                 // Ignore JSON parse errors for incomplete lines
@@ -303,6 +323,8 @@ const ChatInterface: React.FC = () => {
           });
         }
       }
+      setLlmProgress(100);
+      setTimeout(() => setLlmProgress(null), 500);
     } catch (err) {
       addMessage('Error contacting backend.', 'assistant');
       setBannerMessage('Error contacting backend.');
@@ -310,6 +332,7 @@ const ChatInterface: React.FC = () => {
     }
     setIsSending(false);
     setLoading(false);
+    setLlmStreaming(false);
   };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -319,6 +342,7 @@ const ChatInterface: React.FC = () => {
     setIsUploading(true);
     setLoading(true);
     setUploadProgress(0);
+    setEmbeddingStatus('Creating embeddings and chunks...');
 
     for (const [idx, file] of Array.from(files).entries()) {
       const formData = new FormData();
@@ -335,22 +359,27 @@ const ChatInterface: React.FC = () => {
         if (data.status?.includes('uploaded and embedded')) {
           setBannerMessage(`Embeddings created for "${file.name}" (${data.num_chunks} chunks).`);
           setBannerType('success');
+          setEmbeddingStatus(`Embeddings created for "${file.name}" (${data.num_chunks} chunks).`);
         } else if (data.status?.includes('already exist')) {
           setBannerMessage(`Embeddings already exist for "${file.name}".`);
           setBannerType('success');
+          setEmbeddingStatus(`Embeddings already exist for "${file.name}".`);
         } else {
           setBannerMessage(`Embedding failed for "${file.name}": ${data.status}`);
           setBannerType('error');
+          setEmbeddingStatus(`Embedding failed for "${file.name}": ${data.status}`);
         }
         addDocument(file.name);
       } catch (err) {
         setBannerMessage(`Failed to upload document "${file.name}".`);
         setBannerType('error');
+        setEmbeddingStatus(`Failed to upload document "${file.name}".`);
       }
     }
     setIsUploading(false);
     setLoading(false);
     setUploadProgress(null);
+    setTimeout(() => setEmbeddingStatus(null), 2000);
     await refreshDocuments();
   };
 
@@ -374,7 +403,7 @@ const ChatInterface: React.FC = () => {
       });
       setBannerMessage('Conversation renamed.');
       setBannerType('success');
-      // Optionally refresh conversations list
+      // Refresh conversations list and update sidebar
       setConversations((prev) => prev.map(conv => conv.id === updatedSession.id ? { ...conv, title: updatedSession.title } : conv));
     } catch (err) {
       setBannerMessage('Failed to rename conversation.');
@@ -680,7 +709,9 @@ const ChatInterface: React.FC = () => {
                         : 'bg-surface-elevated'
                     }`}
                   >
-                    <p className="text-sm leading-relaxed">{message.content}</p>
+                    <p className="text-sm leading-relaxed">
+                      {message.content && message.content.trim() !== '' ? message.content : <span className="italic text-gray-400">[No content]</span>}
+                    </p>
                     <div className={`text-xs mt-2 ${
                       message.role === 'user' ? 'text-white/70' : 'text-muted-foreground'
                     }`}>
@@ -762,12 +793,16 @@ const ChatInterface: React.FC = () => {
           </div>
         </div>
       </div>
-      {isUploading && (
+      {(isUploading || llmStreaming) && (
         <div className="w-full bg-gray-200 rounded-full h-2.5 mb-4">
           <div
             className="bg-primary h-2.5 rounded-full transition-all duration-300"
-            style={{ width: `${uploadProgress || 0}%` }}
+            style={{ width: `${isUploading ? uploadProgress || 0 : llmProgress || 0}%` }}
           ></div>
+          <div className="text-xs text-center mt-1 text-muted-foreground">
+            {isUploading && embeddingStatus}
+            {llmStreaming && 'Processing LLM response...'}
+          </div>
         </div>
       )}
     </div>
