@@ -60,6 +60,24 @@ export const ChatProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const addMessage = (content: string, role: 'user' | 'assistant') => {
     if (!currentSession) return;
 
+    if (role === 'assistant') {
+      // If the last message is an assistant streaming message, update it
+      const lastMsg = currentSession.messages[currentSession.messages.length - 1];
+      if (lastMsg && lastMsg.role === 'assistant' && lastMsg.isStreaming) {
+        const updatedSession = {
+          ...currentSession,
+          messages: currentSession.messages.map((msg, idx) =>
+            idx === currentSession.messages.length - 1
+              ? { ...msg, content, isStreaming: true }
+              : msg
+          ),
+        };
+        setSessions(prev => prev.map(s => s.id === currentSession.id ? updatedSession : s));
+        setCurrentSession(updatedSession);
+        return;
+      }
+    }
+
     const newMessage: Message = {
       id: uuidv4(),
       content,

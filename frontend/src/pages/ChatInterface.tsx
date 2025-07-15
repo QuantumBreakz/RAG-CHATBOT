@@ -36,7 +36,8 @@ const ChatInterface: React.FC = () => {
     uploadedDocuments,
     addDocument,
     removeDocument,
-    setCurrentSessionFromBackend
+    setCurrentSessionFromBackend,
+    updateStreamingMessage
   } = useChat();
 
   const { loading, setLoading } = useGlobalLoading();
@@ -286,15 +287,14 @@ const ChatInterface: React.FC = () => {
         done = doneReading;
         if (value) {
           const chunk = decoder.decode(value, { stream: true });
-          // Each chunk is a JSON line
           chunk.split('\n').forEach(line => {
             if (line.trim()) {
               try {
                 const data = JSON.parse(line);
                 if (data.answer !== undefined) {
                   assistantContent += data.answer;
-                  // Update the last assistant message in the session
-                  addMessage(assistantContent, 'assistant');
+                  // Update the last assistant message in the session (in place)
+                  updateStreamingMessage(assistantContent);
                 }
               } catch (err) {
                 // Ignore JSON parse errors for incomplete lines
