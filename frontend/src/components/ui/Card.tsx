@@ -47,6 +47,12 @@ const Card: React.FC<CardProps> = ({
       role={onClick ? 'button' : undefined}
       tabIndex={onClick ? 0 : undefined}
       style={onClick ? { cursor: 'pointer' } : undefined}
+      onKeyDown={onClick ? (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onClick();
+        }
+      } : undefined}
     >
       {glow && (
         <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-primary/5 opacity-50"></div>

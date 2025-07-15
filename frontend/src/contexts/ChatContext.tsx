@@ -29,6 +29,7 @@ interface ChatContextType {
   addDocument: (document: string) => void;
   removeDocument: (document: string) => void;
   setCurrentSessionFromBackend: (conv: any) => void;
+  renameSession: (sessionId: string, newTitle: string) => void;
 }
 
 const ChatContext = createContext<ChatContextType | undefined>(undefined);
@@ -140,7 +141,17 @@ export const ChatProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       documents: conv.uploads ? conv.uploads.map((u: any) => u.filename) : []
     };
     setCurrentSession(newSession);
-    setSessions(prev => [newSession, ...prev.filter(s => s.id !== newSession.id)]);
+    setSessions(prev => {
+      // Remove any session with the same ID, then add the new one at the top
+      const filtered = prev.filter(s => s.id !== newSession.id);
+      return [newSession, ...filtered];
+    });
+  };
+
+  // Ensure renames propagate to both sessions and currentSession
+  const renameSession = (sessionId: string, newTitle: string) => {
+    setSessions(prev => prev.map(s => s.id === sessionId ? { ...s, title: newTitle } : s));
+    setCurrentSession(cs => cs && cs.id === sessionId ? { ...cs, title: newTitle } : cs);
   };
 
   return (
@@ -155,7 +166,8 @@ export const ChatProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       uploadedDocuments,
       addDocument,
       removeDocument,
-      setCurrentSessionFromBackend
+      setCurrentSessionFromBackend,
+      renameSession
     }}>
       {children}
     </ChatContext.Provider>

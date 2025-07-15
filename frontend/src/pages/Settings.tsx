@@ -24,6 +24,7 @@ const Settings: React.FC = () => {
   });
 
   const [isSaving, setIsSaving] = useState(false);
+  const [saveBanner, setSaveBanner] = useState<string | null>(null);
 
   const handleSettingChange = (key: string, value: any) => {
     setSettings(prev => ({
@@ -39,6 +40,8 @@ const Settings: React.FC = () => {
     // Simulate API call
     await new Promise(resolve => setTimeout(resolve, 1000));
     setIsSaving(false);
+    setSaveBanner('Settings saved successfully!');
+    setTimeout(() => setSaveBanner(null), 2000);
   };
 
   const handleReset = () => {
@@ -86,6 +89,11 @@ const Settings: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-background p-4">
+      {saveBanner && (
+        <div className="fixed top-4 left-1/2 transform -translate-x-1/2 z-50 bg-primary text-white px-6 py-2 rounded shadow-lg text-sm animate-fade-in">
+          {saveBanner}
+        </div>
+      )}
       <div className="max-w-6xl mx-auto">
         <div className="mb-12">
           <h1 className="text-4xl md:text-5xl font-bold mb-4 bg-gradient-to-r from-foreground to-primary bg-clip-text text-transparent">

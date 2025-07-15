@@ -29,6 +29,8 @@ const ChatInterface: React.FC = () => {
   const [llmProgress, setLlmProgress] = useState<number | null>(null);
   const [llmStreaming, setLlmStreaming] = useState(false);
   const [embeddingStatus, setEmbeddingStatus] = useState<string | null>(null);
+  // Add state for streaming assistant message
+  const [streamingAssistantContent, setStreamingAssistantContent] = useState<string>("");
   
   const {
     sessions,
@@ -41,7 +43,8 @@ const ChatInterface: React.FC = () => {
     addDocument,
     removeDocument,
     setCurrentSessionFromBackend,
-    updateStreamingMessage
+    updateStreamingMessage,
+    renameSession
   } = useChat();
 
   const { loading, setLoading } = useGlobalLoading();
@@ -247,16 +250,42 @@ const ChatInterface: React.FC = () => {
     return () => clearInterval(interval);
   }, []);
 
+  // --- Streaming Assistant Message Bubble Helper ---
+  // Returns a message bubble for the currently streaming assistant message
+  const renderStreamingAssistantBubble = () => {
+    if (!llmStreaming || !streamingAssistantContent) return null;
+    return (
+      <div className="flex justify-start">
+        <div className="flex items-start space-x-3 max-w-2xl">
+          <div className="flex-shrink-0 w-8 h-8 rounded-full bg-surface-elevated border border-border flex items-center justify-center">
+            <Bot className="h-4 w-4 text-primary" />
+          </div>
+          <Card variant="elevated" className="p-4">
+            <p className="text-sm leading-relaxed whitespace-pre-line">
+              {streamingAssistantContent}
+              <span className="ml-1 animate-blink">|</span>
+            </p>
+            <div className="text-xs mt-2 text-muted-foreground">
+              Streaming...
+            </div>
+          </Card>
+        </div>
+      </div>
+    );
+  };
+
+  // --- Fix: Always scroll to latest message, including during streaming ---
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [currentSession?.messages]);
+  }, [currentSession?.messages, streamingAssistantContent, llmStreaming]);
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!inputValue.trim() || isSending) return;
 
     if (!currentSession) {
-      createSession();
+      await createSession();
+      await refreshConversations();
     }
 
     const userMessage = inputValue.trim();
@@ -264,13 +293,12 @@ const ChatInterface: React.FC = () => {
     setLoading(true);
     setLlmStreaming(true);
     setLlmProgress(0);
+    setStreamingAssistantContent(""); // Reset streaming content
 
     // Add user message
     addMessage(userMessage, 'user');
-    console.log('addMessage called with user:', userMessage);
     // Add a placeholder for the assistant's streaming message
     addMessage('', 'assistant');
-    console.log('addMessage called with assistant: ""');
 
     try {
       const response = await fetch('/api/query/stream', {
@@ -288,13 +316,12 @@ const ChatInterface: React.FC = () => {
       const reader = response.body.getReader();
       let decoder = new TextDecoder();
       let done = false;
-      let assistantContent = '';
-      let totalLength = 0;
       let receivedLength = 0;
-      // Try to estimate total length from headers if available
+      let totalLength = 0;
       if (response.headers.has('content-length')) {
         totalLength = parseInt(response.headers.get('content-length') || '0', 10);
       }
+      let streamedContent = "";
       while (!done) {
         const { value, done: doneReading } = await reader.read();
         done = doneReading;
@@ -311,10 +338,8 @@ const ChatInterface: React.FC = () => {
               try {
                 const data = JSON.parse(line);
                 if (data.answer !== undefined) {
-                  assistantContent += data.answer;
-                  // Update the last assistant message in the session (in place)
-                  updateStreamingMessage(assistantContent);
-                  console.log('updateStreamingMessage called with:', assistantContent);
+                  streamedContent += data.answer;
+                  setStreamingAssistantContent(streamedContent);
                 }
               } catch (err) {
                 // Ignore JSON parse errors for incomplete lines
@@ -325,6 +350,8 @@ const ChatInterface: React.FC = () => {
       }
       setLlmProgress(100);
       setTimeout(() => setLlmProgress(null), 500);
+      // At the end, update the context
+      updateStreamingMessage(streamedContent);
     } catch (err) {
       addMessage('Error contacting backend.', 'assistant');
       setBannerMessage('Error contacting backend.');
@@ -333,6 +360,8 @@ const ChatInterface: React.FC = () => {
     setIsSending(false);
     setLoading(false);
     setLlmStreaming(false);
+    setStreamingAssistantContent("");
+    setTimeout(() => refreshConversations(), 500);
   };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -390,29 +419,54 @@ const ChatInterface: React.FC = () => {
   // Add this function to handle title save
   const handleSaveTitle = async () => {
     if (!currentSession) return;
-    const updatedSession = { ...currentSession, title: editedTitle.trim() || 'Untitled Conversation' };
+    const updatedTitle = editedTitle.trim() || 'Untitled Conversation';
+    // Update in frontend state using renameSession
+    renameSession(currentSession.id, updatedTitle);
     setIsEditingTitle(false);
-    // Update in frontend state
-    setCurrentSessionFromBackend(updatedSession);
     // Persist to backend
     try {
       await fetch('/api/history/save', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updatedSession)
+        body: JSON.stringify({ ...currentSession, title: updatedTitle })
       });
       setBannerMessage('Conversation renamed.');
       setBannerType('success');
       // Refresh conversations list and update sidebar
-      setConversations((prev) => prev.map(conv => conv.id === updatedSession.id ? { ...conv, title: updatedSession.title } : conv));
+      setConversations((prev) => prev.map(conv => conv.id === currentSession.id ? { ...conv, title: updatedTitle } : conv));
+      // After renaming, refresh conversations
+      await refreshConversations();
     } catch (err) {
       setBannerMessage('Failed to rename conversation.');
       setBannerType('error');
     }
   };
 
+  // Helper to refresh conversation list from backend
+  const refreshConversations = async () => {
+    setIsLoadingConversations(true);
+    setLoading(true);
+    try {
+      const response = await fetch('/api/history/list');
+      const data = await response.json();
+      setConversations(data.conversations || []);
+    } catch (err) {
+      setConversations([]);
+      setBannerMessage('Failed to fetch conversations.');
+      setBannerType('error');
+    }
+    setIsLoadingConversations(false);
+    setLoading(false);
+  };
+
   return (
     <div className="flex h-screen bg-background">
+      {/* Embedding Status Toast/Banner */}
+      {embeddingStatus && (
+        <div className="fixed top-4 left-1/2 transform -translate-x-1/2 z-50 bg-primary text-white px-6 py-2 rounded shadow-lg text-sm animate-fade-in">
+          {embeddingStatus}
+        </div>
+      )}
       {/* Sidebar */}
       <div className="w-80 bg-surface border-r border-border flex flex-col">
         {/* Banner for error/success */}
@@ -444,7 +498,7 @@ const ChatInterface: React.FC = () => {
             <Card
                 key={conv.id}
               hover
-                className={`p-4 cursor-pointer transition-all duration-300`}
+                className={`p-4 cursor-pointer transition-all duration-300 ${currentSession?.id === conv.id ? 'border-2 border-primary' : ''}`}
                 onClick={() => handleLoadConversation(conv.id)}
             >
                 <div className="flex items-center justify-between">
@@ -684,46 +738,49 @@ const ChatInterface: React.FC = () => {
               </Card>
             </div>
           ) : (
-            currentSession.messages.map((message) => (
-              <div
-                key={message.id}
-                className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
-              >
-                <div className={`flex items-start space-x-3 max-w-2xl ${message.role === 'user' ? 'flex-row-reverse space-x-reverse' : ''}`}>
-                  <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${
-                    message.role === 'user' 
-                      ? 'bg-gradient-to-r from-primary to-primary-dark' 
-                      : 'bg-surface-elevated border border-border'
-                  }`}>
-                    {message.role === 'user' ? (
-                      <User className="h-4 w-4 text-white" />
-                    ) : (
-                      <Bot className="h-4 w-4 text-primary" />
-                    )}
-                  </div>
-                  <Card
-                    variant={message.role === 'user' ? 'default' : 'elevated'}
-                    className={`p-4 ${
-                      message.role === 'user'
-                        ? 'bg-primary text-white border-primary/30'
-                        : 'bg-surface-elevated'
-                    }`}
-                  >
-                    <p className="text-sm leading-relaxed">
-                      {message.content && message.content.trim() !== '' ? message.content : <span className="italic text-gray-400">[No content]</span>}
-                    </p>
-                    <div className={`text-xs mt-2 ${
-                      message.role === 'user' ? 'text-white/70' : 'text-muted-foreground'
+            <>
+              {currentSession.messages.map((message, idx) => (
+                <div
+                  key={message.id || idx}
+                  className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
+                >
+                  <div className={`flex items-start space-x-3 max-w-2xl ${message.role === 'user' ? 'flex-row-reverse space-x-reverse' : ''}`}>
+                    <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${
+                      message.role === 'user' 
+                        ? 'bg-gradient-to-r from-primary to-primary-dark' 
+                        : 'bg-surface-elevated border border-border'
                     }`}>
-                      {formatTimestamp(message.timestamp)}
+                      {message.role === 'user' ? (
+                        <User className="h-4 w-4 text-white" />
+                      ) : (
+                        <Bot className="h-4 w-4 text-primary" />
+                      )}
                     </div>
-                  </Card>
+                    <Card
+                      variant={message.role === 'user' ? 'default' : 'elevated'}
+                      className={`p-4 ${
+                        message.role === 'user'
+                          ? 'bg-primary text-white border-primary/30'
+                          : 'bg-surface-elevated'
+                      }`}
+                    >
+                      <p className="text-sm leading-relaxed">
+                        {message.content && message.content.trim() !== '' ? message.content : <span className="italic text-gray-400">[No content]</span>}
+                      </p>
+                      <div className={`text-xs mt-2 ${
+                        message.role === 'user' ? 'text-white/70' : 'text-muted-foreground'
+                      }`}>
+                        {formatTimestamp(message.timestamp)}
+                      </div>
+                    </Card>
+                  </div>
                 </div>
-              </div>
-            ))
+              ))}
+              {/* Streaming Assistant Bubble */}
+              {renderStreamingAssistantBubble()}
+            </>
           )}
-          
-          {isSending && (
+          {isSending && !llmStreaming && (
             <div className="flex justify-start">
               <div className="flex items-start space-x-3 max-w-2xl">
                 <div className="flex-shrink-0 w-8 h-8 rounded-full bg-surface-elevated border border-border flex items-center justify-center">
@@ -742,7 +799,6 @@ const ChatInterface: React.FC = () => {
               </div>
             </div>
           )}
-          
           <div ref={messagesEndRef} />
         </div>
 
@@ -794,11 +850,13 @@ const ChatInterface: React.FC = () => {
         </div>
       </div>
       {(isUploading || llmStreaming) && (
-        <div className="w-full bg-gray-200 rounded-full h-2.5 mb-4">
-          <div
-            className="bg-primary h-2.5 rounded-full transition-all duration-300"
-            style={{ width: `${isUploading ? uploadProgress || 0 : llmProgress || 0}%` }}
-          ></div>
+        <div className="fixed top-0 left-0 w-full z-50">
+          <div className="w-full bg-gray-200 rounded-full h-2.5">
+            <div
+              className="bg-primary h-2.5 rounded-full transition-all duration-300"
+              style={{ width: `${isUploading ? uploadProgress || 0 : llmProgress || 0}%` }}
+            ></div>
+          </div>
           <div className="text-xs text-center mt-1 text-muted-foreground">
             {isUploading && embeddingStatus}
             {llmStreaming && 'Processing LLM response...'}
