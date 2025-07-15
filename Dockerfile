@@ -1,4 +1,4 @@
-# Dockerfile for PITB RAG Chatbot
+# Dockerfile for PITB RAG Chatbot (Backend)
 
 # Use official Python base image
 FROM python:3.12-slim
@@ -6,6 +6,7 @@ FROM python:3.12-slim
 # Set environment variables
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
+ENV APP_MODE=production  # Set to 'debug' to run Streamlit UI
 
 # Set work directory
 WORKDIR /app
@@ -30,13 +31,12 @@ RUN pip install --upgrade pip && \
 # Copy the rest of the code
 COPY . .
 
-# Expose Streamlit default port
-EXPOSE 8501
+# Expose FastAPI and Streamlit ports
+EXPOSE 8000 8501
 
-# Set environment variables for Streamlit
-ENV STREAMLIT_SERVER_PORT=8501
-ENV STREAMLIT_SERVER_HEADLESS=true
-ENV STREAMLIT_SERVER_ENABLECORS=false
-
-# Entrypoint: run Streamlit app
-CMD ["streamlit", "run", "app.py"] 
+# Entrypoint: run FastAPI (production) or Streamlit (debug)
+CMD if [ "$APP_MODE" = "debug" ]; then \
+      streamlit run app.py --server.port=8501 --server.headless=true --server.enableCORS=false; \
+    else \
+      uvicorn backend.main:app --host 0.0.0.0 --port 8000; \
+    fi 

@@ -1,19 +1,22 @@
-# PITB RAG Chatbot – Developer Instructions (Extensive)
+# XOR RAG Chatbot – Developer Instructions (Extensive)
 
 ---
 
 ## 1. High-Level Overview
 
-This project is a robust, production-grade, fully offline Retrieval-Augmented Generation (RAG) chatbot for document Q&A, built with Streamlit, ChromaDB, and Ollama. It is designed for secure, multi-document Q&A in sensitive environments, with persistent chat history, efficient vector storage, and a modern, user-friendly UI. All data and computation are local—no cloud dependencies after setup.
+This project is a robust, production-grade, fully offline Retrieval-Augmented Generation (RAG) chatbot system for document Q&A, built with a modern React frontend, FastAPI backend, ChromaDB for vector storage, Ollama for LLM/embeddings, and Redis for caching. It is designed for secure, multi-document Q&A in sensitive environments, with persistent chat history, efficient vector storage, and a modern, user-friendly UI. All data and computation are local—no cloud dependencies after setup.
 
 **Key Features:**
 - Multi-document upload and Q&A
-- Real-time, streaming LLM responses
+- Real-time, streaming LLM responses via Ollama
 - Persistent, multi-chat history with context and uploads
-- Efficient, cached vector storage (ChromaDB)
+- Efficient, cached vector storage (ChromaDB) and Redis caching for embeddings, queries, and chat history
 - Per-chat and global embedding management
 - Robust error handling, duplicate prevention, and UI state management
-- PITB branding, dark/light theme, and modern UX
+- Modern React UI/UX: error boundaries, loading spinners, banners, confirmations, and persistent status indicators
+- Playwright integration tests for end-to-end verification
+- Docker Compose for multi-service deployment
+- Streamlit UI retained for debugging and development only
 - Fully local: no internet required after setup
 
 ---
@@ -23,15 +26,22 @@ This project is a robust, production-grade, fully offline Retrieval-Augmented Ge
 **Diagram:** See `assets/architecture.png` for a visual overview.
 
 **Description:**
-- **Frontend (Streamlit):**
-  - Sidebar: Chat management, file upload, settings, and knowledge base reset
-  - Main Area: Chat bubbles, context preview, conversation history navigation, and chat input
-- **Backend:**
+- **Frontend (React):**
+  - Modern, responsive UI for chat, document upload, chat history, and admin actions
+  - Real-time status indicators, error boundaries, loading spinners, banners, and confirmation dialogs
+  - Communicates with backend via REST API (`/api` prefix)
+- **Backend (FastAPI):**
   - **Document Processing:** Handles PDF/DOCX chunking, metadata extraction, and file hashing
   - **Vector Store (ChromaDB):** Stores and retrieves document chunks as embeddings, supports context expansion and per-file retrieval
   - **LLM (Ollama):** Local language model for answer generation, supports streaming and retry logic
-  - **Cache:** Global and per-chat embedding cache, avoids recomputation
+  - **Cache (Redis):** Caches embeddings, query results, and chat history for performance
   - **History:** Persistent chat/context storage per chat, supports editing, deleting, and renaming
+  - **Admin Endpoints:** Health checks, vectorstore management, and advanced operations
+- **Integration:**
+  - Frontend and backend are connected via a Vite proxy for local development (rewrites `/api` to backend root)
+  - All services (Ollama, ChromaDB, Redis) run locally, orchestrated via Docker Compose for production or manual setup for development
+- **Streamlit UI:**
+  - Retained for debugging and development only; not used in production
 - **Assets:** PITB branding, architecture diagrams
 - **Logs:** All chat, context, and embedding data is stored locally for privacy and auditability
 
@@ -39,22 +49,39 @@ This project is a robust, production-grade, fully offline Retrieval-Augmented Ge
 
 ## 3. Folder & File Structure (Detailed)
 
-- **app.py**: Entrypoint for the Streamlit app. Handles startup checks (Ollama health, env vars) and launches the UI.
-- **rag_core/**: All core logic for the RAG system (see below for module breakdown).
+- **backend/**: FastAPI backend application, including all API endpoints, core logic, and configuration.
+- **frontend/**: React frontend application, including all UI components, state management, and API integration.
+- **rag_core/**: Core logic shared by the backend (document processing, vectorstore, LLM, history, caching, config, utils).
 - **assets/**: Branding images, architecture diagrams, and other static assets.
 - **log/**: Stores all chat history, context, and embedding cache files (see below for details).
 - **demo-rag-chroma/**: Persistent storage for ChromaDB vector database.
-- **requirements.txt**: Python dependencies for the project.
+- **requirements.txt**: Python dependencies for the backend and core logic.
+- **docker-compose.yml**: Orchestrates all services (backend, frontend, Ollama, ChromaDB, Redis) for local development and production.
 - **README.md**: User-facing documentation, setup, and usage guide.
 - **INSTRUCTIONS.md**: (This file) Developer-focused technical documentation and architecture notes.
 - **GUIDE.md**: Advanced deployment, backup, and migration instructions.
 
+### backend/ Directory
+- **main.py**: FastAPI entrypoint, includes all API routes and startup logic.
+- **api/**: API route definitions for chat, document, admin, and health endpoints.
+- **dependencies/**: Dependency injection and shared backend utilities.
+- **config.py**: Backend configuration and environment variable loading.
+- **tests/**: Backend unit and integration tests.
+
+### frontend/ Directory
+- **src/**: All React source code (components, pages, hooks, utils, API clients).
+- **public/**: Static assets for the frontend.
+- **vite.config.js**: Vite configuration, including API proxy setup.
+- **package.json**: Frontend dependencies and scripts.
+- **tests/**: Playwright integration tests for end-to-end verification.
+
 ### rag_core/ Module Breakdown
-- **ui.py**: Streamlit UI, chat logic, sidebar, chat management, file upload, and all user interaction. Handles chat rendering, context preview, history navigation, and error display. Implements visual threading, context preview, and message-level actions.
+- **ui.py**: (Streamlit UI, retained for debugging only) Chat logic, sidebar, chat management, file upload, and user interaction. Not used in production.
 - **llm.py**: Handles all LLM (Ollama) interactions, including prompt construction, streaming responses, retry logic, and error/debug logging. Supports structured message history, windowing, and metadata.
 - **vectorstore.py**: Manages ChromaDB vector storage, retrieval, context expansion, and collection reset. Handles batching, error handling, and contextual retrieval.
 - **document.py**: Loads and chunks PDF/DOCX files, adds metadata (filename, chunk index), and supports extensible chunking logic. Can be extended for more file types.
 - **cache.py**: Embedding and file hash caching utilities. Manages global and per-chat embedding caches as .pkl files. Supports cache cleanup and management.
+- **redis_cache.py**: Redis-based caching for embeddings, queries, and chat history.
 - **history.py**: Persistent chat and context storage per chat. Handles saving/loading chat history, context, and uploads. Supports message threads and summarization.
 - **config.py**: Loads environment variables, sets up logging, and defines system-wide constants (chunk size, model names, etc.).
 - **utils.py**: Miscellaneous helpers (e.g., input sanitization, future: summarization/context formatting).
@@ -138,13 +165,32 @@ st.session_state = {
 
 ## 8. Deployment, Scaling, and Operations
 
-- **Local Deployment:**
-  - Clone repo, set up Python venv, install requirements, run `streamlit run app.py`.
-  - Ensure Ollama and ChromaDB are running locally.
+- **Local Development:**
+  - Clone the repo.
+  - Ensure Docker and Docker Compose are installed.
+  - To start all services (backend, frontend, Ollama, ChromaDB, Redis):
+    ```bash
+    docker-compose up --build
+    ```
+  - The React frontend will be available at http://localhost:3000
+  - The FastAPI backend will be available at http://localhost:8000
+  - The Streamlit UI (for debugging) will be available at http://localhost:8501 (if you set `APP_MODE=debug` for the backend service)
+  - Ollama (LLM) at http://localhost:11434, ChromaDB at http://localhost:8001, Redis at http://localhost:6379
+  - To run the backend in debug mode (Streamlit UI):
+    - Edit `docker-compose.yml` and set `APP_MODE=debug` for the backend service, then restart the containers.
+
 - **Production Deployment:**
-  - Use a process manager (e.g., systemd, supervisor) to keep the app running.
+  - Use Docker Compose as above, but keep `APP_MODE=production` (default) for the backend.
   - Use HTTPS and authentication for sensitive environments.
-  - For scaling, containerize with Docker and orchestrate with Kubernetes if needed.
+  - For scaling, deploy with Docker Compose or Kubernetes as needed.
+
+- **Rebuilding Images:**
+  - If you change dependencies or code, rebuild with:
+    ```bash
+    docker-compose build
+    docker-compose up
+    ```
+
 - **Backup & Migration:**
   - All persistent data is in `log/` and `demo-rag-chroma/`—back up these folders regularly.
   - See `GUIDE.md` for advanced migration and backup strategies.
@@ -157,8 +203,9 @@ st.session_state = {
 - Write modular, well-documented code—see module-level READMEs for guidance.
 - Add type annotations and unit tests for new features.
 - Use debug logging and error handling for all external calls (LLM, ChromaDB, file I/O).
-- Keep requirements.txt up to date and minimal.
+- Keep requirements.txt up to date and minimal. Streamlit is included for debugging only.
 - Update this file and module READMEs with any new features or design changes.
+- Use Playwright for frontend integration tests (see `frontend/tests`).
 
 ---
 

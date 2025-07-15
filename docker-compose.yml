@@ -1,16 +1,15 @@
 version: '3.8'
 
 services:
-  rag-bot:
+  backend:
     build: .
-    container_name: pitb-rag-bot
+    container_name: pitb-rag-backend
     ports:
-      - "8501:8501"
+      - "8000:8000"   # FastAPI
+      - "8501:8501"   # Streamlit (debug)
     environment:
       - OLLAMA_BASE_URL=http://ollama:11434
-      - STREAMLIT_SERVER_PORT=8501
-      - STREAMLIT_SERVER_HEADLESS=true
-      - STREAMLIT_SERVER_ENABLECORS=false
+      - APP_MODE=production  # Set to 'debug' to run Streamlit UI
     volumes:
       - ./log:/app/log
       - ./assets:/app/assets
@@ -22,6 +21,20 @@ services:
       - ./INSTRUCTIONS.md:/app/INSTRUCTIONS.md
     depends_on:
       - ollama
+      - redis
+      - chromadb
+
+  frontend:
+    build: ./frontend
+    container_name: pitb-rag-frontend
+    ports:
+      - "3000:3000"   # Vite dev server or React app
+    depends_on:
+      - backend
+    environment:
+      - VITE_API_URL=http://localhost:8000/api
+    volumes:
+      - ./frontend:/app
 
   ollama:
     image: ollama/ollama:latest
@@ -30,9 +43,22 @@ services:
       - "11434:11434"
     volumes:
       - ollama_data:/root/.ollama
-    # Optionally preload a model (uncomment and set your model)
-    # environment:
-    #   - OLLAMA_MODELS=llama3.2:3b
+
+  redis:
+    image: redis:7
+    ports:
+      - "6379:6379"
+    restart: always
+
+  chromadb:
+    image: chromadb/chroma:latest
+    container_name: chromadb
+    ports:
+      - "8001:8000"
+    volumes:
+      - ./demo-rag-chroma:/chroma/chroma
+    environment:
+      - IS_PERSISTENT=TRUE
 
 volumes:
   ollama_data: 
