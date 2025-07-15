@@ -299,11 +299,12 @@ const ChatInterface: React.FC = () => {
     addMessage(userMessage, 'user');
     // Add a placeholder for the assistant's streaming message
     addMessage('', 'assistant');
+    setInputValue(""); // Clear input for better UX
 
     try {
       const response = await fetch('/api/query/stream', {
         method: 'POST',
-        headers: {},
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: new URLSearchParams({
           question: userMessage,
           n_results: '3',
@@ -312,6 +313,7 @@ const ChatInterface: React.FC = () => {
           conversation_history: JSON.stringify(currentSession?.messages || [])
         })
       });
+
       if (!response.body) throw new Error('No response body');
       const reader = response.body.getReader();
       let decoder = new TextDecoder();
@@ -322,6 +324,8 @@ const ChatInterface: React.FC = () => {
         totalLength = parseInt(response.headers.get('content-length') || '0', 10);
       }
       let streamedContent = "";
+      let buffer = "";
+
       while (!done) {
         const { value, done: doneReading } = await reader.read();
         done = doneReading;
@@ -333,29 +337,48 @@ const ChatInterface: React.FC = () => {
             setLlmProgress(null); // Indeterminate
           }
           const chunk = decoder.decode(value, { stream: true });
-          chunk.split('\n').forEach(line => {
+          buffer += chunk;
+          let lines = buffer.split('\n');
+          buffer = lines.pop() || ""; // Save incomplete line for next chunk
+
+          for (const line of lines) {
             if (line.trim()) {
               try {
                 const data = JSON.parse(line);
                 if (data.answer !== undefined) {
                   streamedContent += data.answer;
                   setStreamingAssistantContent(streamedContent);
+                  console.log("Streaming content:", streamedContent);
                 }
               } catch (err) {
-                // Ignore JSON parse errors for incomplete lines
+                console.error("JSON parse error:", err, "Line:", line);
               }
             }
-          });
+          }
         }
       }
+      // Handle any remaining buffered line
+      if (buffer.trim()) {
+        try {
+          const data = JSON.parse(buffer);
+          if (data.answer !== undefined) {
+            streamedContent += data.answer;
+            setStreamingAssistantContent(streamedContent);
+            console.log("Streaming content (final buffer):", streamedContent);
+          }
+        } catch (err) {
+          console.error("JSON parse error (final buffer):", err, "Buffer:", buffer);
+        }
+      }
+
       setLlmProgress(100);
       setTimeout(() => setLlmProgress(null), 500);
-      // At the end, update the context
       updateStreamingMessage(streamedContent);
     } catch (err) {
       addMessage('Error contacting backend.', 'assistant');
       setBannerMessage('Error contacting backend.');
       setBannerType('error');
+      console.error("Streaming error:", err);
     }
     setIsSending(false);
     setLoading(false);
