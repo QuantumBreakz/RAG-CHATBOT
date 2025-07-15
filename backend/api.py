@@ -24,7 +24,7 @@ def health_check():
 
 @app.get("/test_vectorstore")
 def test_vectorstore():
-    """Test if vector store can be initialized and Ollama is working."""
+    """Test if vector stosre can be initialized and Ollama is working."""
     try:
         collection = VectorStore.get_vector_collection()
         if collection:
@@ -117,7 +117,6 @@ async def query_rag_stream(
             history_list = json.loads(conversation_history) if conversation_history else []
         except json.JSONDecodeError:
             history_list = []
-        
         # Query vector store
         results = VectorStore.query_with_expanded_context(
             question, 
@@ -125,33 +124,34 @@ async def query_rag_stream(
             expand=expand,
             filename=filename
         )
-        
         context_docs = results.get("documents", [[]])[0] if results.get("documents") else []
         context_str = " ".join(context_docs)
-        
         if not context_str.strip():
-            return {
-                "answer": "[No relevant context found for your query. Please try rephrasing or uploading more documents.]",
-                "context": "",
-                "status": "no_context"
-            }
-        
-        # For streaming, we'll return the context first, then the answer
-        # The frontend can handle the streaming display
-        answer = LLMHandler.call_llm(
-            question, 
-            context_str, 
-            conversation_history=history_list
-        )
-        
-        return {
-            "answer": answer,
-            "context": context_str,
-            "status": "success"
-        }
-        
+            def empty_stream():
+                yield json.dumps({
+                    "answer": "[No relevant context found for your query. Please try rephrasing or uploading more documents.]",
+                    "context": "",
+                    "status": "no_context"
+                })
+            return StreamingResponse(empty_stream(), media_type="application/json")
+        def word_stream():
+            answer_accum = ""
+            def stream_callback(word):
+                nonlocal answer_accum
+                answer_accum += word
+                yield_word = json.dumps({"answer": word, "context": context_str, "status": "streaming"})
+                yield yield_word + "\n"
+            # Use a generator to yield words as they are produced
+            for _ in LLMHandler.call_llm(question, context_str, conversation_history=history_list, stream_callback=None):
+                # This loop is just to trigger the streaming, actual streaming is handled in stream_callback
+                pass
+            # At the end, yield the full answer
+            yield json.dumps({"answer": answer_accum, "context": context_str, "status": "success"}) + "\n"
+        return StreamingResponse(word_stream(), media_type="application/json")
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Query failed: {str(e)}")
+        def error_stream():
+            yield json.dumps({"answer": f"[Error: {str(e)}]", "context": "", "status": "error"})
+        return StreamingResponse(error_stream(), media_type="application/json")
 
 # --- Chat History Endpoints ---
 @app.get("/history/list")

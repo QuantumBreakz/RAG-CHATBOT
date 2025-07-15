@@ -262,12 +262,13 @@ const ChatInterface: React.FC = () => {
     // Add user message
     addMessage(userMessage, 'user');
 
+    // Add a placeholder for the assistant's streaming message
+    addMessage('', 'assistant');
+
     try {
-      const response = await fetch('/api/query', {
+      const response = await fetch('/api/query/stream', {
         method: 'POST',
-        headers: {
-          'Accept': 'application/json',
-        },
+        headers: {},
         body: new URLSearchParams({
           question: userMessage,
           n_results: '3',
@@ -276,15 +277,39 @@ const ChatInterface: React.FC = () => {
           conversation_history: JSON.stringify(currentSession?.messages || [])
         })
       });
-      if (!response.ok) throw new Error('Query failed');
-      const data = await response.json();
-      addMessage(data.answer, 'assistant');
+      if (!response.body) throw new Error('No response body');
+      const reader = response.body.getReader();
+      let decoder = new TextDecoder();
+      let done = false;
+      let assistantContent = '';
+      while (!done) {
+        const { value, done: doneReading } = await reader.read();
+        done = doneReading;
+        if (value) {
+          const chunk = decoder.decode(value, { stream: true });
+          // Each chunk is a JSON line
+          chunk.split('\n').forEach(line => {
+            if (line.trim()) {
+              try {
+                const data = JSON.parse(line);
+                if (data.answer !== undefined) {
+                  assistantContent += data.answer;
+                  // Update the last assistant message in the session
+                  addMessage(assistantContent, 'assistant');
+                }
+              } catch (err) {
+                // Ignore JSON parse errors for incomplete lines
+              }
+            }
+          });
+        }
+      }
     } catch (err) {
       addMessage('Error contacting backend.', 'assistant');
       setBannerMessage('Error contacting backend.');
       setBannerType('error');
     }
-      setIsSending(false);
+    setIsSending(false);
     setLoading(false);
   };
 
