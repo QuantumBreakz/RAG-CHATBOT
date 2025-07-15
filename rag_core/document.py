@@ -14,6 +14,7 @@ DEFAULT_CHUNK_OVERLAP = 400
 
 class DocumentProcessor:
     """Handles document loading, validation, and chunking. Now supports OCR for scanned PDFs."""
+    
     @staticmethod
     def process_document(uploaded_file, file_bytes=None, chunk_size=DEFAULT_CHUNK_SIZE, chunk_overlap=DEFAULT_CHUNK_OVERLAP):
         """Process an uploaded file and return split document chunks. Raises exceptions for errors. Supports OCR for scanned PDFs."""
@@ -41,10 +42,11 @@ class DocumentProcessor:
                 logger.info(f"PDF {file_basename} detected as scanned. Using OCR.")
                 text = extract_text_from_pdf(temp_file.name)
                 docs = [Document(page_content=text, metadata={"filename": file_basename})]
+                os.unlink(temp_file.name)
             else:
-            loader = PyMuPDFLoader(temp_file.name)
-            docs = loader.load()
-            os.unlink(temp_file.name)
+                loader = PyMuPDFLoader(temp_file.name)
+                docs = loader.load()
+                os.unlink(temp_file.name)
         # Handle DOCX
         elif suffix == ".docx":
             temp_file = tempfile.NamedTemporaryFile("wb", suffix=suffix, delete=False)
