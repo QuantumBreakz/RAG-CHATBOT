@@ -255,7 +255,6 @@ const ChatInterface: React.FC = () => {
     }
 
     const userMessage = inputValue.trim();
-    setInputValue('');
     setIsSending(true);
     setLoading(true);
 
