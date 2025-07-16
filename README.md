@@ -16,9 +16,12 @@ A robust, production-ready, fully offline RAG (Retrieval-Augmented Generation) c
 ### Modern Web Interface
 - **React Frontend**: Modern, responsive UI built with TypeScript and Tailwind CSS
 - **Real-time Chat Interface**: Streaming responses with typing indicators
+- **Responsive Design**: Sidebar is collapsible on mobile, chat bubbles and input area adapt to all screen sizes, and a floating scroll-to-bottom button appears when needed.
 - **Document Upload**: Drag-and-drop file upload with progress tracking
-- **Conversation Management**: Save, load, export, and delete chat histories
-- **Settings Panel**: Configure chunk sizes, overlap, and retrieval parameters
+- **Conversation Management**: Save, load, export, delete, and robustly rename chat histories (renames update everywhere in real time)
+- **Settings Panel**: Configure chunk sizes and overlap in the frontend, which are respected by the backend for new uploads
+- **Overlay During Streaming**: The chat area is blanked out with a loading overlay while the LLM is generating a response
+- **UI/UX Polish**: Rounded corners, subtle shadows, smooth transitions, and improved spacing throughout
 - **Dark/Light Theme**: Toggle between themes with persistent preferences
 
 ### Performance & Scalability
@@ -127,6 +130,7 @@ A robust, production-ready, fully offline RAG (Retrieval-Augmented Generation) c
    - Frontend: http://localhost:5173
    - Backend API: http://localhost:8000
    - API Docs: http://localhost:8000/docs
+   - **Note:** The chat UI is now fully responsive and beautiful, with a collapsible sidebar, floating scroll-to-bottom button, and real-time chunk size/overlap settings.
 
 ### Option 2: Local Development
 
@@ -302,7 +306,7 @@ docker-compose down
 
 **Slow response times:**
 - Increase Redis cache TTL
-- Optimize chunk size and overlap settings
+- Optimize chunk size and overlap setctings
 - Use smaller embedding model for faster processing
 
 **Memory issues:**

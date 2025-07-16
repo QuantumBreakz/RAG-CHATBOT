@@ -69,7 +69,7 @@ This project is a robust, production-grade, fully offline Retrieval-Augmented Ge
 - **tests/**: Backend unit and integration tests.
 
 ### frontend/ Directory
-- **src/**: All React source code (components, pages, hooks, utils, API clients).
+- **src/**: All React source code (components, pages, hooks, utils, API clients). The chat UI is now fully responsive, with a collapsible sidebar, floating scroll-to-bottom button, and improved mobile experience. Users can set chunk size and overlap in the settings panel, and these are respected by the backend for new uploads. Chat rename is robust and updates everywhere in real time. Overlay blanks out the chat area while LLM is streaming. General UI/UX polish: rounded corners, shadows, smooth transitions, and better spacing.
 - **public/**: Static assets for the frontend.
 - **vite.config.js**: Vite configuration, including API proxy setup.
 - **package.json**: Frontend dependencies and scripts.
