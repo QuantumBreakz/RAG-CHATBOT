@@ -47,6 +47,7 @@ const ChatInterface: React.FC = () => {
     setSessions,
     currentSession,
     createSession,
+    createSessionFromPrevious,
     selectSession,
     addMessage,
     clearHistory,
@@ -655,43 +656,28 @@ const ChatInterface: React.FC = () => {
 
   // Persist full chat history to localStorage on every update
   useEffect(() => {
+    // Ensure all timestamps are Date objects before saving
+    const safeSessions = sessions.map(s => ({
+      ...s,
+      createdAt: s.createdAt instanceof Date ? s.createdAt : new Date(s.createdAt),
+      messages: (s.messages || []).map(m => ({
+        ...m,
+        timestamp: m.timestamp instanceof Date ? m.timestamp : new Date(m.timestamp)
+      }))
+    }));
+    const safeCurrentSession = currentSession ? {
+      ...currentSession,
+      createdAt: currentSession.createdAt instanceof Date ? currentSession.createdAt : new Date(currentSession.createdAt),
+      messages: (currentSession.messages || []).map(m => ({
+        ...m,
+        timestamp: m.timestamp instanceof Date ? m.timestamp : new Date(m.timestamp)
+      }))
+    } : null;
     localStorage.setItem(
       CHAT_STATE_KEY,
-      JSON.stringify({ sessions, currentSession, conversations })
+      JSON.stringify({ sessions: safeSessions, currentSession: safeCurrentSession, conversations })
     );
   }, [sessions, currentSession, conversations]);
-
-  // Persist sessions and currentSession to localStorage on every change
-  useEffect(() => {
-    localStorage.setItem(SESSIONS_KEY, JSON.stringify(sessions));
-    if (currentSession) {
-      localStorage.setItem('xor_rag_current_session', JSON.stringify(currentSession));
-    }
-  }, [sessions, currentSession]);
-
-  // On mount, restore sessions and currentSession if not already loaded
-  useEffect(() => {
-    if (sessions.length === 0) {
-      const saved = localStorage.getItem(SESSIONS_KEY);
-      if (saved) {
-        try {
-          const parsed = JSON.parse(saved);
-          if (Array.isArray(parsed) && parsed.length > 0) {
-            setSessions(parsed);
-            const savedCurrent = localStorage.getItem('xor_rag_current_session');
-            if (savedCurrent && !currentSession) {
-              setCurrentSessionFromBackend(JSON.parse(savedCurrent));
-            } else if (!currentSession) {
-              setCurrentSessionFromBackend(parsed[0]);
-            }
-          }
-        } catch {}
-      }
-    }
-  }, []);
-
-  // Defensive: Never allow currentSession to be set to null or sessions to [] except by explicit user action
-  // Remove any code that sets currentSession to null or sessions to [] except in clearHistory (which is now disabled)
 
   return (
     <div className="flex h-screen w-screen bg-background">
@@ -703,14 +689,14 @@ const ChatInterface: React.FC = () => {
         </div>
       )}
       {/* Sidebar - always visible in desktop view */}
-      <div className="bg-surface border-r border-border flex flex-col transition-all duration-300 w-80 fixed md:static z-40 h-full md:w-80">
+      <div className="bg-surface border-r border-border flex flex-col transition-all duration-300 w-80 flex-none h-full z-40">
         {/* Sidebar close button removed for forced desktop view */}
         {/* Banner for error/success */}
         {bannerMessage && (
           <div className={`p-2 text-xs text-center rounded-b ${bannerType === 'success' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'} shadow`}>{bannerMessage}</div>
         )}
         {/* New Chat Button */}
-        <div className="p-4 border-b border-border">
+        <div className="p-4 border-b border-border flex flex-col gap-2">
           <Button 
             onClick={createSession}
             className="w-full group rounded-lg shadow-sm"
@@ -718,6 +704,14 @@ const ChatInterface: React.FC = () => {
           >
             <Plus className="mr-2 h-4 w-4 group-hover:rotate-90 transition-transform duration-300" />
             New Conversation
+          </Button>
+          <Button
+            onClick={createSessionFromPrevious}
+            className="w-full group rounded-lg shadow-sm"
+            variant="outline"
+          >
+            <Sparkles className="mr-2 h-4 w-4 group-hover:scale-110 transition-transform duration-300" />
+            Duplicate Conversation
           </Button>
         </div>
         {/* Chunk Size Setting UI */}
@@ -871,11 +865,10 @@ const ChatInterface: React.FC = () => {
           </div>
         )}
       </div>
-      {/* Sidebar open button for mobile */}
-      {/* Main Chat Area - always visible */}
-      <div className="flex-1 flex flex-col items-center justify-center ml-80 transition-all duration-300 min-h-screen">
+      {/* Main Chat Area - always visible, flush with sidebar */}
+      <div className="flex-1 flex flex-col items-stretch justify-between min-h-screen w-0" style={{ minWidth: 0 }}>
         {/* Chat Header */}
-        <div className="bg-surface border-b border-border p-4 md:p-6 flex items-center justify-between sticky top-0 z-30 shadow-sm w-full max-w-3xl mx-auto">
+        <div className="bg-surface border-b border-border p-4 md:p-6 flex items-center justify-between sticky top-0 z-30 shadow-sm w-full">
           <div className="flex items-center gap-3">
             <Bot className="h-6 w-6 text-primary" />
             {currentSession ? (
@@ -926,8 +919,8 @@ const ChatInterface: React.FC = () => {
           </div>
         </div>
         {/* Messages */}
-        <div className="flex-1 flex flex-col items-center justify-end overflow-y-auto p-2 sm:p-4 md:p-6 space-y-4 md:space-y-6 bg-background relative custom-scrollbar w-full max-w-3xl mx-auto" style={{minHeight: '60vh'}}>
-          <div className="flex flex-col items-center w-full justify-end">
+        <div className="flex-1 flex flex-col items-stretch justify-end overflow-y-auto p-2 sm:p-4 md:p-6 space-y-4 md:space-y-6 bg-background relative custom-scrollbar w-full" style={{minHeight: '60vh'}}>
+          <div className="flex flex-col items-stretch w-full justify-end flex-1">
             {/* Always render all chat bubbles for currentSession.messages */}
             {currentSession && currentSession.messages.length > 0 ? (
               <>
@@ -973,7 +966,7 @@ const ChatInterface: React.FC = () => {
               </>
             ) : (
               // Only show welcome card if there are truly no messages
-              <div className="flex items-center justify-center h-full w-full">
+              <div className="flex items-center justify-center h-full w-full flex-1">
                 <Card variant="elevated" glow className="p-12 text-center max-w-lg rounded-lg shadow-lg mx-auto">
                   <div className="text-6xl mb-6">🤖</div>
                   <h3 className="text-2xl font-bold mb-4 text-foreground">
@@ -1036,7 +1029,7 @@ const ChatInterface: React.FC = () => {
           <div ref={messagesEndRef} />
         </div>
         {/* Input Area - always at the bottom */}
-        <div className="bg-surface border-t border-border p-2 sm:p-4 md:p-6 flex items-end gap-2 md:gap-4 w-full max-w-3xl mx-auto sticky bottom-0 z-20">
+        <div className="bg-surface border-t border-border p-2 sm:p-4 md:p-6 flex items-end gap-2 md:gap-4 w-full sticky bottom-0 z-20">
           <form onSubmit={handleSendMessage} className="flex items-end w-full gap-2 md:gap-4">
             <input
               type="file"
@@ -1073,7 +1066,7 @@ const ChatInterface: React.FC = () => {
               <Send className="h-5 w-5 group-hover:translate-x-1 transition-transform duration-300" />
             </Button>
           </form>
-      </div>
+        </div>
       </div>
     </div>
   );

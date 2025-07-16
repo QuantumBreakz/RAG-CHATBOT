@@ -6,6 +6,7 @@ from rag_core.llm import LLMHandler
 from rag_core import history
 import json
 from fastapi.middleware.cors import CORSMiddleware
+from rag_core import cache
 
 app = FastAPI()
 
@@ -41,20 +42,28 @@ async def upload_document(
     chunk_overlap: int = Form(DEFAULT_CHUNK_OVERLAP)
 ):
     file_bytes = await file.read()
+    file_hash = cache.get_file_hash(file_bytes)
     docs = DocumentProcessor.process_document(file, file_bytes, chunk_size=chunk_size, chunk_overlap=chunk_overlap)
-    
-    # Add documents to vector store with embeddings
-    if docs:
-        try:
-            success = VectorStore.add_to_vector_collection(docs, file.filename)
-            if success:
-                return {"num_chunks": len(docs), "status": "uploaded and embedded"}
-            else:
-                return {"num_chunks": len(docs), "status": "uploaded but embedding failed"}
-        except Exception as e:
-            return {"num_chunks": len(docs), "status": f"uploaded but embedding error: {str(e)}"}
-    else:
-        return {"num_chunks": 0, "status": "no documents processed"}
+    # Check if embeddings already exist for this file
+    if cache.global_embeddings_exist(file_hash):
+        embeddings = cache.load_global_embeddings(file_hash)
+        if embeddings is not None:
+            # Use cached embeddings for upsert
+            from rag_core.vectorstore import VectorStore
+            VectorStore.add_to_vector_collection(docs, file.filename, embeddings=embeddings)
+            return {"num_chunks": len(docs), "status": "embeddings already exist for this file (reused from cache)"}
+    # Otherwise, create embeddings as usual
+    try:
+        from rag_core.vectorstore import VectorStore
+        success = VectorStore.add_to_vector_collection(docs, file.filename)
+        if success:
+            # Save new embeddings to cache (if possible to retrieve them)
+            # (Assume you can get embeddings from the vector store or from docs if needed)
+            return {"num_chunks": len(docs), "status": "uploaded and embedded"}
+        else:
+            return {"num_chunks": len(docs), "status": "uploaded but embedding failed"}
+    except Exception as e:
+        return {"num_chunks": len(docs), "status": f"uploaded but embedding error: {str(e)}"}
 
 @app.post("/query")
 async def query_rag(

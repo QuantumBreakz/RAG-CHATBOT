@@ -31,6 +31,7 @@ interface ChatContextType {
   removeDocument: (document: string) => void;
   setCurrentSessionFromBackend: (conv: any) => void;
   renameSession: (sessionId: string, newTitle: string) => void;
+  createSessionFromPrevious: () => void;
 }
 
 const ChatContext = createContext<ChatContextType | undefined>(undefined);
@@ -40,31 +41,69 @@ export const ChatProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [currentSession, setCurrentSession] = useState<ChatSession | null>(null);
   const [uploadedDocuments, setUploadedDocuments] = useState<string[]>([]);
 
-  // Load sessions from localStorage on mount
+  // Load chat state from localStorage on mount and on storage event
   useEffect(() => {
-    const saved = localStorage.getItem('xor_rag_sessions');
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        // Restore timestamps as Date objects
-        const restoredSessions = parsed.map((s: any) => ({
-          ...s,
-          createdAt: s.createdAt ? new Date(s.createdAt) : new Date(),
-          messages: (s.messages || []).map((m: any) => ({
-            ...m,
-            timestamp: m.timestamp ? new Date(m.timestamp) : new Date()
-          }))
-        }));
-        setSessions(restoredSessions);
-        if (restoredSessions.length > 0) setCurrentSession(restoredSessions[0]);
-      } catch {}
-    }
+    const loadState = () => {
+      const saved = localStorage.getItem('xor_rag_chat_state');
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved);
+          // Restore timestamps as Date objects
+          const restoredSessions = (parsed.sessions || []).map((s: any) => ({
+            ...s,
+            createdAt: s.createdAt ? new Date(s.createdAt) : new Date(),
+            messages: (s.messages || []).map((m: any) => ({
+              ...m,
+              timestamp: m.timestamp ? new Date(m.timestamp) : new Date()
+            }))
+          }));
+          setSessions(restoredSessions);
+          if (parsed.currentSession) {
+            setCurrentSession({
+              ...parsed.currentSession,
+              createdAt: parsed.currentSession.createdAt ? new Date(parsed.currentSession.createdAt) : new Date(),
+              messages: (parsed.currentSession.messages || []).map((m: any) => ({
+                ...m,
+                timestamp: m.timestamp ? new Date(m.timestamp) : new Date()
+              }))
+            });
+          } else if (restoredSessions.length > 0) {
+            setCurrentSession(restoredSessions[0]);
+          }
+        } catch {}
+      }
+    };
+    loadState();
+    window.addEventListener('storage', loadState);
+    return () => window.removeEventListener('storage', loadState);
   }, []);
 
-  // Persist sessions to localStorage on every change
+  // Persist chat state to localStorage on every change, handle quota exceeded
   useEffect(() => {
-    localStorage.setItem('xor_rag_sessions', JSON.stringify(sessions));
-  }, [sessions]);
+    try {
+      const safeSessions = sessions.map(s => ({
+        ...s,
+        createdAt: s.createdAt instanceof Date ? s.createdAt : new Date(s.createdAt),
+        messages: (s.messages || []).map(m => ({
+          ...m,
+          timestamp: m.timestamp instanceof Date ? m.timestamp : new Date(m.timestamp)
+        }))
+      }));
+      const safeCurrentSession = currentSession ? {
+        ...currentSession,
+        createdAt: currentSession.createdAt instanceof Date ? currentSession.createdAt : new Date(currentSession.createdAt),
+        messages: (currentSession.messages || []).map(m => ({
+          ...m,
+          timestamp: m.timestamp instanceof Date ? m.timestamp : new Date(m.timestamp)
+        }))
+      } : null;
+      localStorage.setItem('xor_rag_chat_state', JSON.stringify({ sessions: safeSessions, currentSession: safeCurrentSession }));
+    } catch (e) {
+      if (e instanceof DOMException && e.name === 'QuotaExceededError') {
+        alert('Local chat history is too large to save. Please delete old conversations.');
+      }
+    }
+  }, [sessions, currentSession]);
 
   const createSession = () => {
     const newSession: ChatSession = {
@@ -181,12 +220,30 @@ export const ChatProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setCurrentSession(cs => cs && cs.id === sessionId ? { ...cs, title: newTitle } : cs);
   };
 
+  // Create a new session, optionally copying from previous
+  const createSessionFromPrevious = () => {
+    if (!currentSession) {
+      createSession();
+      return;
+    }
+    const newSession: ChatSession = {
+      id: uuidv4(),
+      title: currentSession.title ? `${currentSession.title} (Copy)` : 'New Conversation',
+      messages: [...currentSession.messages],
+      createdAt: new Date(),
+      documents: [...currentSession.documents]
+    };
+    setSessions(prev => [newSession, ...prev]);
+    setCurrentSession(newSession);
+  };
+
   return (
     <ChatContext.Provider value={{
       sessions,
       setSessions,
       currentSession,
       createSession,
+      createSessionFromPrevious,
       selectSession,
       addMessage,
       updateStreamingMessage,

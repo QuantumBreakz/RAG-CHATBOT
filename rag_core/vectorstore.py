@@ -35,14 +35,13 @@ class VectorStore:
 
     @staticmethod
     @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=4, max=10))
-    def add_to_vector_collection(all_splits, file_name):
-        """Add document chunks to the vector collection with retry logic and batching."""
+    def add_to_vector_collection(all_splits, file_name, embeddings=None):
+        """Add document chunks to the vector collection with retry logic and batching. If embeddings are provided, use them."""
         try:
             collection = VectorStore.get_vector_collection()
             if not collection:
                 return False
             
-            # Process in smaller batches to avoid timeouts
             batch_size = 50  # Adjust based on your system performance
             total_chunks = len(all_splits)
             
@@ -58,8 +57,14 @@ class VectorStore:
 
                 # Add batch with timeout handling
                 try:
-                    collection.upsert(documents=documents, metadatas=metadatas, ids=ids)
-                    logger.info(f"Added batch {i//batch_size + 1} ({len(documents)} chunks) for {file_name}")
+                    if embeddings is not None:
+                        # Use provided embeddings for upsert
+                        batch_embeddings = embeddings[i:batch_end]
+                        collection.upsert(documents=documents, metadatas=metadatas, ids=ids, embeddings=batch_embeddings)
+                        logger.info(f"Added batch {i//batch_size + 1} ({len(documents)} chunks, cached embeddings) for {file_name}")
+                    else:
+                        collection.upsert(documents=documents, metadatas=metadatas, ids=ids)
+                        logger.info(f"Added batch {i//batch_size + 1} ({len(documents)} chunks) for {file_name}")
 
                     # Small delay between batches to prevent overwhelming the system
                     if batch_end < total_chunks:
