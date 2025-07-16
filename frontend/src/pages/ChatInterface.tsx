@@ -36,8 +36,6 @@ const ChatInterface: React.FC = () => {
   // Add state for streaming assistant message
   const [streamingAssistantContent, setStreamingAssistantContent] = useState<string>("");
   const [pendingMessage, setPendingMessage] = useState<string | null>(null);
-  // Add chunk size state
-  const [chunkSize, setChunkSize] = useState(1000); // Default value
   // Force desktop view: sidebar always open, never collapses
   const sidebarOpen = true;
   const [showScrollButton, setShowScrollButton] = useState(false);
@@ -542,6 +540,13 @@ const ChatInterface: React.FC = () => {
     setUploadProgress(0);
     setEmbeddingStatus('Creating embeddings and chunks...');
 
+    // Get chunk size from settings in localStorage
+    let chunkSize = 1000;
+    try {
+      const settings = JSON.parse(localStorage.getItem('xor-rag-settings') || '{}');
+      if (settings.chunkSize) chunkSize = settings.chunkSize;
+    } catch {}
+
     for (const [idx, file] of Array.from(files).entries()) {
       const formData = new FormData();
       formData.append('file', file);
@@ -713,19 +718,6 @@ const ChatInterface: React.FC = () => {
             <Sparkles className="mr-2 h-4 w-4 group-hover:scale-110 transition-transform duration-300" />
             Duplicate Conversation
           </Button>
-        </div>
-        {/* Chunk Size Setting UI */}
-        <div className="p-4 border-b border-border">
-          <label className="block text-xs font-semibold mb-1">Chunk Size</label>
-          <input
-            type="number"
-            min={100}
-            max={5000}
-            step={100}
-            value={chunkSize}
-            onChange={e => setChunkSize(Number(e.target.value))}
-            className="w-full border rounded px-2 py-1 text-xs focus:ring focus:ring-primary/30"
-          />
         </div>
         {/* Chat Sessions (History) */}
         <div className="flex-1 overflow-y-auto p-4 space-y-2 custom-scrollbar">
