@@ -136,16 +136,9 @@ async def query_rag_stream(
             return StreamingResponse(empty_stream(), media_type="application/json")
         def word_stream():
             answer_accum = ""
-            def stream_callback(word):
-                nonlocal answer_accum
+            for word in LLMHandler.call_llm(question, context_str, conversation_history=history_list):
                 answer_accum += word
-                yield_word = json.dumps({"answer": word, "context": context_str, "status": "streaming"})
-                yield yield_word + "\n"
-            # Use a generator to yield words as they are produced
-            for _ in LLMHandler.call_llm(question, context_str, conversation_history=history_list, stream_callback=None):
-                # This loop is just to trigger the streaming, actual streaming is handled in stream_callback
-                pass
-            # At the end, yield the full answer
+                yield json.dumps({"answer": word, "context": context_str, "status": "streaming"}) + "\n"
             yield json.dumps({"answer": answer_accum, "context": context_str, "status": "success"}) + "\n"
         return StreamingResponse(word_stream(), media_type="application/json")
     except Exception as e:

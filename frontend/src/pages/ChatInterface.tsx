@@ -31,6 +31,7 @@ const ChatInterface: React.FC = () => {
   const [embeddingStatus, setEmbeddingStatus] = useState<string | null>(null);
   // Add state for streaming assistant message
   const [streamingAssistantContent, setStreamingAssistantContent] = useState<string>("");
+  const [pendingMessage, setPendingMessage] = useState<string | null>(null);
   
   const {
     sessions,
@@ -253,7 +254,7 @@ const ChatInterface: React.FC = () => {
   // --- Streaming Assistant Message Bubble Helper ---
   // Returns a message bubble for the currently streaming assistant message
   const renderStreamingAssistantBubble = () => {
-    if (!llmStreaming || !streamingAssistantContent) return null;
+    if (!llmStreaming) return null;
     return (
       <div className="flex justify-start">
         <div className="flex items-start space-x-3 max-w-2xl">
@@ -262,7 +263,7 @@ const ChatInterface: React.FC = () => {
           </div>
           <Card variant="elevated" className="p-4">
             <p className="text-sm leading-relaxed whitespace-pre-line">
-              {streamingAssistantContent}
+              {streamingAssistantContent || <span className="italic text-gray-400">[Waiting for response...]</span>}
               <span className="ml-1 animate-blink">|</span>
             </p>
             <div className="text-xs mt-2 text-muted-foreground">
@@ -284,13 +285,15 @@ const ChatInterface: React.FC = () => {
     if (!inputValue.trim() || isSending) return;
 
     if (!currentSession) {
+      setPendingMessage(inputValue.trim());
       await createSession();
       await refreshConversations();
+      setInputValue("");
+      return;
     }
 
     const userMessage = inputValue.trim();
     setIsSending(true);
-    setLoading(true);
     setLlmStreaming(true);
     setLlmProgress(0);
     setStreamingAssistantContent(""); // Reset streaming content
@@ -348,10 +351,10 @@ const ChatInterface: React.FC = () => {
                 if (data.answer !== undefined) {
                   streamedContent += data.answer;
                   setStreamingAssistantContent(streamedContent);
-                  console.log("Streaming content:", streamedContent);
+                  console.log("[STREAM] Received:", data.answer, "Accum:", streamedContent);
                 }
               } catch (err) {
-                console.error("JSON parse error:", err, "Line:", line);
+                console.error("[STREAM] JSON parse error:", err, "Line:", line);
               }
             }
           }
@@ -364,10 +367,10 @@ const ChatInterface: React.FC = () => {
           if (data.answer !== undefined) {
             streamedContent += data.answer;
             setStreamingAssistantContent(streamedContent);
-            console.log("Streaming content (final buffer):", streamedContent);
+            console.log("[STREAM] Final buffer:", data.answer, "Accum:", streamedContent);
           }
         } catch (err) {
-          console.error("JSON parse error (final buffer):", err, "Buffer:", buffer);
+          console.error("[STREAM] JSON parse error (final buffer):", err, "Buffer:", buffer);
         }
       }
 
@@ -378,14 +381,107 @@ const ChatInterface: React.FC = () => {
       addMessage('Error contacting backend.', 'assistant');
       setBannerMessage('Error contacting backend.');
       setBannerType('error');
-      console.error("Streaming error:", err);
+      console.error("[STREAM] Streaming error:", err);
     }
     setIsSending(false);
-    setLoading(false);
     setLlmStreaming(false);
     setStreamingAssistantContent("");
     setTimeout(() => refreshConversations(), 500);
   };
+
+  // Add useEffect to handle pendingMessage after session creation
+  useEffect(() => {
+    if (pendingMessage && currentSession && currentSession.messages.length === 0) {
+      // Add the pending user message and start the assistant response
+      setIsSending(true);
+      setLlmStreaming(true);
+      setLlmProgress(0);
+      setStreamingAssistantContent("");
+      addMessage(pendingMessage, 'user');
+      addMessage('', 'assistant');
+      setPendingMessage(null);
+      // Now trigger the LLM fetch as in handleSendMessage
+      (async () => {
+        try {
+          const response = await fetch('/query/stream', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: new URLSearchParams({
+              question: pendingMessage,
+              n_results: '3',
+              expand: '2',
+              filename: '',
+              conversation_history: JSON.stringify([])
+            })
+          });
+          if (!response.body) throw new Error('No response body');
+          const reader = response.body.getReader();
+          let decoder = new TextDecoder();
+          let done = false;
+          let receivedLength = 0;
+          let totalLength = 0;
+          if (response.headers.has('content-length')) {
+            totalLength = parseInt(response.headers.get('content-length') || '0', 10);
+          }
+          let streamedContent = "";
+          let buffer = "";
+          while (!done) {
+            const { value, done: doneReading } = await reader.read();
+            done = doneReading;
+            if (value) {
+              receivedLength += value.length;
+              if (totalLength > 0) {
+                setLlmProgress(Math.round((receivedLength / totalLength) * 100));
+              } else {
+                setLlmProgress(null); // Indeterminate
+              }
+              const chunk = decoder.decode(value, { stream: true });
+              buffer += chunk;
+              let lines = buffer.split('\n');
+              buffer = lines.pop() || ""; // Save incomplete line for next chunk
+              for (const line of lines) {
+                if (line.trim()) {
+                  try {
+                    const data = JSON.parse(line);
+                    if (data.answer !== undefined) {
+                      streamedContent += data.answer;
+                      setStreamingAssistantContent(streamedContent);
+                    }
+                  } catch (err) {
+                    console.error("[STREAM] JSON parse error:", err, "Line:", line);
+                  }
+                }
+              }
+            }
+          }
+          // Handle any remaining buffered line
+          if (buffer.trim()) {
+            try {
+              const data = JSON.parse(buffer);
+              if (data.answer !== undefined) {
+                streamedContent += data.answer;
+                setStreamingAssistantContent(streamedContent);
+              }
+            } catch (err) {
+              console.error("[STREAM] JSON parse error (final buffer):", err, "Buffer:", buffer);
+            }
+          }
+          setLlmProgress(100);
+          setTimeout(() => setLlmProgress(null), 500);
+          updateStreamingMessage(streamedContent);
+        } catch (err) {
+          addMessage('Error contacting backend.', 'assistant');
+          setBannerMessage('Error contacting backend.');
+          setBannerType('error');
+          console.error("[STREAM] Streaming error:", err);
+        }
+        setIsSending(false);
+        setLlmStreaming(false);
+        setStreamingAssistantContent("");
+        setTimeout(() => refreshConversations(), 500);
+      })();
+    }
+  }, [pendingMessage, currentSession]);
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;

@@ -16,7 +16,7 @@ export default defineConfig({
       '/query': {
         target: 'http://localhost:8000',
         changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/query/, '/query'),
+        // No rewrite: forward as-is
       },
       '/upload': {
         target: 'http://localhost:8000',

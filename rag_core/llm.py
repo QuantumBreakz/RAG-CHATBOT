@@ -7,10 +7,10 @@ class LLMHandler:
     """Handles LLM interactions with retry logic."""
     @staticmethod
     @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=4, max=10))
-    def call_llm(prompt: str, context: str, conversation_history=None, stream_callback=None):
+    def call_llm(prompt: str, context: str, conversation_history=None):
         """
-        Call the LLM with the given prompt, context, and optional conversation history.
-        conversation_history: list of dicts (role, content, ...), or None for no history.
+        Generator: Call the LLM with the given prompt, context, and optional conversation history.
+        Yields each token/word as it is generated.
         """
         import ollama
         try:
@@ -58,18 +58,14 @@ class LLMHandler:
                 options={"base_url": OLLAMA_BASE_URL},
                 messages=messages,
             )
-            response = ""
             for chunk in response_chunks:
                 print("[LLM CHUNK]", chunk)
                 if chunk["done"] is False:
                     word = chunk["message"]["content"]
-                    response += word
-                    if stream_callback:
-                        stream_callback(word)
+                    yield word
                 else:
                     break
             logger.info(f"LLM response generated for prompt: {prompt[:50]}...")
-            return response
         except Exception as e:
             import traceback
             err_str = str(e)
@@ -83,4 +79,4 @@ class LLMHandler:
             logger.error(msg + '\n' + tb_str)
             print(msg)
             print(tb_str)
-            return f"[Error: LLM call failed: {msg}]" 
+            yield f"[Error: LLM call failed: {msg}]" 
