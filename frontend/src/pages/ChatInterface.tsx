@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Upload, FileText, X, Settings, Trash2, Plus, Bot, User, Sparkles, Pencil } from 'lucide-react';
+import { Send, Upload, FileText, X, Settings, Trash2, Plus, Bot, User, Sparkles, Pencil, ArrowRight } from 'lucide-react';
 import { useChat } from '../contexts/ChatContext';
 import Button from '../components/ui/Button';
 import Card from '../components/ui/Card';
@@ -32,6 +32,10 @@ const ChatInterface: React.FC = () => {
   // Add state for streaming assistant message
   const [streamingAssistantContent, setStreamingAssistantContent] = useState<string>("");
   const [pendingMessage, setPendingMessage] = useState<string | null>(null);
+  // Add chunk size state
+  const [chunkSize, setChunkSize] = useState(1000); // Default value
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [showScrollButton, setShowScrollButton] = useState(false);
   
   const {
     sessions,
@@ -280,6 +284,22 @@ const ChatInterface: React.FC = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [currentSession?.messages, streamingAssistantContent, llmStreaming]);
 
+  // Responsive scroll-to-bottom logic
+  useEffect(() => {
+    const handleScroll = () => {
+      if (!messagesEndRef.current) return;
+      const container = messagesEndRef.current.parentElement;
+      if (!container) return;
+      const atBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 40;
+      setShowScrollButton(!atBottom);
+    };
+    const container = messagesEndRef.current?.parentElement;
+    if (container) {
+      container.addEventListener('scroll', handleScroll);
+      return () => container.removeEventListener('scroll', handleScroll);
+    }
+  }, [currentSession?.messages, streamingAssistantContent, llmStreaming]);
+
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!inputValue.trim() || isSending) return;
@@ -377,6 +397,20 @@ const ChatInterface: React.FC = () => {
       setLlmProgress(100);
       setTimeout(() => setLlmProgress(null), 500);
       updateStreamingMessage(streamedContent);
+      // --- Persist conversation and reload from backend ---
+      try {
+        await fetch('/api/history/save', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(currentSession)
+        });
+        const resp = await fetch(`/api/history/get/${currentSession.id}`);
+        const data = await resp.json();
+        setCurrentSessionFromBackend(data.conversation);
+      } catch (err) {
+        setBannerMessage('Failed to sync conversation with backend.');
+        setBannerType('error');
+      }
     } catch (err) {
       addMessage('Error contacting backend.', 'assistant');
       setBannerMessage('Error contacting backend.');
@@ -469,6 +503,20 @@ const ChatInterface: React.FC = () => {
           setLlmProgress(100);
           setTimeout(() => setLlmProgress(null), 500);
           updateStreamingMessage(streamedContent);
+          // --- Persist conversation and reload from backend ---
+          try {
+            await fetch('/api/history/save', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(currentSession)
+            });
+            const resp = await fetch(`/api/history/get/${currentSession.id}`);
+            const data = await resp.json();
+            setCurrentSessionFromBackend(data.conversation);
+          } catch (err) {
+            setBannerMessage('Failed to sync conversation with backend.');
+            setBannerType('error');
+          }
         } catch (err) {
           addMessage('Error contacting backend.', 'assistant');
           setBannerMessage('Error contacting backend.');
@@ -483,6 +531,7 @@ const ChatInterface: React.FC = () => {
     }
   }, [pendingMessage, currentSession]);
 
+  // --- File Upload Handler: Pass chunk size to backend ---
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files) return;
@@ -495,6 +544,7 @@ const ChatInterface: React.FC = () => {
     for (const [idx, file] of Array.from(files).entries()) {
       const formData = new FormData();
       formData.append('file', file);
+      formData.append('chunk_size', chunkSize.toString()); // Pass chunk size
 
       try {
         setUploadProgress(Math.round(((idx + 1) / files.length) * 100));
@@ -551,9 +601,12 @@ const ChatInterface: React.FC = () => {
       });
       setBannerMessage('Conversation renamed.');
       setBannerType('success');
+      // Fetch updated conversation from backend and update state
+      const resp = await fetch(`/api/history/get/${currentSession.id}`);
+      const data = await resp.json();
+      setCurrentSessionFromBackend(data.conversation);
       // Refresh conversations list and update sidebar
       setConversations((prev) => prev.map(conv => conv.id === currentSession.id ? { ...conv, title: updatedTitle } : conv));
-      // After renaming, refresh conversations
       await refreshConversations();
     } catch (err) {
       setBannerMessage('Failed to rename conversation.');
@@ -580,32 +633,60 @@ const ChatInterface: React.FC = () => {
 
   return (
     <div className="flex h-screen bg-background">
+      {/* Overlay while streaming */}
+      {llmStreaming && (
+        <div className="fixed inset-0 z-50 bg-black bg-opacity-50 flex items-center justify-center transition-all duration-300">
+          <div className="text-white text-lg font-semibold animate-pulse bg-black/70 px-8 py-6 rounded-xl shadow-2xl border border-primary">
+            Generating response...
+          </div>
+        </div>
+      )}
       {/* Embedding Status Toast/Banner */}
       {embeddingStatus && (
-        <div className="fixed top-4 left-1/2 transform -translate-x-1/2 z-50 bg-primary text-white px-6 py-2 rounded shadow-lg text-sm animate-fade-in">
+        <div className="fixed top-4 left-1/2 transform -translate-x-1/2 z-50 bg-primary text-white px-6 py-2 rounded-lg shadow-lg text-sm animate-fade-in">
           {embeddingStatus}
         </div>
       )}
-      {/* Sidebar */}
-      <div className="w-80 bg-surface border-r border-border flex flex-col">
+      {/* Sidebar - responsive and collapsible */}
+      <div className={`bg-surface border-r border-border flex flex-col transition-all duration-300 ${sidebarOpen ? 'w-80' : 'w-0'} fixed md:static z-40 h-full md:w-80`}>
+        <button
+          className="absolute top-2 right-2 md:hidden bg-background rounded-full p-1 shadow hover:bg-primary/10 transition"
+          onClick={() => setSidebarOpen(false)}
+          aria-label="Close sidebar"
+          style={{ display: sidebarOpen ? 'block' : 'none' }}
+        >
+          <X className="h-5 w-5 text-muted-foreground" />
+        </button>
         {/* Banner for error/success */}
         {bannerMessage && (
-          <div className={`p-2 text-xs text-center ${bannerType === 'success' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>{bannerMessage}</div>
+          <div className={`p-2 text-xs text-center rounded-b ${bannerType === 'success' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'} shadow`}>{bannerMessage}</div>
         )}
         {/* New Chat Button */}
         <div className="p-4 border-b border-border">
           <Button 
             onClick={createSession}
-            className="w-full group"
+            className="w-full group rounded-lg shadow-sm"
             variant="outline"
           >
             <Plus className="mr-2 h-4 w-4 group-hover:rotate-90 transition-transform duration-300" />
             New Conversation
           </Button>
         </div>
-
+        {/* Chunk Size Setting UI */}
+        <div className="p-4 border-b border-border">
+          <label className="block text-xs font-semibold mb-1">Chunk Size</label>
+          <input
+            type="number"
+            min={100}
+            max={5000}
+            step={100}
+            value={chunkSize}
+            onChange={e => setChunkSize(Number(e.target.value))}
+            className="w-full border rounded px-2 py-1 text-xs focus:ring focus:ring-primary/30"
+          />
+        </div>
         {/* Chat Sessions (History) */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-2">
+        <div className="flex-1 overflow-y-auto p-4 space-y-2 custom-scrollbar">
           <h3 className="text-sm font-semibold text-muted-foreground mb-4 flex items-center">
             <Sparkles className="mr-2 h-4 w-4" />
             Recent Conversations
@@ -617,7 +698,7 @@ const ChatInterface: React.FC = () => {
             <Card
                 key={conv.id}
               hover
-                className={`p-4 cursor-pointer transition-all duration-300 ${currentSession?.id === conv.id ? 'border-2 border-primary' : ''}`}
+                className={`p-4 cursor-pointer transition-all duration-300 rounded-lg shadow-sm ${currentSession?.id === conv.id ? 'border-2 border-primary' : ''}`}
                 onClick={() => handleLoadConversation(conv.id)}
             >
                 <div className="flex items-center justify-between">
@@ -656,7 +737,6 @@ const ChatInterface: React.FC = () => {
             <div className="text-xs text-muted-foreground">No conversations found.</div>
           )}
         </div>
-
         {/* Document Context */}
         <div className="p-4 border-t border-border">
           <div className="flex items-center justify-between mb-4">
@@ -678,7 +758,7 @@ const ChatInterface: React.FC = () => {
               <div className="text-xs text-muted-foreground">Loading documents...</div>
             ) : documents.length > 0 ? (
               documents.map((doc: {filename: string, count: number, examples: any[]}, index: number) => (
-                <Card key={index} className="p-3 group flex items-center justify-between">
+                <Card key={index} className="p-3 group flex items-center justify-between rounded-lg shadow-sm">
                   <div className="flex items-center space-x-2">
                     <FileText className="h-4 w-4 text-primary flex-shrink-0" />
                     <span className="text-xs text-foreground truncate">{doc.filename}</span>
@@ -695,7 +775,7 @@ const ChatInterface: React.FC = () => {
               </Card>
               ))
             ) : (
-            <Card className="p-6 text-center">
+            <Card className="p-6 text-center rounded-lg shadow-sm">
               <FileText className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
               <p className="text-xs text-muted-foreground">No documents uploaded</p>
               <Button
@@ -710,7 +790,6 @@ const ChatInterface: React.FC = () => {
           )}
           </div>
         </div>
-
         {/* Settings & Admin */}
         <div className="p-4 border-t border-border">
           <div className="flex space-x-2 mb-2">
@@ -718,7 +797,7 @@ const ChatInterface: React.FC = () => {
               variant="outline"
               size="sm"
               onClick={clearHistory}
-              className="flex-1 group"
+              className="flex-1 group rounded-lg shadow-sm"
               disabled={isResettingKB}
             >
               <Trash2 className="mr-2 h-4 w-4" />
@@ -760,76 +839,74 @@ const ChatInterface: React.FC = () => {
         </div>
         {/* Persistent error banner if vectorstore is down */}
         {vectorstoreHealthy === false && (
-          <div className="p-2 text-xs text-center bg-red-100 text-red-800 font-semibold">
+          <div className="p-2 text-xs text-center bg-red-100 text-red-800 font-semibold rounded-b shadow">
             Vectorstore is unavailable. Some features may not work.
           </div>
         )}
       </div>
-
+      {/* Sidebar open button for mobile */}
+      {!sidebarOpen && (
+        <button
+          className="fixed top-4 left-4 z-50 md:hidden bg-background rounded-full p-2 shadow-lg border border-border hover:bg-primary/10 transition"
+          onClick={() => setSidebarOpen(true)}
+          aria-label="Open sidebar"
+        >
+          <Settings className="h-6 w-6 text-primary" />
+        </button>
+      )}
       {/* Main Chat Area */}
-      <div className="flex-1 flex flex-col">
+      <div className="flex-1 flex flex-col ml-0 md:ml-80 transition-all duration-300">
         {/* Chat Header */}
-        <div className="bg-surface border-b border-border p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-xl font-bold text-foreground flex items-center">
-                <Bot className="mr-3 h-6 w-6 text-primary" />
-                {isEditingTitle ? (
-                  <input
-                    className="text-xl font-bold bg-surface border-b border-primary focus:outline-none px-2 py-1 rounded"
-                    value={editedTitle}
-                    autoFocus
-                    onChange={e => setEditedTitle(e.target.value)}
-                    onBlur={handleSaveTitle}
-                    onKeyDown={e => {
-                      if (e.key === 'Enter') handleSaveTitle();
-                      if (e.key === 'Escape') setIsEditingTitle(false);
-                    }}
-                    style={{ width: '16rem' }}
-                  />
-                ) : (
-                  <>
-                    {currentSession?.title || 'XOR RAG Assistant'}
-                    <button
-                      className="ml-2 text-primary hover:text-primary-dark"
-                      onClick={() => {
-                        setEditedTitle(currentSession?.title || '');
-                        setIsEditingTitle(true);
-                      }}
-                      title="Rename Conversation"
-                    >
-                      <Pencil className="w-4 h-4 inline" />
-                    </button>
-                  </>
-                )}
-              </h2>
-              <p className="text-sm text-muted-foreground mt-1">
-                {uploadedDocuments.length > 0 
-                  ? `${uploadedDocuments.length} document${uploadedDocuments.length > 1 ? 's' : ''} loaded • Ready to answer questions`
-                  : 'No documents loaded • Upload files to get started'
-                }
-              </p>
-            </div>
-            <div className="flex items-center space-x-3">
-              {isUploading && (
-                <div className="flex items-center space-x-2 text-sm text-primary">
-                  <div className="w-2 h-2 bg-primary rounded-full animate-pulse"></div>
-                  <span>Processing...</span>
-                </div>
-              )}
-              <div className="flex items-center space-x-2">
+        <div className="bg-surface border-b border-border p-4 md:p-6 flex items-center justify-between sticky top-0 z-30 shadow-sm">
+          <div className="flex items-center gap-3">
+            <Bot className="h-6 w-6 text-primary" />
+            {isEditingTitle ? (
+              <input
+                className="text-xl font-bold bg-surface border-b border-primary focus:outline-none px-2 py-1 rounded"
+                value={editedTitle}
+                autoFocus
+                onChange={e => setEditedTitle(e.target.value)}
+                onBlur={handleSaveTitle}
+                onKeyDown={e => {
+                  if (e.key === 'Enter') handleSaveTitle();
+                  if (e.key === 'Escape') setIsEditingTitle(false);
+                }}
+                style={{ width: '16rem' }}
+              />
+            ) : (
+              <>
+                <span className="text-xl font-bold truncate max-w-xs md:max-w-md">{currentSession?.title || 'XOR RAG Assistant'}</span>
+                <button
+                  className="ml-2 text-primary hover:text-primary-dark"
+                  onClick={() => {
+                    setEditedTitle(currentSession?.title || '');
+                    setIsEditingTitle(true);
+                  }}
+                  title="Rename Conversation"
+                >
+                  <Pencil className="w-4 h-4 inline" />
+                </button>
+              </>
+            )}
+          </div>
+          <div className="flex items-center space-x-3">
+            {isUploading && (
+              <div className="flex items-center space-x-2 text-sm text-primary">
                 <div className="w-2 h-2 bg-primary rounded-full animate-pulse"></div>
-                <span className="text-sm text-muted-foreground">Online</span>
+                <span>Processing...</span>
               </div>
+            )}
+            <div className="flex items-center space-x-2">
+              <div className="w-2 h-2 bg-primary rounded-full animate-pulse"></div>
+              <span className="text-sm text-muted-foreground">Online</span>
             </div>
           </div>
         </div>
-
         {/* Messages */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-6">
+        <div className="flex-1 overflow-y-auto p-2 sm:p-4 md:p-6 space-y-4 md:space-y-6 bg-background relative custom-scrollbar">
           {!currentSession || currentSession.messages.length === 0 ? (
             <div className="flex items-center justify-center h-full">
-              <Card variant="elevated" glow className="p-12 text-center max-w-lg">
+              <Card variant="elevated" glow className="p-12 text-center max-w-lg rounded-lg shadow-lg">
                 <div className="text-6xl mb-6">🤖</div>
                 <h3 className="text-2xl font-bold mb-4 text-foreground">
                   Welcome to XOR RAG
@@ -842,7 +919,7 @@ const ChatInterface: React.FC = () => {
                   <Button 
                     onClick={() => fileInputRef.current?.click()}
                     variant="outline"
-                    className="group"
+                    className="group rounded-lg shadow-sm"
                   >
                     <Upload className="mr-2 h-4 w-4 group-hover:-translate-y-1 transition-transform duration-300" />
                     Upload Documents
@@ -850,6 +927,7 @@ const ChatInterface: React.FC = () => {
                   <Button 
                     onClick={createSession}
                     variant="primary"
+                    className="group rounded-lg shadow-sm"
                   >
                     Start Chatting
                   </Button>
@@ -877,7 +955,7 @@ const ChatInterface: React.FC = () => {
                     </div>
                     <Card
                       variant={message.role === 'user' ? 'default' : 'elevated'}
-                      className={`p-4 ${
+                      className={`p-4 rounded-lg shadow-sm ${
                         message.role === 'user'
                           ? 'bg-primary text-white border-primary/30'
                           : 'bg-surface-elevated'
@@ -905,7 +983,7 @@ const ChatInterface: React.FC = () => {
                 <div className="flex-shrink-0 w-8 h-8 rounded-full bg-surface-elevated border border-border flex items-center justify-center">
                   <Bot className="h-4 w-4 text-primary" />
                 </div>
-                <Card variant="elevated" className="p-4">
+                <Card variant="elevated" className="p-4 rounded-lg shadow-sm">
                   <div className="flex items-center space-x-3">
                     <div className="flex space-x-1">
                       <div className="w-2 h-2 bg-primary rounded-full animate-bounce"></div>
@@ -918,12 +996,21 @@ const ChatInterface: React.FC = () => {
               </div>
             </div>
           )}
+          {/* Floating scroll-to-bottom button */}
+          {showScrollButton && (
+            <button
+              className="fixed bottom-24 right-6 z-40 bg-primary text-white rounded-full p-3 shadow-lg hover:bg-primary-dark transition"
+              onClick={() => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })}
+              aria-label="Scroll to bottom"
+            >
+              <ArrowRight className="rotate-90 h-5 w-5" />
+            </button>
+          )}
           <div ref={messagesEndRef} />
         </div>
-
         {/* Input Area */}
-        <div className="bg-surface border-t border-border p-6">
-          <form onSubmit={handleSendMessage} className="flex items-end space-x-4">
+        <div className="bg-surface border-t border-border p-2 sm:p-4 md:p-6 flex items-end gap-2 md:gap-4 sticky bottom-0 z-20">
+          <form onSubmit={handleSendMessage} className="flex items-end w-full gap-2 md:gap-4">
             <input
               type="file"
               ref={fileInputRef}
@@ -932,14 +1019,13 @@ const ChatInterface: React.FC = () => {
               multiple
               className="hidden"
             />
-            
             <div className="flex-1 relative">
-              <Card variant="elevated" className="overflow-hidden">
+              <Card variant="elevated" className="overflow-hidden rounded-lg shadow-sm">
                 <textarea
                   value={inputValue}
                   onChange={(e) => setInputValue(e.target.value)}
                   placeholder="Ask me anything about your documents..."
-                  className="w-full p-4 bg-transparent text-foreground placeholder-muted-foreground focus:outline-none resize-none min-h-[60px] max-h-32"
+                  className="w-full p-4 bg-transparent text-foreground placeholder-muted-foreground focus:outline-none resize-none min-h-[60px] max-h-32 rounded-lg"
                   disabled={isSending}
                   rows={1}
                   onKeyDown={(e) => {
@@ -951,37 +1037,31 @@ const ChatInterface: React.FC = () => {
                 />
               </Card>
             </div>
-            
             <Button
               type="submit"
               disabled={!inputValue.trim() || isSending}
-              className="p-4 group"
+              className="p-4 group rounded-full shadow-md"
               size="lg"
             >
               <Send className="h-5 w-5 group-hover:translate-x-1 transition-transform duration-300" />
             </Button>
           </form>
-          
-          <div className="flex items-center justify-between mt-4 text-xs text-muted-foreground">
-            <span>Press Enter to send, Shift+Enter for new line</span>
-            <span>{inputValue.length}/2000</span>
-          </div>
         </div>
+        {(isUploading || llmStreaming) && (
+          <div className="fixed top-0 left-0 w-full z-50">
+            <div className="w-full bg-gray-200 rounded-full h-2.5">
+              <div
+                className="bg-primary h-2.5 rounded-full transition-all duration-300"
+                style={{ width: `${isUploading ? uploadProgress || 0 : llmProgress || 0}%` }}
+              ></div>
+            </div>
+            <div className="text-xs text-center mt-1 text-muted-foreground">
+              {isUploading && embeddingStatus}
+              {llmStreaming && 'Processing LLM response...'}
+            </div>
+          </div>
+        )}
       </div>
-      {(isUploading || llmStreaming) && (
-        <div className="fixed top-0 left-0 w-full z-50">
-          <div className="w-full bg-gray-200 rounded-full h-2.5">
-            <div
-              className="bg-primary h-2.5 rounded-full transition-all duration-300"
-              style={{ width: `${isUploading ? uploadProgress || 0 : llmProgress || 0}%` }}
-            ></div>
-          </div>
-          <div className="text-xs text-center mt-1 text-muted-foreground">
-            {isUploading && embeddingStatus}
-            {llmStreaming && 'Processing LLM response...'}
-          </div>
-        </div>
-      )}
     </div>
   );
 };

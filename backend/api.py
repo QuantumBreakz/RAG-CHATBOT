@@ -1,6 +1,6 @@
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException
 from fastapi.responses import StreamingResponse, FileResponse
-from rag_core.document import DocumentProcessor
+from rag_core.document import DocumentProcessor, DEFAULT_CHUNK_SIZE, DEFAULT_CHUNK_OVERLAP
 from rag_core.vectorstore import VectorStore
 from rag_core.llm import LLMHandler
 from rag_core import history
@@ -35,9 +35,13 @@ def test_vectorstore():
         return {"status": "error", "message": f"Vector store error: {str(e)}"}
 
 @app.post("/upload")
-async def upload_document(file: UploadFile = File(...)):
+async def upload_document(
+    file: UploadFile = File(...),
+    chunk_size: int = Form(DEFAULT_CHUNK_SIZE),
+    chunk_overlap: int = Form(DEFAULT_CHUNK_OVERLAP)
+):
     file_bytes = await file.read()
-    docs = DocumentProcessor.process_document(file, file_bytes)
+    docs = DocumentProcessor.process_document(file, file_bytes, chunk_size=chunk_size, chunk_overlap=chunk_overlap)
     
     # Add documents to vector store with embeddings
     if docs:
