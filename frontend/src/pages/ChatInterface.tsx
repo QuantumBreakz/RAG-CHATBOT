@@ -100,7 +100,12 @@ const ChatInterface: React.FC = () => {
     try {
       const response = await fetch(`/api/history/get/${convId}`);
       const data = await response.json();
-      setCurrentSessionFromBackend(data.conversation);
+      if (data.conversation && data.conversation.messages && data.conversation.messages.length > 0) {
+        setCurrentSessionFromBackend(data.conversation);
+      } else {
+        setBannerMessage('Conversation is empty or could not be loaded.');
+        setBannerType('error');
+      }
     } catch (err) {
       setBannerMessage('Failed to load conversation.');
       setBannerType('error');
@@ -860,33 +865,38 @@ const ChatInterface: React.FC = () => {
         <div className="bg-surface border-b border-border p-4 md:p-6 flex items-center justify-between sticky top-0 z-30 shadow-sm">
           <div className="flex items-center gap-3">
             <Bot className="h-6 w-6 text-primary" />
-            {isEditingTitle ? (
-              <input
-                className="text-xl font-bold bg-surface border-b border-primary focus:outline-none px-2 py-1 rounded"
-                value={editedTitle}
-                autoFocus
-                onChange={e => setEditedTitle(e.target.value)}
-                onBlur={handleSaveTitle}
-                onKeyDown={e => {
-                  if (e.key === 'Enter') handleSaveTitle();
-                  if (e.key === 'Escape') setIsEditingTitle(false);
-                }}
-                style={{ width: '16rem' }}
-              />
-            ) : (
-              <>
-                <span className="text-xl font-bold truncate max-w-xs md:max-w-md">{currentSession?.title || 'XOR RAG Assistant'}</span>
-                <button
-                  className="ml-2 text-primary hover:text-primary-dark"
-                  onClick={() => {
-                    setEditedTitle(currentSession?.title || '');
-                    setIsEditingTitle(true);
+            {currentSession ? (
+              isEditingTitle ? (
+                <input
+                  className="text-xl font-bold bg-surface border-b border-primary focus:outline-none px-2 py-1 rounded"
+                  value={editedTitle}
+                  autoFocus
+                  onChange={e => setEditedTitle(e.target.value)}
+                  onBlur={handleSaveTitle}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter') handleSaveTitle();
+                    if (e.key === 'Escape') setIsEditingTitle(false);
                   }}
-                  title="Rename Conversation"
-                >
-                  <Pencil className="w-4 h-4 inline" />
-                </button>
-              </>
+                  style={{ width: '16rem' }}
+                />
+              ) : (
+                <>
+                  <span className="text-xl font-bold truncate max-w-xs md:max-w-md">{currentSession.title || 'XOR RAG Assistant'}</span>
+                  <button
+                    className="ml-2 text-primary hover:text-primary-dark focus:outline-none focus:ring-2 focus:ring-primary rounded"
+                    onClick={() => {
+                      setEditedTitle(currentSession.title || '');
+                      setIsEditingTitle(true);
+                    }}
+                    title="Rename Conversation"
+                    aria-label="Rename Conversation"
+                  >
+                    <Pencil className="w-4 h-4 inline" />
+                  </button>
+                </>
+              )
+            ) : (
+              <span className="text-xl font-bold text-muted-foreground">No conversation loaded</span>
             )}
           </div>
           <div className="flex items-center space-x-3">
@@ -1046,21 +1056,21 @@ const ChatInterface: React.FC = () => {
               <Send className="h-5 w-5 group-hover:translate-x-1 transition-transform duration-300" />
             </Button>
           </form>
-        </div>
-        {(isUploading || llmStreaming) && (
-          <div className="fixed top-0 left-0 w-full z-50">
-            <div className="w-full bg-gray-200 rounded-full h-2.5">
-              <div
-                className="bg-primary h-2.5 rounded-full transition-all duration-300"
-                style={{ width: `${isUploading ? uploadProgress || 0 : llmProgress || 0}%` }}
-              ></div>
-            </div>
-            <div className="text-xs text-center mt-1 text-muted-foreground">
-              {isUploading && embeddingStatus}
-              {llmStreaming && 'Processing LLM response...'}
-            </div>
+      </div>
+      {(isUploading || llmStreaming) && (
+        <div className="fixed top-0 left-0 w-full z-50">
+          <div className="w-full bg-gray-200 rounded-full h-2.5">
+            <div
+              className="bg-primary h-2.5 rounded-full transition-all duration-300"
+              style={{ width: `${isUploading ? uploadProgress || 0 : llmProgress || 0}%` }}
+            ></div>
           </div>
-        )}
+          <div className="text-xs text-center mt-1 text-muted-foreground">
+            {isUploading && embeddingStatus}
+            {llmStreaming && 'Processing LLM response...'}
+          </div>
+        </div>
+      )}
       </div>
     </div>
   );

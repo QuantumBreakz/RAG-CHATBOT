@@ -61,20 +61,11 @@ export const ChatProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const addMessage = (content: string, role: 'user' | 'assistant') => {
     if (!currentSession) return;
 
+    // For assistant: only add a placeholder if the last message is not an assistant streaming message
     if (role === 'assistant') {
-      // If the last message is an assistant streaming message, update it
       const lastMsg = currentSession.messages[currentSession.messages.length - 1];
       if (lastMsg && lastMsg.role === 'assistant' && lastMsg.isStreaming) {
-        const updatedSession = {
-          ...currentSession,
-          messages: currentSession.messages.map((msg, idx) =>
-            idx === currentSession.messages.length - 1
-              ? { ...msg, content, isStreaming: true }
-              : msg
-          ),
-        };
-        setSessions(prev => prev.map(s => s.id === currentSession.id ? updatedSession : s));
-        setCurrentSession(updatedSession);
+        // Don't add another placeholder
         return;
       }
     }
@@ -90,7 +81,9 @@ export const ChatProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const updatedSession = {
       ...currentSession,
       messages: [...currentSession.messages, newMessage],
-      title: currentSession.messages.length === 0 ? content.substring(0, 50) : currentSession.title
+      title: currentSession.messages.length === 0 && role === 'user'
+        ? content.substring(0, 50)
+        : currentSession.title
     };
 
     setSessions(prev => prev.map(s => s.id === currentSession.id ? updatedSession : s));
@@ -100,13 +93,20 @@ export const ChatProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const updateStreamingMessage = (content: string) => {
     if (!currentSession) return;
 
-    const updatedSession = {
-      ...currentSession,
-      messages: currentSession.messages.map(msg => 
-        msg.isStreaming ? { ...msg, content, isStreaming: false } : msg
-      )
-    };
+    // Find the last assistant message with isStreaming: true
+    const idx = [...currentSession.messages].reverse().findIndex(
+      msg => msg.role === 'assistant' && msg.isStreaming
+    );
+    if (idx === -1) return;
 
+    const realIdx = currentSession.messages.length - 1 - idx;
+    const updatedMessages = currentSession.messages.map((msg, i) =>
+      i === realIdx
+        ? { ...msg, content, isStreaming: false }
+        : msg
+    );
+
+    const updatedSession = { ...currentSession, messages: updatedMessages };
     setSessions(prev => prev.map(s => s.id === currentSession.id ? updatedSession : s));
     setCurrentSession(updatedSession);
   };

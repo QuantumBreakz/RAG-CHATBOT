@@ -39,7 +39,7 @@ def list_conversations():
     return sorted(convs, key=lambda x: x['created_at'], reverse=True)
 
 def load_conversation(conv_id):
-    """Load a conversation by id, using Redis cache if available."""
+    """Load a conversation by id, using Redis cache if available, always falling back to disk if Redis fails or is empty."""
     # Try Redis first
     try:
         cached = redis_get(f'history:{conv_id}')
@@ -47,10 +47,11 @@ def load_conversation(conv_id):
             return pickle.loads(cached.encode('latin1') if isinstance(cached, str) else cached)
     except Exception:
         pass
+    # If Redis is empty or fails, try disk
     try:
         with open(_conv_path(conv_id), 'r') as f:
             conv = json.load(f)
-            # Cache in Redis for 1 hour
+            # Cache in Redis for 1 hour (if possible)
             try:
                 redis_set(f'history:{conv_id}', pickle.dumps(conv), ex=3600)
             except Exception:
