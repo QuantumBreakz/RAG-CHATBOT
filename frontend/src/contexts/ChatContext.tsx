@@ -19,6 +19,7 @@ export interface ChatSession {
 
 interface ChatContextType {
   sessions: ChatSession[];
+  setSessions: React.Dispatch<React.SetStateAction<ChatSession[]>>;
   currentSession: ChatSession | null;
   createSession: () => void;
   selectSession: (sessionId: string) => void;
@@ -157,6 +158,7 @@ export const ChatProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   return (
     <ChatContext.Provider value={{
       sessions,
+      setSessions,
       currentSession,
       createSession,
       selectSession,

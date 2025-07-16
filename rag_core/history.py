@@ -28,14 +28,17 @@ def list_conversations():
             try:
                 with open(os.path.join(CONV_DIR, fname), 'r') as f:
                     data = json.load(f)
-                    convs.append({
-                        'id': data.get('id'),
-                        'title': data.get('title'),
-                        'created_at': data.get('created_at')
-                    })
+                    created_at = data.get('created_at')
+                    # Only include if created_at is a valid string
+                    if created_at and isinstance(created_at, str):
+                        convs.append({
+                            'id': data.get('id'),
+                            'title': data.get('title'),
+                            'created_at': created_at
+                        })
             except Exception:
                 continue
-    # Sort by created_at descending
+    # Sort by created_at descending, safely
     return sorted(convs, key=lambda x: x['created_at'], reverse=True)
 
 def load_conversation(conv_id):
