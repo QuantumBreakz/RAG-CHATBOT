@@ -25,8 +25,11 @@ const ChatInterface: React.FC = () => {
   const [bannerMessage, setBannerMessage] = useState<string | null>(null);
   const [bannerType, setBannerType] = useState<'success' | 'error' | null>(null);
   const [vectorstoreHealthy, setVectorstoreHealthy] = useState<boolean | null>(null);
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [editedTitle, setEditedTitle] = useState<string>("");
+  // Add state for LLM streaming progress
+  const [llmProgress, setLlmProgress] = useState<number | null>(null);
   const [llmStreaming, setLlmStreaming] = useState(false);
   const [embeddingStatus, setEmbeddingStatus] = useState<string | null>(null);
   // Add state for streaming assistant message
@@ -39,17 +42,21 @@ const ChatInterface: React.FC = () => {
   
   const {
     sessions,
+    setSessions,
     currentSession,
     createSession,
+    selectSession,
     addMessage,
     clearHistory,
+    uploadedDocuments,
     addDocument,
+    removeDocument,
     setCurrentSessionFromBackend,
     updateStreamingMessage,
     renameSession
   } = useChat();
 
-  const { setLoading } = useGlobalLoading();
+  const { loading, setLoading } = useGlobalLoading();
 
   // Fetch documents from backend on mount
   useEffect(() => {
@@ -225,6 +232,22 @@ const ChatInterface: React.FC = () => {
     setLoading(false);
   };
 
+  const handleTestVectorstore = async () => {
+    setStatusMessage('Testing vector store...');
+    setLoading(true);
+    try {
+      const response = await fetch('/api/test_vectorstore');
+      if (!response.ok) throw new Error('Vectorstore test failed');
+      const data = await response.json();
+      setStatusMessage(data.message || data.status);
+    } catch (err) {
+      setStatusMessage('Vector store test failed.');
+      setBannerMessage('Vector store test failed.');
+      setBannerType('error');
+    }
+    setLoading(false);
+  };
+
   // Check vectorstore health on mount and periodically
   useEffect(() => {
     const checkVectorstore = async () => {
@@ -301,6 +324,7 @@ const ChatInterface: React.FC = () => {
     const userMessage = inputValue.trim();
     setIsSending(true);
     setLlmStreaming(true);
+    setLlmProgress(0);
     setStreamingAssistantContent(""); // Reset streaming content
 
     // Add user message
@@ -340,9 +364,9 @@ const ChatInterface: React.FC = () => {
         if (value) {
           receivedLength += value.length;
           if (totalLength > 0) {
-            // setLlmProgress(Math.round((receivedLength / totalLength) * 100)); // Removed llmProgress
+            setLlmProgress(Math.round((receivedLength / totalLength) * 100));
           } else {
-            // setLlmProgress(null); // Removed llmProgress
+            setLlmProgress(null); // Indeterminate
           }
           const chunk = decoder.decode(value, { stream: true });
           buffer += chunk;
@@ -379,10 +403,8 @@ const ChatInterface: React.FC = () => {
         }
       }
 
-      // setLlmProgress(100); // Removed llmProgress
-      setTimeout(() => {
-        // setLlmProgress(null); // Removed llmProgress
-      }, 500);
+      setLlmProgress(100);
+      setTimeout(() => setLlmProgress(null), 500);
       updateStreamingMessage(streamedContent);
       // --- Persist conversation and reload from backend ---
       try {
@@ -416,7 +438,7 @@ const ChatInterface: React.FC = () => {
       // Add the pending user message and start the assistant response
       setIsSending(true);
       setLlmStreaming(true);
-      // setLlmProgress(0); // Removed llmProgress
+      setLlmProgress(0);
       setStreamingAssistantContent("");
       addMessage(pendingMessage, 'user');
       addMessage('', 'assistant');
@@ -452,9 +474,9 @@ const ChatInterface: React.FC = () => {
             if (value) {
               receivedLength += value.length;
               if (totalLength > 0) {
-                // setLlmProgress(Math.round((receivedLength / totalLength) * 100)); // Removed llmProgress
+                setLlmProgress(Math.round((receivedLength / totalLength) * 100));
               } else {
-                // setLlmProgress(null); // Removed llmProgress
+                setLlmProgress(null); // Indeterminate
               }
               const chunk = decoder.decode(value, { stream: true });
               buffer += chunk;
@@ -487,10 +509,8 @@ const ChatInterface: React.FC = () => {
               console.error("[STREAM] JSON parse error (final buffer):", err, "Buffer:", buffer);
             }
           }
-          // setLlmProgress(100); // Removed llmProgress
-          setTimeout(() => {
-            // setLlmProgress(null); // Removed llmProgress
-          }, 500);
+          setLlmProgress(100);
+          setTimeout(() => setLlmProgress(null), 500);
           updateStreamingMessage(streamedContent);
           // --- Persist conversation and reload from backend ---
           try {
@@ -527,7 +547,7 @@ const ChatInterface: React.FC = () => {
 
     setIsUploading(true);
     setLoading(true);
-    // setUploadProgress(0); // Removed uploadProgress
+    setUploadProgress(0);
     setEmbeddingStatus('Creating embeddings and chunks...');
 
     for (const [idx, file] of Array.from(files).entries()) {
@@ -536,7 +556,7 @@ const ChatInterface: React.FC = () => {
       formData.append('chunk_size', chunkSize.toString()); // Pass chunk size
 
       try {
-        // setUploadProgress(Math.round(((idx + 1) / files.length) * 100)); // Removed uploadProgress
+        setUploadProgress(Math.round(((idx + 1) / files.length) * 100));
         const response = await fetch('/api/upload', {
           method: 'POST',
           body: formData
@@ -565,7 +585,7 @@ const ChatInterface: React.FC = () => {
     }
     setIsUploading(false);
     setLoading(false);
-    // setUploadProgress(null); // Removed uploadProgress
+    setUploadProgress(null);
     setTimeout(() => setEmbeddingStatus(null), 2000);
     await refreshDocuments();
   };
@@ -626,14 +646,24 @@ const ChatInterface: React.FC = () => {
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        if (parsed.sessions) {
-          // setSessions(parsed.sessions); // Removed setSessions
+        if (parsed.sessions && Array.isArray(parsed.sessions)) {
+          // Only set if different
+          if (JSON.stringify(parsed.sessions) !== JSON.stringify(sessions)) {
+            setSessions(parsed.sessions);
+          }
         }
-        if (parsed.currentSession) setCurrentSessionFromBackend(parsed.currentSession);
-        if (parsed.conversations) setConversations(parsed.conversations);
+        if (parsed.currentSession && (!currentSession || parsed.currentSession.id !== currentSession.id)) {
+          setCurrentSessionFromBackend(parsed.currentSession);
+        }
+        if (parsed.conversations && Array.isArray(parsed.conversations)) {
+          if (JSON.stringify(parsed.conversations) !== JSON.stringify(conversations)) {
+            setConversations(parsed.conversations);
+          }
+        }
       } catch {}
     }
-  }, [setCurrentSessionFromBackend]);
+    // eslint-disable-next-line
+  }, []);
 
   // Persist full chat history to localStorage on every update
   useEffect(() => {
