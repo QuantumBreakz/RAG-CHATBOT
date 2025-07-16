@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 
 export interface Message {
@@ -39,6 +39,32 @@ export const ChatProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [currentSession, setCurrentSession] = useState<ChatSession | null>(null);
   const [uploadedDocuments, setUploadedDocuments] = useState<string[]>([]);
+
+  // Load sessions from localStorage on mount
+  useEffect(() => {
+    const saved = localStorage.getItem('xor_rag_sessions');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        // Restore timestamps as Date objects
+        const restoredSessions = parsed.map((s: any) => ({
+          ...s,
+          createdAt: s.createdAt ? new Date(s.createdAt) : new Date(),
+          messages: (s.messages || []).map((m: any) => ({
+            ...m,
+            timestamp: m.timestamp ? new Date(m.timestamp) : new Date()
+          }))
+        }));
+        setSessions(restoredSessions);
+        if (restoredSessions.length > 0) setCurrentSession(restoredSessions[0]);
+      } catch {}
+    }
+  }, []);
+
+  // Persist sessions to localStorage on every change
+  useEffect(() => {
+    localStorage.setItem('xor_rag_sessions', JSON.stringify(sessions));
+  }, [sessions]);
 
   const createSession = () => {
     const newSession: ChatSession = {

@@ -7,6 +7,7 @@ import { useGlobalLoading } from '../App';
 
 // --- Persist and Restore Chat State ---
 const CHAT_STATE_KEY = 'xor_rag_chat_state';
+const SESSIONS_KEY = 'xor_rag_sessions';
 
 const ChatInterface: React.FC = () => {
   const [inputValue, setInputValue] = useState('');
@@ -380,7 +381,8 @@ const ChatInterface: React.FC = () => {
                 if (data.answer !== undefined) {
                   streamedContent += data.answer;
                   setStreamingAssistantContent(streamedContent);
-                  console.log("[STREAM] Received:", data.answer, "Accum:", streamedContent);
+                  // Always update the last assistant message in local state
+                  updateStreamingMessage(streamedContent);
                 }
               } catch (err) {
                 console.error("[STREAM] JSON parse error:", err, "Line:", line);
@@ -396,7 +398,7 @@ const ChatInterface: React.FC = () => {
           if (data.answer !== undefined) {
             streamedContent += data.answer;
             setStreamingAssistantContent(streamedContent);
-            console.log("[STREAM] Final buffer:", data.answer, "Accum:", streamedContent);
+            updateStreamingMessage(streamedContent);
           }
         } catch (err) {
           console.error("[STREAM] JSON parse error (final buffer):", err, "Buffer:", buffer);
@@ -405,21 +407,9 @@ const ChatInterface: React.FC = () => {
 
       setLlmProgress(100);
       setTimeout(() => setLlmProgress(null), 500);
+      // Ensure the last assistant message is finalized with the full content
       updateStreamingMessage(streamedContent);
-      // --- Persist conversation and reload from backend ---
-      try {
-        await fetch('/api/history/save', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(currentSession)
-        });
-        const resp = await fetch(`/api/history/get/${currentSession.id}`);
-        const data = await resp.json();
-        setCurrentSessionFromBackend(data.conversation);
-      } catch (err) {
-        setBannerMessage('Failed to sync conversation with backend.');
-        setBannerType('error');
-      }
+      // Do NOT clear or reset chat state here; preserve all old messages
     } catch (err) {
       addMessage('Error contacting backend.', 'assistant');
       setBannerMessage('Error contacting backend.');
@@ -429,7 +419,7 @@ const ChatInterface: React.FC = () => {
     setIsSending(false);
     setLlmStreaming(false);
     setStreamingAssistantContent("");
-    // Do not refresh conversations here to avoid resetting state
+    // Do not refresh conversations or clear chat here
   };
 
   // Add useEffect to handle pendingMessage after session creation
@@ -673,8 +663,37 @@ const ChatInterface: React.FC = () => {
     );
   }, [sessions, currentSession, conversations]);
 
+  // Persist sessions and currentSession to localStorage on every change
+  useEffect(() => {
+    localStorage.setItem(SESSIONS_KEY, JSON.stringify(sessions));
+    if (currentSession) {
+      localStorage.setItem('xor_rag_current_session', JSON.stringify(currentSession));
+    }
+  }, [sessions, currentSession]);
+
+  // On mount, restore sessions and currentSession if not already loaded
+  useEffect(() => {
+    if (sessions.length === 0) {
+      const saved = localStorage.getItem(SESSIONS_KEY);
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setSessions(parsed);
+            const savedCurrent = localStorage.getItem('xor_rag_current_session');
+            if (savedCurrent) {
+              setCurrentSessionFromBackend(JSON.parse(savedCurrent));
+            } else {
+              setCurrentSessionFromBackend(parsed[0]);
+            }
+          }
+        } catch {}
+      }
+    }
+  }, []);
+
   return (
-    <div className="flex h-screen bg-background">
+    <div className="flex h-screen w-screen bg-background">
       {/* Overlay while streaming */}
       {/* Embedding Status Toast/Banner */}
       {embeddingStatus && (
@@ -726,47 +745,26 @@ const ChatInterface: React.FC = () => {
             <Sparkles className="mr-2 h-4 w-4" />
             Recent Conversations
           </h3>
-          {isLoadingConversations ? (
-            <div className="text-xs text-muted-foreground">Loading conversations...</div>
-          ) : conversations.length > 0 ? (
-            conversations.map((conv: {id: string, title: string, created_at: string}) => (
-            <Card
+          {sessions.length > 0 ? (
+            sessions.map((conv) => (
+              <Card
                 key={conv.id}
-              hover
+                hover
                 className={`p-4 cursor-pointer transition-all duration-300 rounded-lg shadow-sm ${currentSession?.id === conv.id ? 'border-2 border-primary' : ''}`}
-                onClick={() => handleLoadConversation(conv.id)}
-            >
+                onClick={() => selectSession(conv.id)}
+              >
                 <div className="flex items-center justify-between">
                   <div>
-              <div className="text-sm font-medium text-foreground truncate mb-1">
+                    <div className="text-sm font-medium text-foreground truncate mb-1">
                       {conv.title}
                     </div>
                     <div className="text-xs text-muted-foreground">
-                      {new Date(conv.created_at).toLocaleString()}
+                      {conv.createdAt ? new Date(conv.createdAt).toLocaleString() : ''}
                     </div>
                   </div>
-                  <div className="flex flex-col space-y-1">
-                    <Button
-                      onClick={e => { e.stopPropagation(); handleExportConversation(conv.id); }}
-                      variant="ghost"
-                      size="sm"
-                      className="p-1"
-                      disabled={isDeletingConversation === conv.id}
-                    >
-                      <FileText className="h-4 w-4 text-primary" />
-                    </Button>
-                    <Button
-                      onClick={e => { e.stopPropagation(); handleDeleteConversation(conv.id); }}
-                      variant="ghost"
-                      size="sm"
-                      className="p-1"
-                      disabled={isDeletingConversation === conv.id}
-                    >
-                      <Trash2 className="h-4 w-4 text-red-500" />
-                    </Button>
-              </div>
-              </div>
-            </Card>
+                  {/* Optionally add export/delete buttons here */}
+                </div>
+              </Card>
             ))
           ) : (
             <div className="text-xs text-muted-foreground">No conversations found.</div>
@@ -828,7 +826,7 @@ const ChatInterface: React.FC = () => {
         {/* Settings & Admin */}
         <div className="p-4 border-t border-border">
           <div className="flex space-x-2 mb-2">
-            <Button
+            {/* <Button
               variant="outline"
               size="sm"
               onClick={clearHistory}
@@ -837,7 +835,7 @@ const ChatInterface: React.FC = () => {
             >
               <Trash2 className="mr-2 h-4 w-4" />
               Clear
-            </Button>
+            </Button> */}
             <Button
               variant="outline"
               size="sm"
@@ -890,9 +888,9 @@ const ChatInterface: React.FC = () => {
         </button>
       )}
       {/* Main Chat Area */}
-      <div className="flex-1 flex flex-col ml-0 md:ml-80 transition-all duration-300">
+      <div className="flex-1 flex flex-col items-center justify-center ml-0 md:ml-80 transition-all duration-300 min-h-screen">
         {/* Chat Header */}
-        <div className="bg-surface border-b border-border p-4 md:p-6 flex items-center justify-between sticky top-0 z-30 shadow-sm">
+        <div className="bg-surface border-b border-border p-4 md:p-6 flex items-center justify-between sticky top-0 z-30 shadow-sm w-full max-w-3xl mx-auto">
           <div className="flex items-center gap-3">
             <Bot className="h-6 w-6 text-primary" />
             {currentSession ? (
@@ -943,39 +941,10 @@ const ChatInterface: React.FC = () => {
           </div>
         </div>
         {/* Messages */}
-        <div className="flex-1 overflow-y-auto p-2 sm:p-4 md:p-6 space-y-4 md:space-y-6 bg-background relative custom-scrollbar">
-          <div className="flex flex-col items-center w-full">
-            {(!currentSession || currentSession.messages.length === 0) ? (
-              <div className="flex items-center justify-center h-full w-full">
-                <Card variant="elevated" glow className="p-12 text-center max-w-lg rounded-lg shadow-lg mx-auto">
-                  <div className="text-6xl mb-6">🤖</div>
-                  <h3 className="text-2xl font-bold mb-4 text-foreground">
-                    Welcome to XOR RAG
-                  </h3>
-                  <p className="text-muted-foreground mb-6 leading-relaxed">
-                    Start a conversation or upload documents to begin. Your AI assistant is ready to help 
-                    with intelligent document-based questions and analysis.
-                  </p>
-                  <div className="flex flex-col sm:flex-row gap-3 justify-center">
-                    <Button 
-                      onClick={() => fileInputRef.current?.click()}
-                      variant="outline"
-                      className="group rounded-lg shadow-sm"
-                    >
-                      <Upload className="mr-2 h-4 w-4 group-hover:-translate-y-1 transition-transform duration-300" />
-                      Upload Documents
-                    </Button>
-                    <Button 
-                      onClick={createSession}
-                      variant="primary"
-                      className="group rounded-lg shadow-sm"
-                    >
-                      Start Chatting
-                    </Button>
-                  </div>
-                </Card>
-              </div>
-            ) : (
+        <div className="flex-1 flex flex-col items-center justify-end overflow-y-auto p-2 sm:p-4 md:p-6 space-y-4 md:space-y-6 bg-background relative custom-scrollbar w-full max-w-3xl mx-auto" style={{minHeight: '60vh'}}>
+          <div className="flex flex-col items-center w-full justify-end">
+            {/* Always render all chat bubbles for currentSession.messages */}
+            {currentSession && currentSession.messages.length > 0 ? (
               <>
                 {currentSession.messages.map((message, idx) => (
                   <div
@@ -1017,6 +986,36 @@ const ChatInterface: React.FC = () => {
                 {/* Streaming Assistant Bubble */}
                 {renderStreamingAssistantBubble()}
               </>
+            ) : (
+              <div className="flex items-center justify-center h-full w-full">
+                <Card variant="elevated" glow className="p-12 text-center max-w-lg rounded-lg shadow-lg mx-auto">
+                  <div className="text-6xl mb-6">🤖</div>
+                  <h3 className="text-2xl font-bold mb-4 text-foreground">
+                    Welcome to XOR RAG
+                  </h3>
+                  <p className="text-muted-foreground mb-6 leading-relaxed">
+                    Start a conversation or upload documents to begin. Your AI assistant is ready to help 
+                    with intelligent document-based questions and analysis.
+                  </p>
+                  <div className="flex flex-col sm:flex-row gap-3 justify-center">
+                    <Button 
+                      onClick={() => fileInputRef.current?.click()}
+                      variant="outline"
+                      className="group rounded-lg shadow-sm"
+                    >
+                      <Upload className="mr-2 h-4 w-4 group-hover:-translate-y-1 transition-transform duration-300" />
+                      Upload Documents
+                    </Button>
+                    <Button 
+                      onClick={createSession}
+                      variant="primary"
+                      className="group rounded-lg shadow-sm"
+                    >
+                      Start Chatting
+                    </Button>
+                  </div>
+                </Card>
+              </div>
             )}
           </div>
           {isSending && !llmStreaming && (
@@ -1050,8 +1049,8 @@ const ChatInterface: React.FC = () => {
           )}
           <div ref={messagesEndRef} />
         </div>
-        {/* Input Area */}
-        <div className="bg-surface border-t border-border p-2 sm:p-4 md:p-6 flex items-end gap-2 md:gap-4 sticky bottom-0 z-20">
+        {/* Input Area - always at the bottom */}
+        <div className="bg-surface border-t border-border p-2 sm:p-4 md:p-6 flex items-end gap-2 md:gap-4 w-full max-w-3xl mx-auto sticky bottom-0 z-20">
           <form onSubmit={handleSendMessage} className="flex items-end w-full gap-2 md:gap-4">
             <input
               type="file"

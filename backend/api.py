@@ -129,7 +129,10 @@ async def query_rag_stream(
             filename=filename
         )
         context_docs = results.get("documents", [[]])[0] if results.get("documents") else []
-        context_str = " ".join(context_docs)
+        # Limit context to 3000 characters (adjust as needed)
+        context_str = "\n---\n".join(context_docs)
+        if len(context_str) > 3000:
+            context_str = context_str[:3000]
         if not context_str.strip():
             def empty_stream():
                 yield json.dumps({
@@ -140,10 +143,15 @@ async def query_rag_stream(
             return StreamingResponse(empty_stream(), media_type="application/json")
         def word_stream():
             answer_accum = ""
+            got_any = False
             for word in LLMHandler.call_llm(question, context_str, conversation_history=history_list):
+                got_any = True
                 answer_accum += word
-                yield json.dumps({"answer": word, "context": context_str, "status": "streaming"}) + "\n"
-            yield json.dumps({"answer": answer_accum, "context": context_str, "status": "success"}) + "\n"
+                yield json.dumps({"answer": word, "context": "", "status": "streaming"}) + "\n"
+            # If nothing was yielded, return a fallback message
+            if not got_any or not answer_accum.strip():
+                answer_accum = "[No answer could be generated. Please try rephrasing your question or uploading more documents.]"
+            yield json.dumps({"answer": answer_accum, "context": "", "status": "success"}) + "\n"
         return StreamingResponse(word_stream(), media_type="application/json")
     except Exception as e:
         def error_stream():
