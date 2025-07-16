@@ -38,7 +38,8 @@ const ChatInterface: React.FC = () => {
   const [pendingMessage, setPendingMessage] = useState<string | null>(null);
   // Add chunk size state
   const [chunkSize, setChunkSize] = useState(1000); // Default value
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  // Force desktop view: sidebar always open, never collapses
+  const sidebarOpen = true;
   const [showScrollButton, setShowScrollButton] = useState(false);
   
   const {
@@ -636,19 +637,16 @@ const ChatInterface: React.FC = () => {
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        if (parsed.sessions && Array.isArray(parsed.sessions)) {
-          // Only set if different
-          if (JSON.stringify(parsed.sessions) !== JSON.stringify(sessions)) {
-            setSessions(parsed.sessions);
-          }
+        // Only restore if sessions are empty
+        if (parsed.sessions && Array.isArray(parsed.sessions) && sessions.length === 0) {
+          setSessions(parsed.sessions);
         }
-        if (parsed.currentSession && (!currentSession || parsed.currentSession.id !== currentSession.id)) {
+        // Only restore if currentSession is null
+        if (parsed.currentSession && !currentSession) {
           setCurrentSessionFromBackend(parsed.currentSession);
         }
-        if (parsed.conversations && Array.isArray(parsed.conversations)) {
-          if (JSON.stringify(parsed.conversations) !== JSON.stringify(conversations)) {
-            setConversations(parsed.conversations);
-          }
+        if (parsed.conversations && Array.isArray(parsed.conversations) && conversations.length === 0) {
+          setConversations(parsed.conversations);
         }
       } catch {}
     }
@@ -681,9 +679,9 @@ const ChatInterface: React.FC = () => {
           if (Array.isArray(parsed) && parsed.length > 0) {
             setSessions(parsed);
             const savedCurrent = localStorage.getItem('xor_rag_current_session');
-            if (savedCurrent) {
+            if (savedCurrent && !currentSession) {
               setCurrentSessionFromBackend(JSON.parse(savedCurrent));
-            } else {
+            } else if (!currentSession) {
               setCurrentSessionFromBackend(parsed[0]);
             }
           }
@@ -691,6 +689,9 @@ const ChatInterface: React.FC = () => {
       }
     }
   }, []);
+
+  // Defensive: Never allow currentSession to be set to null or sessions to [] except by explicit user action
+  // Remove any code that sets currentSession to null or sessions to [] except in clearHistory (which is now disabled)
 
   return (
     <div className="flex h-screen w-screen bg-background">
@@ -701,16 +702,9 @@ const ChatInterface: React.FC = () => {
           {embeddingStatus}
         </div>
       )}
-      {/* Sidebar - responsive and collapsible */}
-      <div className={`bg-surface border-r border-border flex flex-col transition-all duration-300 ${sidebarOpen ? 'w-80' : 'w-0'} fixed md:static z-40 h-full md:w-80`}>
-        <button
-          className="absolute top-2 right-2 md:hidden bg-background rounded-full p-1 shadow hover:bg-primary/10 transition"
-          onClick={() => setSidebarOpen(false)}
-          aria-label="Close sidebar"
-          style={{ display: sidebarOpen ? 'block' : 'none' }}
-        >
-          <X className="h-5 w-5 text-muted-foreground" />
-        </button>
+      {/* Sidebar - always visible in desktop view */}
+      <div className="bg-surface border-r border-border flex flex-col transition-all duration-300 w-80 fixed md:static z-40 h-full md:w-80">
+        {/* Sidebar close button removed for forced desktop view */}
         {/* Banner for error/success */}
         {bannerMessage && (
           <div className={`p-2 text-xs text-center rounded-b ${bannerType === 'success' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'} shadow`}>{bannerMessage}</div>
@@ -878,17 +872,8 @@ const ChatInterface: React.FC = () => {
         )}
       </div>
       {/* Sidebar open button for mobile */}
-      {!sidebarOpen && (
-        <button
-          className="fixed top-4 left-4 z-50 md:hidden bg-background rounded-full p-2 shadow-lg border border-border hover:bg-primary/10 transition"
-          onClick={() => setSidebarOpen(true)}
-          aria-label="Open sidebar"
-        >
-          <Settings className="h-6 w-6 text-primary" />
-        </button>
-      )}
-      {/* Main Chat Area */}
-      <div className="flex-1 flex flex-col items-center justify-center ml-0 md:ml-80 transition-all duration-300 min-h-screen">
+      {/* Main Chat Area - always visible */}
+      <div className="flex-1 flex flex-col items-center justify-center ml-80 transition-all duration-300 min-h-screen">
         {/* Chat Header */}
         <div className="bg-surface border-b border-border p-4 md:p-6 flex items-center justify-between sticky top-0 z-30 shadow-sm w-full max-w-3xl mx-auto">
           <div className="flex items-center gap-3">
@@ -987,6 +972,7 @@ const ChatInterface: React.FC = () => {
                 {renderStreamingAssistantBubble()}
               </>
             ) : (
+              // Only show welcome card if there are truly no messages
               <div className="flex items-center justify-center h-full w-full">
                 <Card variant="elevated" glow className="p-12 text-center max-w-lg rounded-lg shadow-lg mx-auto">
                   <div className="text-6xl mb-6">🤖</div>

@@ -398,14 +398,14 @@ const Settings: React.FC = () => {
 
           {/* Action Buttons */}
           <div className="flex flex-col sm:flex-row justify-between items-center gap-4 pt-8">
-            <Button
+            {/* <Button
               onClick={clearHistory}
               variant="outline"
               className="text-red-500 border-red-500/30 hover:bg-red-500/10 hover:border-red-500/50 group"
             >
               <RotateCcw className="mr-2 h-4 w-4 group-hover:rotate-180 transition-transform duration-500" />
               Clear All Data
-            </Button>
+            </Button> */}
             
             <div className="flex space-x-4">
               <Button
