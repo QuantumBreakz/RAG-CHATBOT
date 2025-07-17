@@ -10,17 +10,18 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@types/react-router-dom": "^5.3.3",
+    "@types/uuid": "^9.0.7",
+    "framer-motion": "^10.16.16",
     "lucide-react": "^0.344.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "@types/react-router-dom": "^5.3.3",
     "react-router-dom": "^6.20.1",
-    "framer-motion": "^10.16.16",
-    "@types/uuid": "^9.0.7",
     "uuid": "^9.0.1"
   },
   "devDependencies": {
     "@eslint/js": "^9.9.1",
+    "@types/lodash": "^4.17.20",
     "@types/react": "^18.3.5",
     "@types/react-dom": "^18.3.0",
     "@vitejs/plugin-react": "^4.3.1",
