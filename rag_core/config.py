@@ -5,6 +5,14 @@ import logging
 # Load environment variables from .env file
 load_dotenv()
 
+def get_env_value(key, default=None):
+    """Get environment variable value and strip any comments"""
+    value = os.getenv(key, default)
+    if value is not None:
+        # Strip comments (anything after #)
+        value = value.split('#')[0].strip()
+    return value
+
 # List of required environment variables
 REQUIRED_ENV_VARS = [
     "LOG_LEVEL", "LOG_FILE", "OLLAMA_BASE_URL", "OLLAMA_EMBEDDING_MODEL", "OLLAMA_LLM_MODEL",
@@ -14,23 +22,23 @@ REQUIRED_ENV_VARS = [
 
 # Enforce that all required environment variables are set
 for var in REQUIRED_ENV_VARS:
-    if os.getenv(var) is None:
+    if get_env_value(var) is None:
         raise ValueError(f"Environment variable {var} must be set in your .env file.")
 
 # Application configuration (all values loaded from environment)
-LOG_LEVEL = os.getenv("LOG_LEVEL")
-LOG_FILE = os.getenv("LOG_FILE")
-OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL")
-OLLAMA_EMBEDDING_MODEL = os.getenv("OLLAMA_EMBEDDING_MODEL")
-OLLAMA_LLM_MODEL = os.getenv("OLLAMA_LLM_MODEL")
-MAX_FILE_SIZE = int(os.getenv("MAX_FILE_SIZE"))
-DEFAULT_CHUNK_SIZE = int(os.getenv("CHUNK_SIZE", 600))
-DEFAULT_CHUNK_OVERLAP = int(os.getenv("CHUNK_OVERLAP", 200))
-DEFAULT_N_RESULTS = int(os.getenv("N_RESULTS"))
-CHROMA_DB_PATH = os.getenv("CHROMA_DB_PATH")
-CHROMA_COLLECTION_NAME = os.getenv("CHROMA_COLLECTION_NAME")
-CACHE_TTL = int(os.getenv("CACHE_TTL"))
-EMBEDDINGS_CACHE_PATH = os.getenv("EMBEDDINGS_CACHE_PATH")
+LOG_LEVEL = get_env_value("LOG_LEVEL")
+LOG_FILE = get_env_value("LOG_FILE")
+OLLAMA_BASE_URL = get_env_value("OLLAMA_BASE_URL")
+OLLAMA_EMBEDDING_MODEL = get_env_value("OLLAMA_EMBEDDING_MODEL")
+OLLAMA_LLM_MODEL = get_env_value("OLLAMA_LLM_MODEL")
+MAX_FILE_SIZE = int(get_env_value("MAX_FILE_SIZE"))
+DEFAULT_CHUNK_SIZE = int(get_env_value("CHUNK_SIZE", "600"))
+DEFAULT_CHUNK_OVERLAP = int(get_env_value("CHUNK_OVERLAP", "200"))
+DEFAULT_N_RESULTS = int(get_env_value("N_RESULTS"))
+CHROMA_DB_PATH = get_env_value("CHROMA_DB_PATH")
+CHROMA_COLLECTION_NAME = get_env_value("CHROMA_COLLECTION_NAME")
+CACHE_TTL = int(get_env_value("CACHE_TTL"))
+EMBEDDINGS_CACHE_PATH = get_env_value("EMBEDDINGS_CACHE_PATH")
 
 # Set up logging
 logging.basicConfig(
@@ -68,4 +76,4 @@ Format your response as follows:
 2. Organize your answer into paragraphs for readability.
 3. Use bullet points or numbered lists where appropriate to break down complex information.
 4. If relevant, include any headings or subheadings to structure your response.
-""" 
+"""
