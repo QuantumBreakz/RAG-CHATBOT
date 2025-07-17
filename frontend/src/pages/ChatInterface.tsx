@@ -4,6 +4,8 @@ import { useChat } from '../contexts/ChatContext';
 import Button from '../components/ui/Button';
 import Card from '../components/ui/Card';
 import { useGlobalLoading } from '../App';
+import { useStreamingAssistant } from './useStreamingAssistant';
+import debounce from 'lodash.debounce';
 
 // --- Persist and Restore Chat State ---
 const CHAT_STATE_KEY = 'xor_rag_chat_state';
@@ -29,16 +31,10 @@ const ChatInterface: React.FC = () => {
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [editedTitle, setEditedTitle] = useState<string>("");
-  // Add state for LLM streaming progress
-  const [llmProgress, setLlmProgress] = useState<number | null>(null);
-  const [llmStreaming, setLlmStreaming] = useState(false);
-  const [embeddingStatus, setEmbeddingStatus] = useState<string | null>(null);
-  // Add state for streaming assistant message
-  const [streamingAssistantContent, setStreamingAssistantContent] = useState<string>("");
-  const [pendingMessage, setPendingMessage] = useState<string | null>(null);
   // Force desktop view: sidebar always open, never collapses
   const sidebarOpen = true;
   const [showScrollButton, setShowScrollButton] = useState(false);
+  const [pendingMessage, setPendingMessage] = useState<string | null>(null);
   
   const {
     sessions,
@@ -265,10 +261,29 @@ const ChatInterface: React.FC = () => {
     return () => clearInterval(interval);
   }, []);
 
+  // --- Streaming Assistant Hook ---
+  const {
+    streamingContent,
+    progress: streamingProgress,
+    status: streamingStatus,
+    error: streamingError,
+    startStreaming,
+    resetStreaming
+  } = useStreamingAssistant();
+
+  // Memoized scroll-to-bottom with debounce
+  const scrollToBottom = React.useMemo(() => debounce(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, 100), []);
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [currentSession?.messages, streamingContent, streamingStatus, scrollToBottom]);
+
   // --- Streaming Assistant Message Bubble Helper ---
   // Returns a message bubble for the currently streaming assistant message
   const renderStreamingAssistantBubble = () => {
-    if (!llmStreaming) return null;
+    if (streamingStatus !== 'streaming' || !streamingContent) return null;
     return (
       <div className="flex justify-start">
         <div className="flex items-start space-x-3 max-w-2xl">
@@ -277,7 +292,7 @@ const ChatInterface: React.FC = () => {
           </div>
           <Card variant="elevated" className="p-4">
             <p className="text-sm leading-relaxed whitespace-pre-line">
-              {streamingAssistantContent || <span className="italic text-gray-400">[Waiting for response...]</span>}
+              {streamingContent || <span className="italic text-gray-400">[Waiting for response...]</span>}
               <span className="ml-1 animate-blink">|</span>
             </p>
             <div className="text-xs mt-2 text-muted-foreground">
@@ -288,11 +303,6 @@ const ChatInterface: React.FC = () => {
       </div>
     );
   };
-
-  // --- Fix: Always scroll to latest message, including during streaming ---
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [currentSession?.messages, streamingAssistantContent, llmStreaming]);
 
   // Responsive scroll-to-bottom logic
   useEffect(() => {
@@ -308,118 +318,47 @@ const ChatInterface: React.FC = () => {
       container.addEventListener('scroll', handleScroll);
       return () => container.removeEventListener('scroll', handleScroll);
     }
-  }, [currentSession?.messages, streamingAssistantContent, llmStreaming]);
+  }, [currentSession?.messages, streamingContent, streamingStatus]);
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!inputValue.trim() || isSending) return;
 
-    if (!currentSession) {
-      setPendingMessage(inputValue.trim());
-      await createSession();
-      await refreshConversations();
-      setInputValue("");
-      return;
-    }
-
     const userMessage = inputValue.trim();
     setIsSending(true);
-    setLlmStreaming(true);
-    setLlmProgress(0);
-    setStreamingAssistantContent(""); // Reset streaming content
+    setInputValue("");
 
-    // Add user message
+    // Add user message immediately
     addMessage(userMessage, 'user');
-    // Add a placeholder for the assistant's streaming message
-    addMessage('', 'assistant');
-    setInputValue(""); // Clear input for better UX
 
     try {
-      const response = await fetch('/query/stream', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({
-          question: userMessage,
-          n_results: '3',
-          expand: '2',
-          filename: '',
-          conversation_history: JSON.stringify(currentSession?.messages || [])
-        })
-      });
-
-      if (!response.body) throw new Error('No response body');
-      const reader = response.body.getReader();
-      let decoder = new TextDecoder();
-      let done = false;
-      let receivedLength = 0;
-      let totalLength = 0;
-      if (response.headers.has('content-length')) {
-        totalLength = parseInt(response.headers.get('content-length') || '0', 10);
+      // Stream response
+      const streamedContent = await startStreaming(userMessage, currentSession?.messages || []);
+      // Add assistant response after streaming completes
+      addMessage(streamedContent, 'assistant');
+      // Save to backend
+      if (currentSession) {
+        const updatedMessages = [
+          ...currentSession.messages,
+          { role: 'user', content: userMessage, timestamp: new Date() },
+          { role: 'assistant', content: streamedContent, timestamp: new Date() }
+        ];
+        await fetch('/api/history/save', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            ...currentSession,
+            messages: updatedMessages
+          })
+        });
       }
-      let streamedContent = "";
-      let buffer = "";
-
-      while (!done) {
-        const { value, done: doneReading } = await reader.read();
-        done = doneReading;
-        if (value) {
-          receivedLength += value.length;
-          if (totalLength > 0) {
-            setLlmProgress(Math.round((receivedLength / totalLength) * 100));
-          } else {
-            setLlmProgress(null); // Indeterminate
-          }
-          const chunk = decoder.decode(value, { stream: true });
-          buffer += chunk;
-          let lines = buffer.split('\n');
-          buffer = lines.pop() || ""; // Save incomplete line for next chunk
-
-          for (const line of lines) {
-            if (line.trim()) {
-              try {
-                const data = JSON.parse(line);
-                if (data.answer !== undefined) {
-                  streamedContent += data.answer;
-                  setStreamingAssistantContent(streamedContent);
-                  // Always update the last assistant message in local state
-                  updateStreamingMessage(streamedContent);
-                }
-              } catch (err) {
-                console.error("[STREAM] JSON parse error:", err, "Line:", line);
-              }
-            }
-          }
-        }
-      }
-      // Handle any remaining buffered line
-      if (buffer.trim()) {
-        try {
-          const data = JSON.parse(buffer);
-          if (data.answer !== undefined) {
-            streamedContent += data.answer;
-            setStreamingAssistantContent(streamedContent);
-            updateStreamingMessage(streamedContent);
-          }
-        } catch (err) {
-          console.error("[STREAM] JSON parse error (final buffer):", err, "Buffer:", buffer);
-        }
-      }
-
-      setLlmProgress(100);
-      setTimeout(() => setLlmProgress(null), 500);
-      // Ensure the last assistant message is finalized with the full content
-      updateStreamingMessage(streamedContent);
-      // Do NOT clear or reset chat state here; preserve all old messages
-    } catch (err) {
-      addMessage('Error contacting backend.', 'assistant');
-      setBannerMessage('Error contacting backend.');
+    } catch (error) {
+      setBannerMessage('Failed to send message.');
       setBannerType('error');
-      console.error("[STREAM] Streaming error:", err);
+    } finally {
+      setIsSending(false);
+      // Don't call resetStreaming here
     }
-    setIsSending(false);
-    setLlmStreaming(false);
-    setStreamingAssistantContent("");
-    // Do not refresh conversations or clear chat here
   };
 
   // Add useEffect to handle pendingMessage after session creation
@@ -427,108 +366,35 @@ const ChatInterface: React.FC = () => {
     if (pendingMessage && currentSession && currentSession.messages.length === 0) {
       // Add the pending user message and start the assistant response
       setIsSending(true);
-      setLlmStreaming(true);
-      setLlmProgress(0);
-      setStreamingAssistantContent("");
       addMessage(pendingMessage, 'user');
       addMessage('', 'assistant');
       setPendingMessage(null);
       // Now trigger the LLM fetch as in handleSendMessage
       (async () => {
+        // Use the streaming hook
+        const streamedContent = await startStreaming(pendingMessage, []);
+        updateStreamingMessage(streamedContent);
+        // Persist conversation to backend before clearing streaming state
         try {
-          const response = await fetch('/query/stream', {
+          await fetch('/api/history/save', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: new URLSearchParams({
-              question: pendingMessage,
-              n_results: '3',
-              expand: '2',
-              filename: '',
-              conversation_history: JSON.stringify([])
-            })
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ...currentSession, messages: [
+              ...currentSession.messages.slice(0, -1),
+              { ...currentSession.messages[currentSession.messages.length - 1], content: streamedContent }
+            ] })
           });
-          if (!response.body) throw new Error('No response body');
-          const reader = response.body.getReader();
-          let decoder = new TextDecoder();
-          let done = false;
-          let receivedLength = 0;
-          let totalLength = 0;
-          if (response.headers.has('content-length')) {
-            totalLength = parseInt(response.headers.get('content-length') || '0', 10);
-          }
-          let streamedContent = "";
-          let buffer = "";
-          while (!done) {
-            const { value, done: doneReading } = await reader.read();
-            done = doneReading;
-            if (value) {
-              receivedLength += value.length;
-              if (totalLength > 0) {
-                setLlmProgress(Math.round((receivedLength / totalLength) * 100));
-              } else {
-                setLlmProgress(null); // Indeterminate
-              }
-              const chunk = decoder.decode(value, { stream: true });
-              buffer += chunk;
-              let lines = buffer.split('\n');
-              buffer = lines.pop() || ""; // Save incomplete line for next chunk
-              for (const line of lines) {
-                if (line.trim()) {
-                  try {
-                    const data = JSON.parse(line);
-                    if (data.answer !== undefined) {
-                      streamedContent += data.answer;
-                      setStreamingAssistantContent(streamedContent);
-                    }
-                  } catch (err) {
-                    console.error("[STREAM] JSON parse error:", err, "Line:", line);
-                  }
-                }
-              }
-            }
-          }
-          // Handle any remaining buffered line
-          if (buffer.trim()) {
-            try {
-              const data = JSON.parse(buffer);
-              if (data.answer !== undefined) {
-                streamedContent += data.answer;
-                setStreamingAssistantContent(streamedContent);
-              }
-            } catch (err) {
-              console.error("[STREAM] JSON parse error (final buffer):", err, "Buffer:", buffer);
-            }
-          }
-          setLlmProgress(100);
-          setTimeout(() => setLlmProgress(null), 500);
-          updateStreamingMessage(streamedContent);
-          // --- Persist conversation and reload from backend ---
-          try {
-            await fetch('/api/history/save', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(currentSession)
-            });
-            const resp = await fetch(`/api/history/get/${currentSession.id}`);
-            const data = await resp.json();
-            setCurrentSessionFromBackend(data.conversation);
-          } catch (err) {
-            setBannerMessage('Failed to sync conversation with backend.');
-            setBannerType('error');
-          }
+          // Optionally refresh conversations
+          setTimeout(() => refreshConversations(), 500);
         } catch (err) {
-          addMessage('Error contacting backend.', 'assistant');
-          setBannerMessage('Error contacting backend.');
+          setBannerMessage('Failed to sync conversation with backend.');
           setBannerType('error');
-          console.error("[STREAM] Streaming error:", err);
         }
         setIsSending(false);
-        setLlmStreaming(false);
-        setStreamingAssistantContent("");
-        setTimeout(() => refreshConversations(), 500);
+        resetStreaming();
       })();
     }
-  }, [pendingMessage, currentSession]);
+  }, [pendingMessage, currentSession, startStreaming, updateStreamingMessage]);
 
   // --- File Upload Handler: Pass chunk size to backend ---
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -538,7 +404,6 @@ const ChatInterface: React.FC = () => {
     setIsUploading(true);
     setLoading(true);
     setUploadProgress(0);
-    setEmbeddingStatus('Creating embeddings and chunks...');
 
     // Get chunk size from settings in localStorage
     let chunkSize = 1000;
@@ -563,27 +428,23 @@ const ChatInterface: React.FC = () => {
         if (data.status?.includes('uploaded and embedded')) {
           setBannerMessage(`Embeddings created for "${file.name}" (${data.num_chunks} chunks).`);
           setBannerType('success');
-          setEmbeddingStatus(`Embeddings created for "${file.name}" (${data.num_chunks} chunks).`);
         } else if (data.status?.includes('already exist')) {
           setBannerMessage(`Embeddings already exist for "${file.name}".`);
           setBannerType('success');
-          setEmbeddingStatus(`Embeddings already exist for "${file.name}".`);
         } else {
           setBannerMessage(`Embedding failed for "${file.name}": ${data.status}`);
           setBannerType('error');
-          setEmbeddingStatus(`Embedding failed for "${file.name}": ${data.status}`);
         }
         addDocument(file.name);
       } catch (err) {
         setBannerMessage(`Failed to upload document "${file.name}".`);
         setBannerType('error');
-        setEmbeddingStatus(`Failed to upload document "${file.name}".`);
       }
     }
     setIsUploading(false);
     setLoading(false);
     setUploadProgress(null);
-    setTimeout(() => setEmbeddingStatus(null), 2000);
+    setTimeout(() => setBannerMessage(null), 2000);
     await refreshDocuments();
   };
 
@@ -688,13 +549,8 @@ const ChatInterface: React.FC = () => {
     <div className="flex h-screen w-screen bg-background">
       {/* Overlay while streaming */}
       {/* Embedding Status Toast/Banner */}
-      {embeddingStatus && (
-        <div className="fixed top-4 left-1/2 transform -translate-x-1/2 z-50 bg-primary text-white px-6 py-2 rounded-lg shadow-lg text-sm animate-fade-in">
-          {embeddingStatus}
-        </div>
-      )}
       {/* Sidebar - always visible in desktop view */}
-      <div className="bg-surface border-r border-border flex flex-col transition-all duration-300 w-80 flex-none h-full z-40">
+      <div className="bg-surface border-r border-border flex flex-col transition-all duration-300 w-80 flex-none h-screen z-40 fixed left-0 top-0">
         {/* Sidebar close button removed for forced desktop view */}
         {/* Banner for error/success */}
         {bannerMessage && (
@@ -858,7 +714,7 @@ const ChatInterface: React.FC = () => {
         )}
       </div>
       {/* Main Chat Area - always visible, flush with sidebar */}
-      <div className="flex-1 flex flex-col items-stretch justify-between min-h-screen w-0" style={{ minWidth: 0 }}>
+      <div className="flex-1 flex flex-col items-stretch justify-between min-h-screen w-0 ml-80" style={{ minWidth: 0 }}>
         {/* Chat Header */}
         <div className="bg-surface border-b border-border p-4 md:p-6 flex items-center justify-between sticky top-0 z-30 shadow-sm w-full">
           <div className="flex items-center gap-3">
@@ -911,7 +767,7 @@ const ChatInterface: React.FC = () => {
           </div>
         </div>
         {/* Messages */}
-        <div className="flex-1 flex flex-col items-stretch justify-end overflow-y-auto p-2 sm:p-4 md:p-6 space-y-4 md:space-y-6 bg-background relative custom-scrollbar w-full" style={{minHeight: '60vh'}}>
+        <div className="flex-1 flex flex-col items-stretch justify-end overflow-y-auto p-2 sm:p-4 md:p-6 space-y-4 md:space-y-6 bg-background relative custom-scrollbar w-full" style={{minHeight: '60vh'}} role="log" aria-live="polite" aria-label="Chat messages">
           <div className="flex flex-col items-stretch w-full justify-end flex-1">
             {/* Always render all chat bubbles for currentSession.messages */}
             {currentSession && currentSession.messages.length > 0 ? (
@@ -989,7 +845,7 @@ const ChatInterface: React.FC = () => {
               </div>
             )}
           </div>
-          {isSending && !llmStreaming && (
+          {isSending && streamingStatus !== 'streaming' && (
             <div className="flex justify-start">
               <div className="flex items-start space-x-3 max-w-2xl">
                 <div className="flex-shrink-0 w-8 h-8 rounded-full bg-surface-elevated border border-border flex items-center justify-center">
@@ -1038,7 +894,7 @@ const ChatInterface: React.FC = () => {
                   onChange={(e) => setInputValue(e.target.value)}
                   placeholder="Ask me anything about your documents..."
                   className="w-full p-4 bg-transparent text-foreground placeholder-muted-foreground focus:outline-none resize-none min-h-[60px] max-h-32 rounded-lg"
-                  disabled={isSending || llmStreaming}
+                  disabled={isSending || streamingStatus === 'streaming'}
                   rows={1}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' && !e.shiftKey) {
@@ -1051,7 +907,7 @@ const ChatInterface: React.FC = () => {
             </div>
             <Button
               type="submit"
-              disabled={!inputValue.trim() || isSending || llmStreaming}
+              disabled={!inputValue.trim() || isSending || streamingStatus === 'streaming'}
               className="p-4 group rounded-full shadow-md"
               size="lg"
             >
