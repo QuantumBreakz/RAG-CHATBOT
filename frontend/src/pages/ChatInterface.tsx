@@ -29,6 +29,7 @@ const ChatInterface: React.FC = () => {
   const [editedTitle, setEditedTitle] = useState<string>("");
   const [showScrollButton, setShowScrollButton] = useState(false);
   const [renamingConvId, setRenamingConvId] = useState<string | null>(null);
+  const [lastSessionId, setLastSessionId] = useState<string | null>(null);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -247,7 +248,11 @@ const ChatInterface: React.FC = () => {
         ) {
           updatedMessages.push({ id: uuidv4(), role: 'user', content: userMessage, timestamp: new Date(), isStreaming: false });
         }
-        updatedMessages.push({ id: uuidv4(), role: 'assistant', content: streamed, timestamp: new Date(), isStreaming: false });
+        // Only append the assistant message if it's not already present as the last message
+        const lastMsg = updatedMessages[updatedMessages.length - 1];
+        if (!(lastMsg && lastMsg.role === 'assistant' && lastMsg.content === streamed)) {
+          updatedMessages.push({ id: uuidv4(), role: 'assistant', content: streamed, timestamp: new Date(), isStreaming: false });
+        }
         setCurrentSessionFromBackend({
           ...currentSession,
           messages: updatedMessages
@@ -341,6 +346,10 @@ const ChatInterface: React.FC = () => {
     setIsEditingTitle(false);
     setRenamingConvId(null);
     
+    // Update local conversations list first
+    setConversations(prev => prev.map(conv => conv.id === convToRename.id ? { ...conv, title: updatedTitle } : conv));
+    localStorage.setItem(CONVERSATIONS_KEY, JSON.stringify(conversations));
+
     try {
       await apiCall('/api/history/save', {
         method: 'POST',
@@ -348,7 +357,7 @@ const ChatInterface: React.FC = () => {
         body: JSON.stringify({ ...convToRename, title: updatedTitle })
       });
       showBanner('Conversation renamed.', 'success');
-      await fetchConversations(); // Re-fetch conversations to update sidebar
+      await fetchConversations(); // Sync with backend if online
     } catch (err) {
       showBanner('Failed to rename conversation.', 'error');
     }
@@ -386,8 +395,9 @@ const ChatInterface: React.FC = () => {
   // Add delete handler
   const handleDeleteConversation = async (convId: string) => {
     if (!window.confirm('Are you sure you want to delete this conversation?')) return;
-    // Remove from local state
+    // Remove from local state and localStorage first
     setConversations(prev => prev.filter(conv => conv.id !== convId));
+    localStorage.setItem(CONVERSATIONS_KEY, JSON.stringify(conversations.filter(conv => conv.id !== convId)));
     // Remove from sessions and currentSession
     if (currentSession && currentSession.id === convId) {
       // If deleting the current session, select another or clear
@@ -402,7 +412,7 @@ const ChatInterface: React.FC = () => {
     try {
       await apiCall('/api/history/delete/' + convId, { method: 'DELETE' });
       showBanner('Conversation deleted.', 'success');
-      await fetchConversations(); // Re-fetch conversations to update sidebar
+      await fetchConversations(); // Sync with backend if online
     } catch (err) {
       showBanner('Failed to delete conversation.', 'error');
     }
@@ -434,39 +444,104 @@ const ChatInterface: React.FC = () => {
 
   // Initialize data
   useEffect(() => {
-    fetchDocuments();
-    // On page load, try to fetch conversations from backend; if it fails, load from localStorage for offline mode
-    (async () => {
+    // On page load, always restore from localStorage first
+    const savedState = localStorage.getItem(CHAT_STATE_KEY);
+    let localCurrentSessionId = null;
+    let localCurrentSession = null;
+    let localConversations = [];
+    if (savedState) {
       try {
-        await fetchConversations();
-      } catch {
-        // Offline mode: load from localStorage
-        const saved = localStorage.getItem(CONVERSATIONS_KEY);
-        if (saved) {
+        const parsed = JSON.parse(savedState);
+        if (parsed.sessions) setSessions(parsed.sessions);
+        if (parsed.currentSession) {
+          setCurrentSessionFromBackend(parsed.currentSession);
+          localCurrentSessionId = parsed.currentSession.id;
+          localCurrentSession = parsed.currentSession;
+          setLastSessionId(parsed.currentSession.id);
+        }
+        if (parsed.conversations) {
+          setConversations(parsed.conversations);
+          localConversations = parsed.conversations;
+        }
+      } catch {}
+    }
+    // Fetch conversations from backend, but always fallback to local if missing
+    (async () => {
+      let backendConvs = [];
+      let backendCurrentSession = null;
+      try {
+        const data = await apiCall('/api/history/list');
+        backendConvs = data.conversations || [];
+        // If current session is not in backend conversations, add it
+        if (localCurrentSession && !backendConvs.some((c: any) => c.id === localCurrentSession.id)) {
+          backendConvs = [
+            { id: localCurrentSession.id, title: localCurrentSession.title, created_at: String(localCurrentSession.created_at) },
+            ...backendConvs
+          ];
+        }
+        setConversations(backendConvs);
+        setSessions(backendConvs.map((conv: any) => ({
+          id: conv.id,
+          title: conv.title,
+          messages: [],
+          createdAt: conv.created_at ? new Date(conv.created_at) : new Date(),
+          documents: []
+        })));
+        // Try to fetch the current session from backend
+        if (localCurrentSessionId) {
           try {
-            setConversations(JSON.parse(saved));
-          } catch {}
+            const data = await apiCall(`/api/history/get/${localCurrentSessionId}`);
+            if (data.conversation) {
+              backendCurrentSession = data.conversation;
+              setCurrentSessionFromBackend(data.conversation);
+              setLastSessionId(data.conversation.id);
+            } else if (localCurrentSession) {
+              setCurrentSessionFromBackend(localCurrentSession);
+              setLastSessionId(localCurrentSession.id);
+            }
+          } catch {
+            if (localCurrentSession) {
+              setCurrentSessionFromBackend(localCurrentSession);
+              setLastSessionId(localCurrentSession.id);
+            }
+          }
+        } else if (backendConvs.length > 0) {
+          // If no current session, set the first conversation as current
+          const firstConv = backendConvs[0];
+          if (firstConv) {
+            try {
+              const data = await apiCall(`/api/history/get/${firstConv.id}`);
+              if (data.conversation) {
+                setCurrentSessionFromBackend(data.conversation);
+                setLastSessionId(data.conversation.id);
+              } else {
+                setCurrentSessionFromBackend(firstConv);
+                setLastSessionId(firstConv.id);
+              }
+            } catch {
+              setCurrentSessionFromBackend(firstConv);
+              setLastSessionId(firstConv.id);
+            }
+          }
+        }
+      } catch {
+        // If backend fetch fails, always use the local copy
+        if (localCurrentSession) {
+          setCurrentSessionFromBackend(localCurrentSession);
+          setLastSessionId(localCurrentSession.id);
+        }
+        if (localConversations.length > 0) {
+          setConversations(localConversations);
         }
       }
     })();
+    fetchDocuments();
     checkVectorstore();
     const interval = setInterval(checkVectorstore, 30000);
     return () => clearInterval(interval);
   }, []);
 
-  // Persistence
-  useEffect(() => {
-    const saved = localStorage.getItem(CHAT_STATE_KEY);
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        if (parsed.sessions && sessions.length === 0) setSessions(parsed.sessions);
-        if (parsed.currentSession && !currentSession) setCurrentSessionFromBackend(parsed.currentSession);
-        if (parsed.conversations && conversations.length === 0) setConversations(parsed.conversations);
-      } catch {}
-    }
-  }, []);
-
+  // Always persist conversations and current session to localStorage after any change
   useEffect(() => {
     const safeSessions = sessions.map(s => ({
       ...s,
@@ -484,11 +559,20 @@ const ChatInterface: React.FC = () => {
         timestamp: m.timestamp instanceof Date ? m.timestamp : new Date(m.timestamp)
       }))
     } : null;
+    // Ensure current session is in conversations
+    let safeConversations = [...conversations];
+    if (safeCurrentSession && !safeConversations.some((c: any) => c.id === safeCurrentSession.id)) {
+      safeConversations = [
+        { id: safeCurrentSession.id, title: safeCurrentSession.title, created_at: (safeCurrentSession.createdAt instanceof Date ? safeCurrentSession.createdAt.toISOString() : String(safeCurrentSession.createdAt)) },
+        ...safeConversations
+      ];
+    }
     localStorage.setItem(CHAT_STATE_KEY, JSON.stringify({ 
       sessions: safeSessions, 
       currentSession: safeCurrentSession, 
-      conversations 
+      conversations: safeConversations
     }));
+    if (safeCurrentSession) setLastSessionId(safeCurrentSession.id);
   }, [sessions, currentSession, conversations]);
 
   // Load conversations from localStorage on mount
@@ -506,18 +590,10 @@ const ChatInterface: React.FC = () => {
   }, [conversations]);
 
   // After creating, renaming, or deleting a conversation, always call fetchConversations() to refresh the sidebar
-  useEffect(() => {
-    if (currentSession) {
-      setConversations(prev => {
-        const existing = prev.find(conv => conv.id === currentSession.id);
-        if (existing) {
-          return prev.map(conv => conv.id === currentSession.id ? { ...conv, title: currentSession.title || 'Untitled Conversation' } : conv);
-        } else {
-          return [...prev, { id: currentSession.id, title: currentSession.title || 'Untitled Conversation', created_at: currentSession.createdAt ? new Date(currentSession.createdAt).toISOString() : new Date().toISOString() }];
-        }
-      });
-    }
-  }, [currentSession]);
+  // This useEffect is now redundant as persistence handles it.
+  // useEffect(() => {
+  //   fetchConversations();
+  // }, [currentSession]);
 
   // Render streaming assistant bubble - only show when actively streaming
   const renderStreamingAssistantBubble = () => {
@@ -572,6 +648,40 @@ const ChatInterface: React.FC = () => {
       </div>
     )) || [], [currentSession?.messages]);
 
+  // Restore handleSelectSession and handleCreateNewConversation with correct logic
+  const handleSelectSession = async (convId: string) => {
+    selectSession(convId);
+    try {
+      const data = await apiCall(`/api/history/get/${convId}`);
+      if (data.conversation) {
+        setCurrentSessionFromBackend(data.conversation);
+      }
+    } catch {}
+  };
+
+  const handleCreateNewConversation = async () => {
+    // Create a new conversation and persist to backend
+    const now = new Date().toISOString();
+    const newConv = {
+      id: uuidv4(),
+      title: 'New Conversation',
+      created_at: now,
+      messages: [],
+      uploads: []
+    };
+    await apiCall('/api/history/save', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(newConv)
+    });
+    // Add to conversations and set as current
+    setConversations((prev: any[]) => [
+      { id: newConv.id, title: newConv.title, created_at: newConv.created_at },
+      ...prev
+    ]);
+    await handleSelectSession(newConv.id);
+  };
+
   return (
     <div className="flex h-screen w-screen bg-background">
       {/* Sidebar */}
@@ -584,24 +694,7 @@ const ChatInterface: React.FC = () => {
         
         {/* New Chat & Rename Buttons */}
         <div className="p-4 border-b border-border flex flex-col gap-2 mt-16">
-          <Button onClick={async () => {
-            // Create a new conversation and persist to backend
-            const now = new Date().toISOString();
-            const newConv = {
-              id: uuidv4(),
-              title: 'New Conversation',
-              created_at: now,
-              messages: [],
-              uploads: []
-            };
-            await apiCall('/api/history/save', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(newConv)
-            });
-            await fetchConversations();
-            selectSession(newConv.id);
-          }} className="w-full group rounded-lg shadow-sm" variant="outline">
+          <Button onClick={handleCreateNewConversation} className="w-full group rounded-lg shadow-sm" variant="outline">
             <Plus className="mr-2 h-4 w-4 group-hover:rotate-90 transition-transform duration-300" />
             New Conversation
           </Button>
@@ -616,15 +709,7 @@ const ChatInterface: React.FC = () => {
           {conversations.length > 0 ? (
             conversations.map((conv) => (
               <Card key={conv.id} hover className={`p-4 cursor-pointer transition-all duration-300 rounded-lg shadow-sm flex items-center justify-between ${currentSession?.id === conv.id ? 'border-2 border-primary' : ''}`}
-                onClick={async () => {
-                  selectSession(conv.id);
-                  try {
-                    const data = await apiCall(`/api/history/get/${conv.id}`);
-                    if (data.conversation) {
-                      setCurrentSessionFromBackend(data.conversation); // Only update current session
-                    }
-                  } catch {}
-                }}>
+                onClick={() => handleSelectSession(conv.id)}>
                 <div className="flex items-center space-x-2 w-full">
                   <div className="flex-1 min-w-0">
                     {renamingConvId === conv.id ? (
@@ -755,7 +840,7 @@ const ChatInterface: React.FC = () => {
                   value={editedTitle}
                   autoFocus
                   onChange={e => setEditedTitle(e.target.value)}
-                  onBlur={handleSaveTitle}
+                  onBlur={() => handleSaveTitle()}
                   onKeyDown={e => {
                     if (e.key === 'Enter') handleSaveTitle();
                     if (e.key === 'Escape') setIsEditingTitle(false);

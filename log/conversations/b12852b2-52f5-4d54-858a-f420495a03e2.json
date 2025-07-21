@@ -1,0 +1,22 @@
+{
+  "id": "b12852b2-52f5-4d54-858a-f420495a03e2",
+  "title": "New Conversation",
+  "messages": [
+    {
+      "id": "3f81cfc1-910e-4e80-b913-423c432a2f60",
+      "role": "user",
+      "content": "hi what is this document about?",
+      "timestamp": "2025-07-21T09:39:23.178Z",
+      "isStreaming": false
+    },
+    {
+      "id": "29ee5112-ce8e-46d2-858f-76ce9f43829c",
+      "role": "assistant",
+      "content": "**Power-of-Attorney Document Overview**\n\nThe provided document appears to be a \"POWER OF ATTORNEY\" form, specifically designed for companies and firms participating in a procurement process. This document is likely used as part of the Expression of Interest (EOI) submission process for the project mentioned on Page 1.\n\n**Key Purpose:**\nThe Power-of-Attorney document authorizes Mr. [full name] to act on behalf of the company, allowing him to sign and submit documents, provide information, and respond to inquiries from the Purchaser (Punjab Information Technology Board).\n\n**Relevant Details:**\n\n* The company appoints Mr. [full name] as their attorney to represent them in the procurement process.\n* Mr. [full name] is currently employed by the company and holds a position within the organization.\n* The Power-of-Attorney document ratifies all actions taken by the attorney, implying that the company agrees with and accepts the decisions made on their behalf.\n\n**Procurement Rules:**\nThe document mentions the Punjab Procurement Rules 2009, which provide guidelines for the procurement process. Specifically, it references Rule 12(1) and Rule 12(3), indicating that the EOI document is being advertised in print media and available online at the PPRA website and PITB's website.\n\n**Registration Requirement:**\nProspective firms/companies are required to register themselves with the Procurement Assistant, PITB, by submitting a deposit slip of Rs. 2000/-. This suggests that there may be an additional step or requirement for companies participating in the procurement process.**Power-of-Attorney Document Overview**\n\nThe provided document appears to be a \"POWER OF ATTORNEY\" form, specifically designed for companies and firms participating in a procurement process. This document is likely used as part of the Expression of Interest (EOI) submission process for the project mentioned on Page 1.\n\n**Key Purpose:**\nThe Power-of-Attorney document authorizes Mr. [full name] to act on behalf of the company, allowing him to sign and submit documents, provide information, and respond to inquiries from the Purchaser (Punjab Information Technology Board).\n\n**Relevant Details:**\n\n* The company appoints Mr. [full name] as their attorney to represent them in the procurement process.\n* Mr. [full name] is currently employed by the company and holds a position within the organization.\n* The Power-of-Attorney document ratifies all actions taken by the attorney, implying that the company agrees with and accepts the decisions made on their behalf.\n\n**Procurement Rules:**\nThe document mentions the Punjab Procurement Rules 2009, which provide guidelines for the procurement process. Specifically, it references Rule 12(1) and Rule 12(3), indicating that the EOI document is being advertised in print media and available online at the PPRA website and PITB's website.\n\n**Registration Requirement:**\nProspective firms/companies are required to register themselves with the Procurement Assistant, PITB, by submitting a deposit slip of Rs. 2000/-. This suggests that there may be an additional step or requirement for companies participating in the procurement process.",
+      "timestamp": "2025-07-21T09:39:23.178Z",
+      "isStreaming": false
+    }
+  ],
+  "createdAt": "2025-07-21T09:39:01.400Z",
+  "documents": []
+}

@@ -1,0 +1,22 @@
+{
+  "id": "dfcd4237-ce9c-4bb1-8753-86bfdb0531f0",
+  "title": "New Conversation",
+  "messages": [
+    {
+      "id": "e2a4dd22-703c-426f-ab41-4ab053394c48",
+      "role": "user",
+      "content": "hi what is this document about?",
+      "timestamp": "2025-07-21T10:49:33.628Z",
+      "isStreaming": false
+    },
+    {
+      "id": "fea8e99d-3105-4c66-bb8b-915e1ce10e79",
+      "role": "assistant",
+      "content": "Based on the provided snippet from the test document (specifically Power-of-Attorney page 12 of 17), it appears that this document is a \"Power of Attorney\" (PoA) agreement. \n\nThis PoA grants Mr. [full name and residential address] (the attorney) the authority to act on behalf of the company, represented by the same entity's registered office address. The scope of this delegation includes signing documents, submitting information, and responding to queries in connection with a proposed project for [project name].\n\nIn essence, this document grants the attorney the necessary powers to execute actions on behalf of the company in response to tenders invited by the Purchaser (Punjab Information Technology Board).\n\nWould you like me to expand on anything or clarify any specific parts of this document?Based on the provided snippet from the test document (specifically Power-of-Attorney page 12 of 17), it appears that this document is a \"Power of Attorney\" (PoA) agreement. \n\nThis PoA grants Mr. [full name and residential address] (the attorney) the authority to act on behalf of the company, represented by the same entity's registered office address. The scope of this delegation includes signing documents, submitting information, and responding to queries in connection with a proposed project for [project name].\n\nIn essence, this document grants the attorney the necessary powers to execute actions on behalf of the company in response to tenders invited by the Purchaser (Punjab Information Technology Board).\n\nWould you like me to expand on anything or clarify any specific parts of this document?",
+      "timestamp": "2025-07-21T10:49:33.628Z",
+      "isStreaming": false
+    }
+  ],
+  "createdAt": "2025-07-21T09:55:23.165Z",
+  "documents": []
+}

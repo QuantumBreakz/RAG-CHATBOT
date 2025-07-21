@@ -1,0 +1,36 @@
+{
+  "id": "dfa5d1d6-18d7-402e-99ce-07b010031994",
+  "title": "New Conversation",
+  "messages": [
+    {
+      "id": "ae410338-844f-4ff8-a107-e8b27777776f",
+      "content": "hi! answer and cross check mcqs from document 1 given document 2",
+      "role": "user",
+      "timestamp": "2025-07-21T10:23:02.954Z",
+      "isStreaming": false
+    },
+    {
+      "id": "c7a30bca-90a1-44fb-833a-bef29c372097",
+      "content": "I'd be happy to help you with the MCQs.\n\nSince I don't have the actual documents (test_document.pdf and document 2), I'll assume that document 1 is a generic set of questions related to Power of Attorney and document 2 is another set of questions. Please note that my responses will be based on my understanding of the context.\n\n**Document 1:**\n\nPlease provide the MCQs from document 1, and I'll do my best to answer them.\n\n**Document 2:**\n\nSimilarly, please provide the MCQs from document 2.\n\nOnce I receive both sets of questions, I'll:\n\n1. Cross-check answers against both documents.\n2. Provide detailed answers with citations and explanations.\n3. Highlight any discrepancies or differences between the two documents.\n\nPlease go ahead and provide the MCQs from both documents!I'd be happy to help you with the MCQs.\n\nSince I don't have the actual documents (test_document.pdf and document 2), I'll assume that document 1 is a generic set of questions related to Power of Attorney and document 2 is another set of questions. Please note that my responses will be based on my understanding of the context.\n\n**Document 1:**\n\nPlease provide the MCQs from document 1, and I'll do my best to answer them.\n\n**Document 2:**\n\nSimilarly, please provide the MCQs from document 2.\n\nOnce I receive both sets of questions, I'll:\n\n1. Cross-check answers against both documents.\n2. Provide detailed answers with citations and explanations.\n3. Highlight any discrepancies or differences between the two documents.\n\nPlease go ahead and provide the MCQs from both documents!",
+      "role": "assistant",
+      "timestamp": "2025-07-21T10:23:02.954Z",
+      "isStreaming": false
+    },
+    {
+      "id": "f0029333-0ae0-429c-8eaa-7d5438c3d447",
+      "role": "user",
+      "content": "i have uploaded it now",
+      "timestamp": "2025-07-21T10:23:32.894Z",
+      "isStreaming": false
+    },
+    {
+      "id": "f0007477-d6bd-4eec-865e-bb400a029790",
+      "role": "assistant",
+      "content": "[timestamp: 2025-07-21T10:25:02.954Z]\n\nTo answer your question and cross-check with Document 2, I'll need to analyze both documents.\n\nFrom **Document 1**, the key points are:\n\n* The Punjab Information Technology Board (PITB) is the purchasing entity.\n* The proposal must be accompanied by a registration fee of Rs. 2000/-\n* The proposal should be delivered to the Tender Box No. 2 at PITB's reception on or before 1500 Hrs, August 21st, 2013.\n* A Power-of-Attorney document is required, which should be signed and stamped by an authorized representative.\n\nFrom **Document 2**, I'll need you to upload it. Please proceed with uploading Document 2, and I'll provide a comprehensive response that answers your question and cross-checks the information from both documents.[timestamp: 2025-07-21T10:25:02.954Z]\n\nTo answer your question and cross-check with Document 2, I'll need to analyze both documents.\n\nFrom **Document 1**, the key points are:\n\n* The Punjab Information Technology Board (PITB) is the purchasing entity.\n* The proposal must be accompanied by a registration fee of Rs. 2000/-\n* The proposal should be delivered to the Tender Box No. 2 at PITB's reception on or before 1500 Hrs, August 21st, 2013.\n* A Power-of-Attorney document is required, which should be signed and stamped by an authorized representative.\n\nFrom **Document 2**, I'll need you to upload it. Please proceed with uploading Document 2, and I'll provide a comprehensive response that answers your question and cross-checks the information from both documents.",
+      "timestamp": "2025-07-21T10:23:32.894Z",
+      "isStreaming": false
+    }
+  ],
+  "createdAt": "2025-07-21T10:23:02.954Z",
+  "documents": []
+}

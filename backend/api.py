@@ -1,5 +1,5 @@
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException
-from fastapi.responses import StreamingResponse, FileResponse
+from fastapi.responses import StreamingResponse, FileResponse, JSONResponse
 from rag_core.document import DocumentProcessor, DEFAULT_CHUNK_SIZE, DEFAULT_CHUNK_OVERLAP
 from rag_core.vectorstore import VectorStore
 from rag_core.llm import LLMHandler
@@ -219,6 +219,16 @@ def export_history(conv_id: str):
         raise HTTPException(status_code=404, detail="Conversation not found")
     file_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'log', 'conversations', f"{conv_id}.json")
     return FileResponse(file_path, media_type='application/json', filename=f"conversation_{conv_id}.json")
+
+@app.get("/api/history/file/{conv_id}")
+def get_history_file(conv_id: str):
+    import os
+    file_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'log', 'conversations', f"{conv_id}.json")
+    if not os.path.exists(file_path):
+        return JSONResponse(status_code=404, content={"error": "Conversation file not found"})
+    with open(file_path, 'r') as f:
+        data = f.read()
+    return JSONResponse(content={"conversation": json.loads(data)})
 
 # --- Knowledge Base Reset Endpoint ---
 @app.post("/reset_kb")

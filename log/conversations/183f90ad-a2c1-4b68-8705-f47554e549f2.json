@@ -1,0 +1,22 @@
+{
+  "id": "183f90ad-a2c1-4b68-8705-f47554e549f2",
+  "title": "New Conversation",
+  "messages": [
+    {
+      "id": "0b36cb2d-481f-4881-8b34-1d5bf84ec6e9",
+      "role": "user",
+      "content": "answer mcqs and tell whether they are marked right or wrong",
+      "timestamp": "2025-07-21T10:01:47.838Z",
+      "isStreaming": false
+    },
+    {
+      "id": "683fb2c9-12c3-4f68-8475-cf156bec02ac",
+      "role": "assistant",
+      "content": "I can't access any external documents. However, I can still provide answers to your multiple-choice questions based on the information provided in the context.\n\nPlease go ahead and ask your MCQs, and I'll do my best to answer them with a one-line justification for each answer. \n\n(Note: I won't be able to check if the claim/query matches DOCUMENT 1 or is correct as per your request 13, as you mentioned earlier that I shouldn't show context to the user.)I can't access any external documents. However, I can still provide answers to your multiple-choice questions based on the information provided in the context.\n\nPlease go ahead and ask your MCQs, and I'll do my best to answer them with a one-line justification for each answer. \n\n(Note: I won't be able to check if the claim/query matches DOCUMENT 1 or is correct as per your request 13, as you mentioned earlier that I shouldn't show context to the user.)",
+      "timestamp": "2025-07-21T10:01:47.838Z",
+      "isStreaming": false
+    }
+  ],
+  "createdAt": "2025-07-21T09:55:21.449Z",
+  "documents": []
+}

@@ -1,0 +1,22 @@
+{
+  "id": "17623997-98bf-441c-9a9c-c261467974d9",
+  "title": "New Conversation",
+  "messages": [
+    {
+      "id": "708d7121-082f-4419-a2b1-2d8ab4fa9082",
+      "role": "user",
+      "content": "hi, what is this document about",
+      "timestamp": "2025-07-21T09:38:39.540Z",
+      "isStreaming": false
+    },
+    {
+      "id": "5c68ba8a-1c38-4de7-a099-6935156694bd",
+      "role": "assistant",
+      "content": "This document appears to be a Power of Attorney form and an Invitation for Expression of Interest (EOI) document, likely related to a business or commercial proposal. The document outlines the terms and conditions for a proposed project, including the appointment of an attorney to represent the company in its dealings with a Purchaser, Punjab Information Technology Board.\n\nThe EOI document provides details on the procurement process, including the mode of advertisement, the requirements for registration, and the financial capacity of participating firms or companies. The document also includes a requirement for firms or companies to provide historical financial information for the previous three years.\n\nIn summary, this document is likely related to a business proposal for a project, where the company is seeking to partner with a Purchaser and needs to demonstrate its financial capacity and ability to perform the required services.This document appears to be a Power of Attorney form and an Invitation for Expression of Interest (EOI) document, likely related to a business or commercial proposal. The document outlines the terms and conditions for a proposed project, including the appointment of an attorney to represent the company in its dealings with a Purchaser, Punjab Information Technology Board.\n\nThe EOI document provides details on the procurement process, including the mode of advertisement, the requirements for registration, and the financial capacity of participating firms or companies. The document also includes a requirement for firms or companies to provide historical financial information for the previous three years.\n\nIn summary, this document is likely related to a business proposal for a project, where the company is seeking to partner with a Purchaser and needs to demonstrate its financial capacity and ability to perform the required services.",
+      "timestamp": "2025-07-21T09:38:39.540Z",
+      "isStreaming": false
+    }
+  ],
+  "createdAt": "2025-07-21T09:38:18.167Z",
+  "documents": []
+}

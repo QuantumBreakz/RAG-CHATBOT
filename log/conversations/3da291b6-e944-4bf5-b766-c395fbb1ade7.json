@@ -1,7 +1,7 @@
 {
   "id": "3da291b6-e944-4bf5-b766-c395fbb1ade7",
   "title": "New Conversation",
-  "created_at": "2025-07-21T09:20:16.868Z",
   "messages": [],
-  "uploads": []
+  "createdAt": "2025-07-21T09:20:16.868Z",
+  "documents": []
 }
