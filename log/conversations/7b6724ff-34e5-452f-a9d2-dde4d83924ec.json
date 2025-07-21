@@ -1,0 +1,20 @@
+{
+  "id": "7b6724ff-34e5-452f-a9d2-dde4d83924ec",
+  "title": "New Conversation",
+  "messages": [
+    {
+      "id": "14d45c1f-6148-4504-999b-40b42dd8ac31",
+      "content": "I can provide you with a general overview of the Power-of-Attorney document and its annexures.\n\n**Power-of-Attorney Overview**\n\nThe Power-of-Attorney document is a legal agreement that grants authority to Mr. [Full Name] (the attorney) to act on behalf of [Company Name] (the principal) in various matters related to the proposed project for [Project Name]. The document authorizes the attorney to sign and submit documents, provide information, and respond to queries from the Purchaser (the entity issuing the tender).\n\n**Annexure-D: Financial Capacity**\n\nAnnexure-D provides financial data for the participating firm/company, including:\n\n1. Historical financial information for the previous three years.\n2. Information from the Balance Sheet:\n\t* Total Assets (TA)\n\t* Current Assets (CA)\n\t* Total Liabilities (TL)\n\t* Current Liabilities (CL)\n3. Information from the Income Statement:\n\t* Total Revenue (TR)\n\t* Profits before Taxes (PBT)\n\t* Net Worth (TW)\n\nThe document also includes a calculation of the Current Ratio, which is calculated as:\n\nCurrent Ratio = Current Assets (CA) / Current Liabilities (CL)\n\n**Annexure-A: Instruction for Preparation of Power of Attorney**\n\nAnnexure-A provides guidance on the preparation and execution of the Power-of-Attorney document. The key points include:\n\n1. Execution by an authorized representative of the participating firm/company.\n2. Mode of execution in accordance with applicable law and charter documents.\n3. Submission of extracts from charter documents, such as resolutions or powers of attorney.\n\nPlease note that this is a general overview, and it's essential to consult with a legal professional to understand the specific requirements and implications of this document.I can provide you with a general overview of the Power-of-Attorney document and its annexures.\n\n**Power-of-Attorney Overview**\n\nThe Power-of-Attorney document is a legal agreement that grants authority to Mr. [Full Name] (the attorney) to act on behalf of [Company Name] (the principal) in various matters related to the proposed project for [Project Name]. The document authorizes the attorney to sign and submit documents, provide information, and respond to queries from the Purchaser (the entity issuing the tender).\n\n**Annexure-D: Financial Capacity**\n\nAnnexure-D provides financial data for the participating firm/company, including:\n\n1. Historical financial information for the previous three years.\n2. Information from the Balance Sheet:\n\t* Total Assets (TA)\n\t* Current Assets (CA)\n\t* Total Liabilities (TL)\n\t* Current Liabilities (CL)\n3. Information from the Income Statement:\n\t* Total Revenue (TR)\n\t* Profits before Taxes (PBT)\n\t* Net Worth (TW)\n\nThe document also includes a calculation of the Current Ratio, which is calculated as:\n\nCurrent Ratio = Current Assets (CA) / Current Liabilities (CL)\n\n**Annexure-A: Instruction for Preparation of Power of Attorney**\n\nAnnexure-A provides guidance on the preparation and execution of the Power-of-Attorney document. The key points include:\n\n1. Execution by an authorized representative of the participating firm/company.\n2. Mode of execution in accordance with applicable law and charter documents.\n3. Submission of extracts from charter documents, such as resolutions or powers of attorney.\n\nPlease note that this is a general overview, and it's essential to consult with a legal professional to understand the specific requirements and implications of this document.",
+      "role": "assistant",
+      "timestamp": "2025-07-21T08:38:14.888Z",
+      "isStreaming": false
+    },
+    {
+      "role": "user",
+      "content": "hello",
+      "timestamp": "2025-07-21T08:43:58.689Z"
+    }
+  ],
+  "createdAt": "2025-07-21T08:38:11.220Z",
+  "documents": []
+}

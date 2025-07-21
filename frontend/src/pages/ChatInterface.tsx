@@ -6,8 +6,10 @@ import Card from '../components/ui/Card';
 import { useGlobalLoading } from '../App';
 import { useStreamingAssistant } from './useStreamingAssistant';
 import debounce from 'lodash.debounce';
+import { v4 as uuidv4 } from 'uuid';
 
 const CHAT_STATE_KEY = 'xor_rag_chat_state';
+const CONVERSATIONS_KEY = 'xor_rag_conversations';
 
 const ChatInterface: React.FC = () => {
   const [inputValue, setInputValue] = useState('');
@@ -26,6 +28,7 @@ const ChatInterface: React.FC = () => {
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [editedTitle, setEditedTitle] = useState<string>("");
   const [showScrollButton, setShowScrollButton] = useState(false);
+  const [renamingConvId, setRenamingConvId] = useState<string | null>(null);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -49,14 +52,9 @@ const ChatInterface: React.FC = () => {
 
   const { loading, setLoading } = useGlobalLoading();
 
-  const {
-    streamingContent,
-    progress: streamingProgress,
-    status: streamingStatus,
-    error: streamingError,
-    startStreaming,
-    resetStreaming
-  } = useStreamingAssistant();
+  // Streaming state for assistant
+  const [streamingContent, setStreamingContent] = useState('');
+  const [streamingStatus, setStreamingStatus] = useState<'idle' | 'streaming'>('idle');
 
   // Utility functions
   const showBanner = (message: string, type: 'success' | 'error') => {
@@ -92,6 +90,16 @@ const ChatInterface: React.FC = () => {
     try {
       const data = await apiCall('/api/history/list');
       setConversations(data.conversations || []);
+      // Update chat context sessions as well
+      if (data.conversations && Array.isArray(data.conversations)) {
+        setSessions(data.conversations.map(conv => ({
+          id: conv.id,
+          title: conv.title,
+          messages: [], // Optionally fetch messages for each conversation if needed
+          createdAt: conv.created_at ? new Date(conv.created_at) : new Date(),
+          documents: []
+        })));
+      }
     } catch (err) {
       showBanner('Failed to fetch conversations.', 'error');
     }
@@ -108,6 +116,11 @@ const ChatInterface: React.FC = () => {
     }
   };
 
+  const resetStreaming = () => {
+    setStreamingContent('');
+    setStreamingStatus('idle');
+  };
+
   // Event handlers
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -117,23 +130,128 @@ const ChatInterface: React.FC = () => {
     setOperationState(s => ({ ...s, sending: true }));
     setInputValue("");
 
+    // Reset streaming state
+    resetStreaming();
+
+    // If this is a new conversation, ensure context is empty
+    const isNewConversation = !currentSession || (currentSession.messages && currentSession.messages.length === 0);
+
     // Add user message immediately
     addMessage(userMessage, 'user');
 
+    // Add a placeholder assistant message for streaming (remove any existing empty assistant message first)
+    if (currentSession && currentSession.messages.length > 0) {
+      const lastMsg = currentSession.messages[currentSession.messages.length - 1];
+      if (lastMsg.role === 'assistant' && !lastMsg.content) {
+        // Remove the empty assistant message
+        setCurrentSessionFromBackend({
+          ...currentSession,
+          messages: currentSession.messages.slice(0, -1)
+        });
+      }
+    }
+    addMessage('', 'assistant');
+
     try {
-      // Start streaming and get the final content
-      const streamedContent = await startStreaming(userMessage, currentSession?.messages || []);
-      
-      // Add assistant response after streaming completes
-      addMessage(streamedContent, 'assistant');
-      
-      // Save to backend
+      setStreamingStatus('streaming');
+      setStreamingContent('');
+      let streamed = '';
+      // Use only the current session's messages for context, and for new conversations, context is empty
+      const conversationHistory = isNewConversation ? [] : (currentSession?.messages.filter(m => m.role !== 'assistant' || m.content) || []);
+      const response = await fetch('/api/query/stream', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          question: userMessage,
+          n_results: '3',
+          expand: '2',
+          filename: '',
+          conversation_history: JSON.stringify(conversationHistory)
+        })
+      });
+      if (!response.body) throw new Error('No response body');
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let done = false;
+      let buffer = '';
+      let finished = false;
+      while (!done && !finished) {
+        const { value, done: doneReading } = await reader.read();
+        done = doneReading;
+        if (value) {
+          const chunk = decoder.decode(value, { stream: true });
+          buffer += chunk;
+          const lines = buffer.split('\n');
+          buffer = lines.pop() || '';
+          for (const line of lines) {
+            if (line.trim()) {
+              try {
+                const data = JSON.parse(line);
+                if (data.status === 'streaming' && data.answer !== undefined) {
+                  streamed += data.answer;
+                  setStreamingContent(streamed);
+                  updateStreamingMessage(streamed); // Real-time update
+                }
+                if (data.status === 'success') {
+                  if (data.answer !== undefined) {
+                    streamed += data.answer;
+                    setStreamingContent(streamed);
+                    updateStreamingMessage(streamed); // Final update
+                  }
+                  finished = true;
+                  break;
+                }
+              } catch (err) {
+                // Ignore parse errors for incomplete lines
+              }
+            }
+          }
+        }
+      }
+      // Handle any remaining buffered line
+      if (buffer.trim() && !finished) {
+        try {
+          const data = JSON.parse(buffer);
+          if (data.status === 'streaming' && data.answer !== undefined) {
+            streamed += data.answer;
+            setStreamingContent(streamed);
+            updateStreamingMessage(streamed);
+          }
+          if (data.status === 'success') {
+            if (data.answer !== undefined) {
+              streamed += data.answer;
+              setStreamingContent(streamed);
+              updateStreamingMessage(streamed);
+            }
+          }
+        } catch (err) {
+          // Ignore parse errors for incomplete lines
+        }
+      }
+      setStreamingStatus('idle');
+      // After streaming, update the session's messages by removing the placeholder and appending the real assistant message
       if (currentSession) {
-        const updatedMessages = [
-          ...currentSession.messages,
-          { role: 'user', content: userMessage, timestamp: new Date() },
-          { role: 'assistant', content: streamedContent, timestamp: new Date() }
-        ];
+        // Remove the last (empty) assistant message and append the real one
+        const filteredMessages = currentSession.messages.filter((m, idx, arr) => {
+          // Remove the last assistant message if it's empty
+          if (idx === arr.length - 1 && m.role === 'assistant' && !m.content) return false;
+          return true;
+        });
+        // Ensure the user's message is present before the assistant's response
+        let updatedMessages = [...filteredMessages];
+        // If the last message is not the user's message, add it
+        if (
+          updatedMessages.length === 0 ||
+          updatedMessages[updatedMessages.length - 1].role !== 'user' ||
+          updatedMessages[updatedMessages.length - 1].content !== userMessage
+        ) {
+          updatedMessages.push({ id: uuidv4(), role: 'user', content: userMessage, timestamp: new Date(), isStreaming: false });
+        }
+        updatedMessages.push({ id: uuidv4(), role: 'assistant', content: streamed, timestamp: new Date(), isStreaming: false });
+        setCurrentSessionFromBackend({
+          ...currentSession,
+          messages: updatedMessages
+        });
         await apiCall('/api/history/save', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -145,9 +263,17 @@ const ChatInterface: React.FC = () => {
       }
     } catch (error) {
       showBanner('Failed to send message.', 'error');
+      // Remove the empty assistant message on error
+      if (currentSession && currentSession.messages.length > 0) {
+        const messagesWithoutEmpty = currentSession.messages.filter((m, idx, arr) => !(idx === arr.length - 1 && m.role === 'assistant' && !m.content));
+        setCurrentSessionFromBackend({
+          ...currentSession,
+          messages: messagesWithoutEmpty
+        });
+      }
     } finally {
       setOperationState(s => ({ ...s, sending: false }));
-      resetStreaming();
+      setStreamingStatus('idle');
     }
   };
 
@@ -207,22 +333,22 @@ const ChatInterface: React.FC = () => {
     setLoading(false);
   };
 
-  const handleSaveTitle = async () => {
-    if (!currentSession) return;
+  const handleSaveTitle = async (convId?: string) => {
+    const convToRename = convId ? sessions.find(s => s.id === convId) : currentSession;
+    if (!convToRename) return;
     const updatedTitle = editedTitle.trim() || 'Untitled Conversation';
-    renameSession(currentSession.id, updatedTitle);
+    renameSession(convToRename.id, updatedTitle);
     setIsEditingTitle(false);
+    setRenamingConvId(null);
     
     try {
       await apiCall('/api/history/save', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...currentSession, title: updatedTitle })
+        body: JSON.stringify({ ...convToRename, title: updatedTitle })
       });
       showBanner('Conversation renamed.', 'success');
-      setConversations(prev => prev.map(conv => 
-        conv.id === currentSession.id ? { ...conv, title: updatedTitle } : conv
-      ));
+      await fetchConversations(); // Re-fetch conversations to update sidebar
     } catch (err) {
       showBanner('Failed to rename conversation.', 'error');
     }
@@ -257,6 +383,31 @@ const ChatInterface: React.FC = () => {
     setLoading(false);
   };
 
+  // Add delete handler
+  const handleDeleteConversation = async (convId: string) => {
+    if (!window.confirm('Are you sure you want to delete this conversation?')) return;
+    // Remove from local state
+    setConversations(prev => prev.filter(conv => conv.id !== convId));
+    // Remove from sessions and currentSession
+    if (currentSession && currentSession.id === convId) {
+      // If deleting the current session, select another or clear
+      const remaining = sessions.filter(s => s.id !== convId);
+      if (remaining.length > 0) {
+        selectSession(remaining[0].id);
+      } else {
+        clearHistory();
+      }
+    }
+    // Remove from backend if needed (optional, depending on your API)
+    try {
+      await apiCall('/api/history/delete/' + convId, { method: 'DELETE' });
+      showBanner('Conversation deleted.', 'success');
+      await fetchConversations(); // Re-fetch conversations to update sidebar
+    } catch (err) {
+      showBanner('Failed to delete conversation.', 'error');
+    }
+  };
+
   // Scroll functionality
   const scrollToBottom = useMemo(() => debounce(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -284,7 +435,20 @@ const ChatInterface: React.FC = () => {
   // Initialize data
   useEffect(() => {
     fetchDocuments();
-    fetchConversations();
+    // On page load, try to fetch conversations from backend; if it fails, load from localStorage for offline mode
+    (async () => {
+      try {
+        await fetchConversations();
+      } catch {
+        // Offline mode: load from localStorage
+        const saved = localStorage.getItem(CONVERSATIONS_KEY);
+        if (saved) {
+          try {
+            setConversations(JSON.parse(saved));
+          } catch {}
+        }
+      }
+    })();
     checkVectorstore();
     const interval = setInterval(checkVectorstore, 30000);
     return () => clearInterval(interval);
@@ -327,7 +491,35 @@ const ChatInterface: React.FC = () => {
     }));
   }, [sessions, currentSession, conversations]);
 
-  // Render streaming assistant bubble
+  // Load conversations from localStorage on mount
+  useEffect(() => {
+    const saved = localStorage.getItem(CONVERSATIONS_KEY);
+    if (saved) {
+      try {
+        setConversations(JSON.parse(saved));
+      } catch {}
+    }
+  }, []);
+  // On every change, persist the full conversations list to localStorage for offline mode
+  useEffect(() => {
+    localStorage.setItem(CONVERSATIONS_KEY, JSON.stringify(conversations));
+  }, [conversations]);
+
+  // After creating, renaming, or deleting a conversation, always call fetchConversations() to refresh the sidebar
+  useEffect(() => {
+    if (currentSession) {
+      setConversations(prev => {
+        const existing = prev.find(conv => conv.id === currentSession.id);
+        if (existing) {
+          return prev.map(conv => conv.id === currentSession.id ? { ...conv, title: currentSession.title || 'Untitled Conversation' } : conv);
+        } else {
+          return [...prev, { id: currentSession.id, title: currentSession.title || 'Untitled Conversation', created_at: currentSession.createdAt ? new Date(currentSession.createdAt).toISOString() : new Date().toISOString() }];
+        }
+      });
+    }
+  }, [currentSession]);
+
+  // Render streaming assistant bubble - only show when actively streaming
   const renderStreamingAssistantBubble = () => {
     if (streamingStatus !== 'streaming' || !streamingContent) return null;
     return (
@@ -383,43 +575,100 @@ const ChatInterface: React.FC = () => {
   return (
     <div className="flex h-screen w-screen bg-background">
       {/* Sidebar */}
-      <div className="bg-surface border-r border-border flex flex-col w-80 flex-none h-screen z-40 fixed left-0 top-0">
+      <div className="bg-surface border-r border-border flex flex-col w-80 flex-none h-screen z-40 fixed left-0 top-0 overflow-y-auto max-h-screen shadow-lg">
         {bannerMessage && (
           <div className={`p-2 text-xs text-center rounded-b ${bannerType === 'success' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'} shadow`}>
             {bannerMessage}
           </div>
         )}
         
-        {/* New Chat Buttons */}
-        <div className="p-4 border-b border-border flex flex-col gap-2">
-          <Button onClick={createSession} className="w-full group rounded-lg shadow-sm" variant="outline">
+        {/* New Chat & Rename Buttons */}
+        <div className="p-4 border-b border-border flex flex-col gap-2 mt-16">
+          <Button onClick={async () => {
+            // Create a new conversation and persist to backend
+            const now = new Date().toISOString();
+            const newConv = {
+              id: uuidv4(),
+              title: 'New Conversation',
+              created_at: now,
+              messages: [],
+              uploads: []
+            };
+            await apiCall('/api/history/save', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(newConv)
+            });
+            await fetchConversations();
+            selectSession(newConv.id);
+          }} className="w-full group rounded-lg shadow-sm" variant="outline">
             <Plus className="mr-2 h-4 w-4 group-hover:rotate-90 transition-transform duration-300" />
             New Conversation
-          </Button>
-          <Button onClick={createSessionFromPrevious} className="w-full group rounded-lg shadow-sm" variant="outline">
-            <Sparkles className="mr-2 h-4 w-4 group-hover:scale-110 transition-transform duration-300" />
-            Duplicate Conversation
           </Button>
         </div>
 
         {/* Chat Sessions */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-2 custom-scrollbar">
+        <div className="flex-1 overflow-y-auto p-4 space-y-2 custom-scrollbar max-h-[calc(100vh-300px)]">
           <h3 className="text-sm font-semibold text-muted-foreground mb-4 flex items-center">
             <Sparkles className="mr-2 h-4 w-4" />
             Recent Conversations
           </h3>
-          {sessions.length > 0 ? (
-            sessions.map((conv) => (
-              <Card key={conv.id} hover className={`p-4 cursor-pointer transition-all duration-300 rounded-lg shadow-sm ${
-                currentSession?.id === conv.id ? 'border-2 border-primary' : ''
-              }`} onClick={() => selectSession(conv.id)}>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <div className="text-sm font-medium text-foreground truncate mb-1">{conv.title}</div>
+          {conversations.length > 0 ? (
+            conversations.map((conv) => (
+              <Card key={conv.id} hover className={`p-4 cursor-pointer transition-all duration-300 rounded-lg shadow-sm flex items-center justify-between ${currentSession?.id === conv.id ? 'border-2 border-primary' : ''}`}
+                onClick={async () => {
+                  selectSession(conv.id);
+                  try {
+                    const data = await apiCall(`/api/history/get/${conv.id}`);
+                    if (data.conversation) {
+                      setCurrentSessionFromBackend(data.conversation); // Only update current session
+                    }
+                  } catch {}
+                }}>
+                <div className="flex items-center space-x-2 w-full">
+                  <div className="flex-1 min-w-0">
+                    {renamingConvId === conv.id ? (
+                      <input
+                        className="text-sm font-medium text-foreground truncate mb-1 bg-surface border-b border-primary focus:outline-none px-2 py-1 rounded"
+                        value={editedTitle}
+                        autoFocus
+                        onChange={e => setEditedTitle(e.target.value)}
+                        onBlur={() => handleSaveTitle(conv.id)}
+                        onKeyDown={e => {
+                          if (e.key === 'Enter') handleSaveTitle(conv.id);
+                          if (e.key === 'Escape') { setIsEditingTitle(false); setRenamingConvId(null); }
+                        }}
+                        style={{ width: '10rem' }}
+                      />
+                    ) : (
+                      <span className="text-sm font-medium text-foreground truncate mb-1">{conv.title}</span>
+                    )}
                     <div className="text-xs text-muted-foreground">
-                      {conv.createdAt ? new Date(conv.createdAt).toLocaleString() : ''}
+                      {conv.created_at ? new Date(conv.created_at).toLocaleString() : ''}
                     </div>
                   </div>
+                  <button
+                    className="ml-1 text-primary hover:text-primary-dark focus:outline-none rounded p-1"
+                    onClick={e => {
+                      e.stopPropagation();
+                      setEditedTitle(conv.title || '');
+                      setIsEditingTitle(true);
+                      setRenamingConvId(conv.id);
+                    }}
+                    title="Rename Conversation"
+                  >
+                    <Pencil className="w-4 h-4" />
+                  </button>
+                  <button
+                    className="ml-1 text-red-500 hover:text-red-700 focus:outline-none rounded p-1"
+                    onClick={async e => {
+                      e.stopPropagation();
+                      await handleDeleteConversation(conv.id);
+                    }}
+                    title="Delete Conversation"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
                 </div>
               </Card>
             ))
@@ -494,9 +743,9 @@ const ChatInterface: React.FC = () => {
       </div>
 
       {/* Main Chat Area */}
-      <div className="flex-1 flex flex-col ml-80">
-        {/* Chat Header */}
-        <div className="bg-surface border-b border-border p-4 md:p-6 flex items-center justify-between sticky top-0 z-30 shadow-sm">
+      <div className="flex-1 flex flex-col ml-80 min-w-0">
+        {/* Chat Header - stretch across full width, add padding and shadow */}
+        <div className="bg-surface border-b border-border px-8 py-5 flex items-center justify-between sticky top-0 z-30 shadow-md w-full">
           <div className="flex items-center gap-3">
             <Bot className="h-6 w-6 text-primary" />
             {currentSession ? (
@@ -519,7 +768,7 @@ const ChatInterface: React.FC = () => {
                     {currentSession.title || 'XOR RAG Assistant'}
                   </span>
                   <button
-                    className="ml-2 text-primary hover:text-primary-dark focus:outline-none rounded"
+                    className="ml-2 text-primary hover:text-primary-dark focus:outline-none rounded transition-colors duration-200"
                     onClick={() => {
                       setEditedTitle(currentSession.title || '');
                       setIsEditingTitle(true);
@@ -540,7 +789,7 @@ const ChatInterface: React.FC = () => {
         </div>
 
         {/* Messages */}
-        <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-4 md:space-y-6 bg-background custom-scrollbar">
+        <div className="flex-1 overflow-y-auto p-6 space-y-6 bg-background custom-scrollbar min-h-0">
           {memoizedMessages.length > 0 ? (
             <>
               {memoizedMessages}
@@ -550,24 +799,10 @@ const ChatInterface: React.FC = () => {
             <div className="flex items-center justify-center h-full">
               <Card variant="elevated" glow className="p-12 text-center max-w-lg rounded-lg shadow-lg">
                 <div className="text-6xl mb-6">🤖</div>
-                <h3 className="text-2xl font-bold mb-4 text-foreground">Welcome to XOR RAG</h3>
-                <p className="text-muted-foreground mb-6 leading-relaxed">
-                  Start a conversation or upload documents to begin. Your AI assistant is ready to help 
-                  with intelligent document-based questions and analysis.
-                </p>
-                <div className="flex flex-col sm:flex-row gap-3 justify-center">
-                  <Button onClick={() => fileInputRef.current?.click()} variant="outline" className="group rounded-lg shadow-sm">
-                    <Upload className="mr-2 h-4 w-4 group-hover:-translate-y-1 transition-transform duration-300" />
-                    Upload Documents
-                  </Button>
-                  <Button onClick={createSession} variant="primary" className="group rounded-lg shadow-sm">
-                    Start Chatting
-                  </Button>
-                </div>
+                <h3 className="text-2xl font-bold mb-4 text-foreground">Hi! How can I help you today?</h3>
               </Card>
             </div>
           )}
-          
           {operationState.sending && streamingStatus !== 'streaming' && (
             <div className="flex justify-start">
               <div className="flex items-start space-x-3 max-w-2xl">
@@ -587,7 +822,6 @@ const ChatInterface: React.FC = () => {
               </div>
             </div>
           )}
-          
           {showScrollButton && (
             <button
               className="fixed bottom-24 right-6 z-40 bg-primary text-white rounded-full p-3 shadow-lg hover:bg-primary-dark transition"
@@ -600,7 +834,7 @@ const ChatInterface: React.FC = () => {
         </div>
 
         {/* Input Area */}
-        <div className="bg-surface border-t border-border p-4 md:p-6 flex items-end gap-4 sticky bottom-0 z-20">
+        <div className="bg-surface border-t border-border px-8 py-5 flex items-end gap-4 sticky bottom-0 z-20 shadow-md">
           <form onSubmit={handleSendMessage} className="flex items-end w-full gap-4">
             <input
               type="file"
@@ -631,7 +865,7 @@ const ChatInterface: React.FC = () => {
             <Button
               type="submit"
               disabled={!inputValue.trim() || operationState.sending || streamingStatus === 'streaming'}
-              className="p-4 group rounded-full shadow-md"
+              className="p-4 group rounded-full shadow-md hover:bg-primary-dark transition-colors duration-200"
               size="lg"
             >
               <Send className="h-5 w-5 group-hover:translate-x-1 transition-transform duration-300" />

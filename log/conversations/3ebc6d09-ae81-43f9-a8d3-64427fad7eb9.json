@@ -1,0 +1,15 @@
+{
+  "id": "3ebc6d09-ae81-43f9-a8d3-64427fad7eb9",
+  "title": "New Conversation",
+  "messages": [
+    {
+      "id": "26a0254b-03ec-4872-8952-6ba0c4554fc9",
+      "content": "",
+      "role": "assistant",
+      "timestamp": "2025-07-21T08:38:04.760Z",
+      "isStreaming": true
+    }
+  ],
+  "createdAt": "2025-07-21T08:38:02.640Z",
+  "documents": []
+}

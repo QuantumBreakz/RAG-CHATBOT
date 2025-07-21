@@ -65,6 +65,22 @@ async def upload_document(
     except Exception as e:
         return {"num_chunks": len(docs), "status": f"uploaded but embedding error: {str(e)}"}
 
+def is_mcq_question(question):
+    q = question.lower()
+    return 'option' in q or 'mcq' in q or 'a)' in q or 'b)' in q or 'c)' in q or 'd)' in q
+
+def get_source_filename():
+    # Heuristic: pick the first non-quiz/non-mcq document as the source
+    docs = VectorStore.list_documents()
+    for doc in docs:
+        fname = doc['filename'].lower()
+        if not ('mcq' in fname or 'quiz' in fname or 'question' in fname):
+            return doc['filename']
+    # Fallback: just use the first document
+    if docs:
+        return docs[0]['filename']
+    return None
+
 @app.post("/query")
 async def query_rag(
     question: str = Form(...),
@@ -73,45 +89,45 @@ async def query_rag(
     filename: str = Form(None),
     conversation_history: str = Form("[]")
 ):
-    """Enhanced query endpoint with streaming support and conversation history."""
     try:
-        # Parse conversation history
         try:
             history_list = json.loads(conversation_history) if conversation_history else []
         except json.JSONDecodeError:
             history_list = []
-        
-        # Query vector store
+        # Always search all documents for context
         results = VectorStore.query_with_expanded_context(
-            question, 
-            n_results=n_results, 
+            question,
+            n_results=n_results,
             expand=expand,
-            filename=filename
+            filename=None  # Always search all documents
         )
-        
-        context_docs = results.get("documents", [[]])[0] if results.get("documents") else []
-        context_str = " ".join(context_docs)
-        
+        # Group context by document
+        context_by_doc = {}
+        docs = results.get('documents', [[]])[0]
+        metas = results.get('metadatas', [[]])[0]
+        for chunk, meta in zip(docs, metas):
+            fname = meta.get('filename', 'unknown')
+            context_by_doc.setdefault(fname, []).append(chunk)
+        # Build a prompt that shows context grouped by document
+        context_str = ''
+        for fname, chunks in context_by_doc.items():
+            context_str += f'Context from {fname}:\n' + '\n'.join(chunks) + '\n\n'
         if not context_str.strip():
             return {
                 "answer": "[No relevant context found for your query. Please try rephrasing or uploading more documents.]",
                 "context": "",
                 "status": "no_context"
             }
-        
-        # Call LLM with conversation history
         answer = LLMHandler.call_llm(
-            question, 
-            context_str, 
+            question,
+            context_str,
             conversation_history=history_list
         )
-        
         return {
             "answer": answer,
             "context": context_str,
             "status": "success"
         }
-        
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Query failed: {str(e)}")
 
@@ -123,23 +139,29 @@ async def query_rag_stream(
     filename: str = Form(None),
     conversation_history: str = Form("[]")
 ):
-    """Streaming query endpoint for real-time responses."""
     try:
-        # Parse conversation history
         try:
             history_list = json.loads(conversation_history) if conversation_history else []
         except json.JSONDecodeError:
             history_list = []
-        # Query vector store
+        # Always search all documents for context
         results = VectorStore.query_with_expanded_context(
-            question, 
-            n_results=n_results, 
+            question,
+            n_results=n_results,
             expand=expand,
-            filename=filename
+            filename=None  # Always search all documents
         )
-        context_docs = results.get("documents", [[]])[0] if results.get("documents") else []
-        # Limit context to 3000 characters (adjust as needed)
-        context_str = "\n---\n".join(context_docs)
+        # Group context by document
+        context_by_doc = {}
+        docs = results.get('documents', [[]])[0]
+        metas = results.get('metadatas', [[]])[0]
+        for chunk, meta in zip(docs, metas):
+            fname = meta.get('filename', 'unknown')
+            context_by_doc.setdefault(fname, []).append(chunk)
+        # Build a prompt that shows context grouped by document
+        context_str = ''
+        for fname, chunks in context_by_doc.items():
+            context_str += f'Context from {fname}:\n' + '\n'.join(chunks) + '\n\n'
         if len(context_str) > 3000:
             context_str = context_str[:3000]
         if not context_str.strip():
@@ -157,7 +179,6 @@ async def query_rag_stream(
                 got_any = True
                 answer_accum += word
                 yield json.dumps({"answer": word, "context": "", "status": "streaming"}) + "\n"
-            # If nothing was yielded, return a fallback message
             if not got_any or not answer_accum.strip():
                 answer_accum = "[No answer could be generated. Please try rephrasing your question or uploading more documents.]"
             yield json.dumps({"answer": answer_accum, "context": "", "status": "success"}) + "\n"

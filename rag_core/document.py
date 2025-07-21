@@ -86,6 +86,14 @@ class DocumentProcessor:
                 separators=["\n\n", "\n", ".", "!", "?", " ", ""]
             )
             splits = text_splitter.split_documents(docs)
+            # Failsafe: if no chunks or only empty chunks, try OCR fallback
+            if (not splits) or all(not getattr(s, 'page_content', '').strip() for s in splits):
+                logger.warning(f"Initial chunking failed for {file_basename}, attempting OCR fallback.")
+                if suffix == ".pdf":
+                    text = extract_text_from_pdf(temp_file.name)
+                    docs = [Document(page_content=text, metadata={"filename": file_basename})]
+                    splits = text_splitter.split_documents(docs)
+                    logger.info(f"OCR fallback produced {len(splits)} chunks for {file_basename}")
             # Add filename and chunk_index to each chunk's metadata
             for idx, split in enumerate(splits):
                 if not hasattr(split, 'metadata') or not isinstance(split.metadata, dict):
