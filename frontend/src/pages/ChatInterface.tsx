@@ -30,6 +30,9 @@ const ChatInterface: React.FC = () => {
   const [showScrollButton, setShowScrollButton] = useState(false);
   const [renamingConvId, setRenamingConvId] = useState<string | null>(null);
   const [lastSessionId, setLastSessionId] = useState<string | null>(null);
+  const [attachedFile, setAttachedFile] = useState<File | null>(null);
+  const [fileProcessing, setFileProcessing] = useState(false);
+  const [fileError, setFileError] = useState<string | null>(null);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -130,6 +133,7 @@ const ChatInterface: React.FC = () => {
     const userMessage = inputValue.trim();
     setOperationState(s => ({ ...s, sending: true }));
     setInputValue("");
+    setFileError(null);
 
     // Reset streaming state
     resetStreaming();
@@ -159,17 +163,45 @@ const ChatInterface: React.FC = () => {
       let streamed = '';
       // Use only the current session's messages for context, and for new conversations, context is empty
       const conversationHistory = isNewConversation ? [] : (currentSession?.messages.filter(m => m.role !== 'assistant' || m.content) || []);
-      const response = await fetch('/api/query/stream', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({
-          question: userMessage,
-          n_results: '3',
-          expand: '2',
-          filename: '',
-          conversation_history: JSON.stringify(conversationHistory)
-        })
-      });
+      let response;
+      if (attachedFile) {
+        setFileProcessing(true);
+        // Use multipart/form-data if file is attached
+        const formData = new FormData();
+        formData.append('question', userMessage);
+        formData.append('n_results', '3');
+        formData.append('expand', '2');
+        formData.append('filename', '');
+        formData.append('conversation_history', JSON.stringify(conversationHistory));
+        formData.append('file', attachedFile);
+        response = await fetch('/api/query/stream', {
+          method: 'POST',
+          body: formData
+        });
+        setFileProcessing(false);
+        if (!response.ok) {
+          const err = await response.json();
+          setFileError(err.error || 'File processing failed.');
+          setOperationState(s => ({ ...s, sending: false }));
+          setStreamingStatus('idle');
+          setAttachedFile(null);
+          return;
+        }
+      } else {
+        // Use existing x-www-form-urlencoded flow
+        response = await fetch('/api/query/stream', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: new URLSearchParams({
+            question: userMessage,
+            n_results: '3',
+            expand: '2',
+            filename: '',
+            conversation_history: JSON.stringify(conversationHistory)
+          })
+        });
+      }
+      setAttachedFile(null); // Reset after sending
       if (!response.body) throw new Error('No response body');
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
@@ -202,6 +234,11 @@ const ChatInterface: React.FC = () => {
                   finished = true;
                   break;
                 }
+                if (data.status === 'error' && data.answer) {
+                  setFileError(data.answer);
+                  finished = true;
+                  break;
+                }
               } catch (err) {
                 // Ignore parse errors for incomplete lines
               }
@@ -224,6 +261,9 @@ const ChatInterface: React.FC = () => {
               setStreamingContent(streamed);
               updateStreamingMessage(streamed);
             }
+          }
+          if (data.status === 'error' && data.answer) {
+            setFileError(data.answer);
           }
         } catch (err) {
           // Ignore parse errors for incomplete lines
@@ -268,6 +308,7 @@ const ChatInterface: React.FC = () => {
       }
     } catch (error) {
       showBanner('Failed to send message.', 'error');
+      setFileError('Failed to send message.');
       // Remove the empty assistant message on error
       if (currentSession && currentSession.messages.length > 0) {
         const messagesWithoutEmpty = currentSession.messages.filter((m, idx, arr) => !(idx === arr.length - 1 && m.role === 'assistant' && !m.content));
@@ -279,6 +320,7 @@ const ChatInterface: React.FC = () => {
     } finally {
       setOperationState(s => ({ ...s, sending: false }));
       setStreamingStatus('idle');
+      setFileProcessing(false);
     }
   };
 
@@ -682,6 +724,13 @@ const ChatInterface: React.FC = () => {
     await handleSelectSession(newConv.id);
   };
 
+  // New handler for inline file attach
+  const handleInlineFileAttach = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      setAttachedFile(e.target.files[0]);
+    }
+  };
+
   return (
     <div className="flex h-screen w-screen bg-background">
       {/* Sidebar */}
@@ -929,6 +978,17 @@ const ChatInterface: React.FC = () => {
               multiple
               className="hidden"
             />
+            {/* Inline attach for chat prompt */}
+            <input
+              type="file"
+              accept=".pdf,.png,.jpg,.jpeg"
+              style={{ display: 'none' }}
+              ref={el => {
+                // Use a separate ref for inline attach
+                (window as any).inlineFileInputRef = el;
+              }}
+              onChange={handleInlineFileAttach}
+            />
             <div className="flex-1 relative">
               <Card variant="elevated" className="overflow-hidden rounded-lg shadow-sm">
                 <textarea
@@ -946,7 +1006,36 @@ const ChatInterface: React.FC = () => {
                   }}
                 />
               </Card>
+              {/* Show attached file name if present */}
+              {attachedFile && (
+                <div className="text-xs text-primary mt-1 flex items-center gap-2">
+                  <span>📎 {attachedFile.name}</span>
+                  <button type="button" className="ml-1 text-red-500 hover:text-red-700" onClick={() => setAttachedFile(null)}>Remove</button>
+                </div>
+              )}
+              {/* Show file processing spinner/status */}
+              {fileProcessing && (
+                <div className="text-xs text-muted-foreground mt-1 flex items-center gap-2">
+                  <span className="animate-spin">⏳</span> Processing file (OCR)...
+                </div>
+              )}
+              {/* Show file error if any */}
+              {fileError && (
+                <div className="text-xs text-red-500 mt-1 flex items-center gap-2">
+                  <span>⚠️ {fileError}</span>
+                </div>
+              )}
             </div>
+            {/* Inline attach button */}
+            <Button
+              type="button"
+              className="p-4 group rounded-full shadow-md hover:bg-primary-dark transition-colors duration-200"
+              size="lg"
+              onClick={() => (window as any).inlineFileInputRef && (window as any).inlineFileInputRef.click()}
+              disabled={operationState.sending || streamingStatus === 'streaming'}
+            >
+              <span role="img" aria-label="Attach">📎</span>
+            </Button>
             <Button
               type="submit"
               disabled={!inputValue.trim() || operationState.sending || streamingStatus === 'streaming'}

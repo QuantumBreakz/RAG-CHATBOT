@@ -1,4 +1,4 @@
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Request
 from fastapi.responses import StreamingResponse, FileResponse, JSONResponse
 from rag_core.document import DocumentProcessor, DEFAULT_CHUNK_SIZE, DEFAULT_CHUNK_OVERLAP
 from rag_core.vectorstore import VectorStore
@@ -7,6 +7,14 @@ from rag_core import history
 import json
 from fastapi.middleware.cors import CORSMiddleware
 from rag_core import cache
+import tempfile
+import mimetypes
+import fitz  # PyMuPDF
+import pytesseract
+from PIL import Image
+import io
+import re
+import logging
 
 app = FastAPI()
 
@@ -137,7 +145,8 @@ async def query_rag_stream(
     n_results: int = Form(3),
     expand: int = Form(2),
     filename: str = Form(None),
-    conversation_history: str = Form("[]")
+    conversation_history: str = Form("[]"),
+    file: UploadFile = File(None)
 ):
     try:
         try:
@@ -162,6 +171,88 @@ async def query_rag_stream(
         context_str = ''
         for fname, chunks in context_by_doc.items():
             context_str += f'Context from {fname}:\n' + '\n'.join(chunks) + '\n\n'
+        # --- NEW: Handle attached file (PDF/image) ---
+        temp_chunks = []
+        temp_filename = None
+        MAX_FILE_SIZE_MB = 10
+        SUPPORTED_TYPES = ['application/pdf', 'image/png', 'image/jpeg']
+        def clean_text_for_rag(text):
+            text = re.sub(r'Page \\d+ of \\d+', '', text)
+            text = re.sub(r'Confidential', '', text, flags=re.IGNORECASE)
+            text = re.sub(r'\s+', ' ', text)
+            return text.strip()
+        def smart_chunk(text, max_words=300):
+            paras = [p.strip() for p in text.split('\n\n') if p.strip()]
+            chunks = []
+            current = []
+            word_count = 0
+            for para in paras:
+                words = para.split()
+                if word_count + len(words) > max_words and current:
+                    chunks.append(' '.join(current))
+                    current = []
+                    word_count = 0
+                current.append(para)
+                word_count += len(words)
+            if current:
+                chunks.append(' '.join(current))
+            return chunks
+        if file is not None:
+            temp_filename = file.filename
+            file_bytes = await file.read()
+            mime_type, _ = mimetypes.guess_type(file.filename)
+            # File type/size validation
+            if mime_type not in SUPPORTED_TYPES:
+                return JSONResponse(status_code=400, content={'error': 'Unsupported file type.'})
+            if len(file_bytes) > MAX_FILE_SIZE_MB * 1024 * 1024:
+                return JSONResponse(status_code=400, content={'error': 'File too large.'})
+            try:
+                # If PDF
+                if file.filename.lower().endswith('.pdf') or (mime_type and 'pdf' in mime_type):
+                    with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as tmp_pdf:
+                        tmp_pdf.write(file_bytes)
+                        tmp_pdf.flush()
+                        doc = fitz.open(tmp_pdf.name)
+                        for page in doc:
+                            text = page.get_text()
+                            if text.strip():
+                                temp_chunks.append(text)
+                            else:
+                                pix = page.get_pixmap()
+                                img = Image.open(io.BytesIO(pix.tobytes()))
+                                ocr_text = pytesseract.image_to_string(img)
+                                if ocr_text.strip():
+                                    temp_chunks.append(ocr_text)
+                        doc.close()
+                # If image
+                elif mime_type and mime_type.startswith('image'):
+                    img = Image.open(io.BytesIO(file_bytes))
+                    ocr_text = pytesseract.image_to_string(img)
+                    if ocr_text.strip():
+                        temp_chunks.append(ocr_text)
+                # Clean and chunk
+                clean_text = '\n'.join([c.strip() for c in temp_chunks if c.strip()])
+                cleaned_text = clean_text_for_rag(clean_text)
+                temp_doc_chunks = smart_chunk(cleaned_text)
+                if not temp_doc_chunks:
+                    return JSONResponse(status_code=400, content={'error': 'No text could be extracted from the file.'})
+                # Generate embeddings for these chunks (use same model as KB)
+                from rag_core.vectorstore import VectorStore
+                temp_vectors = []
+                for chunk in temp_doc_chunks:
+                    emb = VectorStore.embed_text(chunk)
+                    temp_vectors.append((chunk, emb))
+                # Retrieve top-k from temp_vectors
+                import numpy as np
+                if temp_vectors:
+                    q_emb = VectorStore.embed_text(question)
+                    sims = [float(np.dot(q_emb, emb)) for _, emb in temp_vectors]
+                    topk = np.argsort(sims)[-n_results:][::-1]
+                    temp_context = [temp_doc_chunks[i] for i in topk]
+                    context_str += f'Context from {temp_filename} (attached):\n' + '\n'.join(temp_context) + '\n\n'
+            except Exception as e:
+                logging.error(f'OCR or file processing failed: {e}')
+                return JSONResponse(status_code=500, content={'error': 'OCR or file processing failed. Please try a different file.'})
         if len(context_str) > 3000:
             context_str = context_str[:3000]
         if not context_str.strip():
