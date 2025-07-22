@@ -260,3 +260,18 @@ For enterprise support and custom deployments, contact:
 ---
 
 **XOR RAG Chatbot** - Secure, Offline, Intelligent Document Processing
+
+## Deployment Environment Variables
+
+Create a `.env` file in the `frontend/` directory with:
+
+```
+VITE_API_URL=https://your-backend-domain.com
+```
+
+For local development, use:
+```
+VITE_API_URL=http://localhost:8000
+```
+
+Make sure to restart the frontend dev server after changing `.env`.

@@ -3,11 +3,13 @@ FROM node:18-alpine AS builder
 
 WORKDIR /app
 
-# Copy package files
-COPY package*.json ./
-
-# Install dependencies
+# Install Node dependencies
+COPY package.json package-lock.json ./
 RUN npm ci --only=production
+
+# Add support for VITE_API_URL build arg
+ARG VITE_API_URL
+ENV VITE_API_URL=${VITE_API_URL}
 
 # Copy source code
 COPY . .

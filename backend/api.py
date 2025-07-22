@@ -15,13 +15,16 @@ from PIL import Image
 import io
 import re
 import logging
+from rag_core.whisper_asr import transcribe_audio_with_ollama
+import os
 
 app = FastAPI()
 
 # Enable CORS for frontend
+frontend_origin = os.environ.get("FRONTEND_ORIGIN", "http://localhost:5173")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],  # Adjust as needed
+    allow_origins=[frontend_origin],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -52,17 +55,17 @@ async def upload_document(
     file_bytes = await file.read()
     file_hash = cache.get_file_hash(file_bytes)
     docs = DocumentProcessor.process_document(file, file_bytes, chunk_size=chunk_size, chunk_overlap=chunk_overlap)
+    if not docs or all(not getattr(doc, 'page_content', '').strip() for doc in docs):
+        return JSONResponse(status_code=400, content={'error': 'No text could be extracted from the document. If this is a scanned PDF, ensure OCR is working and Tesseract is installed.'})
     # Check if embeddings already exist for this file
     if cache.global_embeddings_exist(file_hash):
         embeddings = cache.load_global_embeddings(file_hash)
         if embeddings is not None:
             # Use cached embeddings for upsert
-            from rag_core.vectorstore import VectorStore
             VectorStore.add_to_vector_collection(docs, file.filename, embeddings=embeddings)
             return {"num_chunks": len(docs), "status": "embeddings already exist for this file (reused from cache)"}
     # Otherwise, create embeddings as usual
     try:
-        from rag_core.vectorstore import VectorStore
         success = VectorStore.add_to_vector_collection(docs, file.filename)
         if success:
             # Save new embeddings to cache (if possible to retrieve them)
@@ -102,6 +105,13 @@ async def query_rag(
             history_list = json.loads(conversation_history) if conversation_history else []
         except json.JSONDecodeError:
             history_list = []
+        # Check if knowledge base is empty
+        if not VectorStore.list_documents():
+            return {
+                "answer": "There is nothing in the knowledge base right now. Please upload a document before continuing.",
+                "context": "",
+                "status": "empty_kb"
+            }
         # Always search all documents for context
         results = VectorStore.query_with_expanded_context(
             question,
@@ -153,6 +163,15 @@ async def query_rag_stream(
             history_list = json.loads(conversation_history) if conversation_history else []
         except json.JSONDecodeError:
             history_list = []
+        # Check if knowledge base is empty
+        if not VectorStore.list_documents():
+            def empty_kb_stream():
+                yield json.dumps({
+                    "answer": "There is nothing in the knowledge base right now. Please upload a document before continuing.",
+                    "context": "",
+                    "status": "empty_kb"
+                })
+            return StreamingResponse(empty_kb_stream(), media_type="application/json")
         # Always search all documents for context
         results = VectorStore.query_with_expanded_context(
             question,
@@ -237,7 +256,6 @@ async def query_rag_stream(
                 if not temp_doc_chunks:
                     return JSONResponse(status_code=400, content={'error': 'No text could be extracted from the file.'})
                 # Generate embeddings for these chunks (use same model as KB)
-                from rag_core.vectorstore import VectorStore
                 temp_vectors = []
                 for chunk in temp_doc_chunks:
                     emb = VectorStore.embed_text(chunk)
@@ -275,7 +293,7 @@ async def query_rag_stream(
             yield json.dumps({"answer": answer_accum, "context": "", "status": "success"}) + "\n"
         return StreamingResponse(word_stream(), media_type="application/json")
     except Exception as e:
-        def error_stream():
+        def error_stream(e=e):
             yield json.dumps({"answer": f"[Error: {str(e)}]", "context": "", "status": "error"})
         return StreamingResponse(error_stream(), media_type="application/json")
 
@@ -338,3 +356,13 @@ def delete_document(filename: str):
         return {"status": "deleted", "filename": filename}
     else:
         raise HTTPException(status_code=404, detail="Document not found or could not be deleted") 
+
+@app.post("/transcribe")
+async def transcribe_audio(file: UploadFile = File(...)):
+    audio_bytes = await file.read()
+    audio_format = file.filename.split('.')[-1].lower()
+    try:
+        text = transcribe_audio_with_ollama(audio_bytes, audio_format=audio_format)
+        return {"text": text}
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"error": f"Transcription failed: {str(e)}"}) 

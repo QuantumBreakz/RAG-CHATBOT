@@ -1,0 +1,22 @@
+{
+  "id": "2e97b1f4-bc3b-4b06-badb-130f45d932a8",
+  "title": "New Conversation",
+  "messages": [
+    {
+      "id": "5cf05b43-77f3-4af1-8d76-fb785c085a4a",
+      "role": "user",
+      "content": "hello there, make 10 mcqs from this document with answers and why",
+      "timestamp": "2025-07-22T08:29:24.762Z",
+      "isStreaming": false
+    },
+    {
+      "id": "c7e0ea03-b604-4322-aaa3-16a90409e65b",
+      "role": "assistant",
+      "content": "",
+      "timestamp": "2025-07-22T08:29:24.762Z",
+      "isStreaming": false
+    }
+  ],
+  "createdAt": "2025-07-22T08:28:07.056Z",
+  "documents": []
+}

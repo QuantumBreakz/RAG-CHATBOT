@@ -7,9 +7,12 @@ import { useGlobalLoading } from '../App';
 import { useStreamingAssistant } from './useStreamingAssistant';
 import debounce from 'lodash.debounce';
 import { v4 as uuidv4 } from 'uuid';
+import ReactMarkdown from 'react-markdown';
 
 const CHAT_STATE_KEY = 'xor_rag_chat_state';
 const CONVERSATIONS_KEY = 'xor_rag_conversations';
+
+const API_URL = 'http://localhost:8000';
 
 const ChatInterface: React.FC = () => {
   const [inputValue, setInputValue] = useState('');
@@ -33,6 +36,12 @@ const ChatInterface: React.FC = () => {
   const [attachedFile, setAttachedFile] = useState<File | null>(null);
   const [fileProcessing, setFileProcessing] = useState(false);
   const [fileError, setFileError] = useState<string | null>(null);
+  const [isRecording, setIsRecording] = useState(false);
+  const [isTranscribing, setIsTranscribing] = useState(false);
+  const [audioDuration, setAudioDuration] = useState<number | null>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const audioUrlRef = useRef<string | null>(null);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -130,6 +139,27 @@ const ChatInterface: React.FC = () => {
     e.preventDefault();
     if (!inputValue.trim() || operationState.sending || streamingStatus === 'streaming') return;
 
+    // Ensure a conversation is selected or created
+    let sessionToUse = currentSession;
+    if (!sessionToUse) {
+      if (sessions && sessions.length > 0) {
+        selectSession(sessions[0].id);
+        sessionToUse = sessions[0];
+      } else {
+        // Create a new conversation and use it
+        createSession();
+        // Wait for state to update (force sync)
+        // This is a hack, ideally use a callback or state update
+        sessionToUse = {
+          id: uuidv4(),
+          title: 'New Conversation',
+          messages: [],
+          createdAt: new Date(),
+          documents: []
+        };
+      }
+    }
+
     const userMessage = inputValue.trim();
     setOperationState(s => ({ ...s, sending: true }));
     setInputValue("");
@@ -139,19 +169,18 @@ const ChatInterface: React.FC = () => {
     resetStreaming();
 
     // If this is a new conversation, ensure context is empty
-    const isNewConversation = !currentSession || (currentSession.messages && currentSession.messages.length === 0);
+    const isNewConversation = !sessionToUse || (sessionToUse.messages && sessionToUse.messages.length === 0);
 
     // Add user message immediately
     addMessage(userMessage, 'user');
 
     // Add a placeholder assistant message for streaming (remove any existing empty assistant message first)
-    if (currentSession && currentSession.messages.length > 0) {
-      const lastMsg = currentSession.messages[currentSession.messages.length - 1];
+    if (sessionToUse && sessionToUse.messages.length > 0) {
+      const lastMsg = sessionToUse.messages[sessionToUse.messages.length - 1];
       if (lastMsg.role === 'assistant' && !lastMsg.content) {
-        // Remove the empty assistant message
         setCurrentSessionFromBackend({
-          ...currentSession,
-          messages: currentSession.messages.slice(0, -1)
+          ...sessionToUse,
+          messages: sessionToUse.messages.slice(0, -1)
         });
       }
     }
@@ -162,7 +191,7 @@ const ChatInterface: React.FC = () => {
       setStreamingContent('');
       let streamed = '';
       // Use only the current session's messages for context, and for new conversations, context is empty
-      const conversationHistory = isNewConversation ? [] : (currentSession?.messages.filter(m => m.role !== 'assistant' || m.content) || []);
+      const conversationHistory = isNewConversation ? [] : (sessionToUse?.messages.filter(m => m.role !== 'assistant' || m.content) || []);
       let response;
       if (attachedFile) {
         setFileProcessing(true);
@@ -271,9 +300,9 @@ const ChatInterface: React.FC = () => {
       }
       setStreamingStatus('idle');
       // After streaming, update the session's messages by removing the placeholder and appending the real assistant message
-      if (currentSession) {
+      if (sessionToUse) {
         // Remove the last (empty) assistant message and append the real one
-        const filteredMessages = currentSession.messages.filter((m, idx, arr) => {
+        const filteredMessages = sessionToUse.messages.filter((m, idx, arr) => {
           // Remove the last assistant message if it's empty
           if (idx === arr.length - 1 && m.role === 'assistant' && !m.content) return false;
           return true;
@@ -294,14 +323,16 @@ const ChatInterface: React.FC = () => {
           updatedMessages.push({ id: uuidv4(), role: 'assistant', content: streamed, timestamp: new Date(), isStreaming: false });
         }
         setCurrentSessionFromBackend({
-          ...currentSession,
+          ...sessionToUse,
           messages: updatedMessages
         });
         await apiCall('/api/history/save', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            ...currentSession,
+            ...sessionToUse,
+            created_at: sessionToUse.createdAt instanceof Date ? sessionToUse.createdAt.toISOString() : sessionToUse.createdAt,
+            uploads: (sessionToUse.documents || []).map(filename => ({ filename })),
             messages: updatedMessages
           })
         });
@@ -310,10 +341,10 @@ const ChatInterface: React.FC = () => {
       showBanner('Failed to send message.', 'error');
       setFileError('Failed to send message.');
       // Remove the empty assistant message on error
-      if (currentSession && currentSession.messages.length > 0) {
-        const messagesWithoutEmpty = currentSession.messages.filter((m, idx, arr) => !(idx === arr.length - 1 && m.role === 'assistant' && !m.content));
+      if (sessionToUse && sessionToUse.messages.length > 0) {
+        const messagesWithoutEmpty = sessionToUse.messages.filter((m, idx, arr) => !(idx === arr.length - 1 && m.role === 'assistant' && !m.content));
         setCurrentSessionFromBackend({
-          ...currentSession,
+          ...sessionToUse,
           messages: messagesWithoutEmpty
         });
       }
@@ -387,18 +418,23 @@ const ChatInterface: React.FC = () => {
     renameSession(convToRename.id, updatedTitle);
     setIsEditingTitle(false);
     setRenamingConvId(null);
-    
-    // Update local conversations list first
-    setConversations(prev => prev.map(conv => conv.id === convToRename.id ? { ...conv, title: updatedTitle } : conv));
-    localStorage.setItem(CONVERSATIONS_KEY, JSON.stringify(conversations));
-
     try {
       await apiCall('/api/history/save', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...convToRename, title: updatedTitle })
+        body: JSON.stringify({
+          ...convToRename,
+          title: updatedTitle,
+          created_at: convToRename.createdAt instanceof Date ? convToRename.createdAt.toISOString() : convToRename.createdAt,
+          uploads: (convToRename.documents || []).map(filename => ({ filename })),
+        })
       });
       showBanner('Conversation renamed.', 'success');
+      // Update local conversations list after successful API call
+      setConversations(prev => prev.map(conv => conv.id === convToRename.id ? { ...conv, title: updatedTitle } : conv));
+      // Also update localStorage
+      const updatedConvs = conversations.map(conv => conv.id === convToRename.id ? { ...conv, title: updatedTitle } : conv);
+      localStorage.setItem(CONVERSATIONS_KEY, JSON.stringify(updatedConvs));
       await fetchConversations(); // Sync with backend if online
     } catch (err) {
       showBanner('Failed to rename conversation.', 'error');
@@ -647,10 +683,10 @@ const ChatInterface: React.FC = () => {
             <Bot className="h-4 w-4 text-primary" />
           </div>
           <Card variant="elevated" className="p-4">
-            <p className="text-sm leading-relaxed whitespace-pre-line">
+            <ReactMarkdown components={{p: ({node, ...props}) => <p className="text-sm leading-relaxed whitespace-pre-line" {...props} />}}>
               {streamingContent}
-              <span className="ml-1 animate-pulse">|</span>
-            </p>
+            </ReactMarkdown>
+            <span className="ml-1 animate-pulse">|</span>
             <div className="text-xs mt-2 text-muted-foreground">
               Streaming...
             </div>
@@ -679,9 +715,9 @@ const ChatInterface: React.FC = () => {
           <Card variant={message.role === 'user' ? 'default' : 'elevated'} className={`p-4 rounded-lg shadow-sm w-full ${
             message.role === 'user' ? 'bg-primary text-white border-primary/30' : 'bg-surface-elevated'
           }`}>
-            <p className="text-sm leading-relaxed whitespace-pre-line">
+            <ReactMarkdown components={{p: ({node, ...props}) => <p className="text-sm leading-relaxed whitespace-pre-line" {...props} />}}>
               {message.content || ''}
-            </p>
+            </ReactMarkdown>
             <div className={`text-xs mt-2 ${message.role === 'user' ? 'text-white/70' : 'text-muted-foreground'}`}>
               {message.timestamp ? new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
             </div>
@@ -714,7 +750,11 @@ const ChatInterface: React.FC = () => {
     await apiCall('/api/history/save', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(newConv)
+      body: JSON.stringify({
+        ...newConv,
+        created_at: newConv.created_at || newConv.createdAt,
+        uploads: (newConv.uploads || []).map(filename => ({ filename })),
+      })
     });
     // Add to conversations and set as current
     setConversations((prev: any[]) => [
@@ -728,6 +768,61 @@ const ChatInterface: React.FC = () => {
   const handleInlineFileAttach = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
       setAttachedFile(e.target.files[0]);
+    }
+  };
+
+  // Voice recording logic
+  const handleStartRecording = async () => {
+    setIsRecording(true);
+    setAudioDuration(null);
+    audioChunksRef.current = [];
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mediaRecorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = mediaRecorder;
+      let startTime = Date.now();
+      mediaRecorder.ondataavailable = (e) => {
+        if (e.data.size > 0) audioChunksRef.current.push(e.data);
+      };
+      mediaRecorder.onstop = async () => {
+        setIsRecording(false);
+        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/wav' });
+        setAudioDuration((Date.now() - startTime) / 1000);
+        if (audioUrlRef.current) URL.revokeObjectURL(audioUrlRef.current);
+        audioUrlRef.current = URL.createObjectURL(audioBlob);
+        setIsTranscribing(true);
+        const formData = new FormData();
+        formData.append('file', audioBlob, 'voice.wav');
+        showBanner('Transcribing voice input...', 'success');
+        try {
+          const response = await fetch(`${API_URL}/transcribe`, {
+            method: 'POST',
+            body: formData
+          });
+          const data = await response.json();
+          setIsTranscribing(false);
+          if (data.text) {
+            setInputValue(data.text);
+            showBanner('Voice transcription complete.', 'success');
+          } else {
+            showBanner(data.error || 'Transcription failed.', 'error');
+          }
+        } catch (err) {
+          setIsTranscribing(false);
+          showBanner('Transcription failed.', 'error');
+        }
+      };
+      mediaRecorder.start();
+    } catch (err) {
+      setIsRecording(false);
+      showBanner('Microphone access denied or not available.', 'error');
+    }
+  };
+
+  const handleStopRecording = () => {
+    if (mediaRecorderRef.current && isRecording) {
+      mediaRecorderRef.current.stop();
+      mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop());
     }
   };
 
@@ -996,7 +1091,7 @@ const ChatInterface: React.FC = () => {
                   onChange={(e) => setInputValue(e.target.value)}
                   placeholder="Ask me anything about your documents..."
                   className="w-full p-4 bg-transparent text-foreground placeholder-muted-foreground focus:outline-none resize-none min-h-[60px] max-h-32 rounded-lg"
-                  disabled={operationState.sending || streamingStatus === 'streaming'}
+                  disabled={operationState.sending || streamingStatus === 'streaming' || isRecording || isTranscribing}
                   rows={1}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' && !e.shiftKey) {
@@ -1032,17 +1127,41 @@ const ChatInterface: React.FC = () => {
               className="p-4 group rounded-full shadow-md hover:bg-primary-dark transition-colors duration-200"
               size="lg"
               onClick={() => (window as any).inlineFileInputRef && (window as any).inlineFileInputRef.click()}
-              disabled={operationState.sending || streamingStatus === 'streaming'}
+              disabled={operationState.sending || streamingStatus === 'streaming' || isRecording || isTranscribing}
             >
               <span role="img" aria-label="Attach">📎</span>
             </Button>
             <Button
               type="submit"
-              disabled={!inputValue.trim() || operationState.sending || streamingStatus === 'streaming'}
+              disabled={!inputValue.trim() || operationState.sending || streamingStatus === 'streaming' || isRecording || isTranscribing}
               className="p-4 group rounded-full shadow-md hover:bg-primary-dark transition-colors duration-200"
               size="lg"
             >
               <Send className="h-5 w-5 group-hover:translate-x-1 transition-transform duration-300" />
+            </Button>
+            <Button
+              type="button"
+              className="p-4 group rounded-full shadow-md hover:bg-primary-dark transition-colors duration-200 relative"
+              size="lg"
+              onClick={isRecording ? handleStopRecording : handleStartRecording}
+              disabled={operationState.sending || streamingStatus === 'streaming' || isTranscribing}
+              aria-label={isRecording ? 'Stop recording' : 'Start voice input'}
+              title={isRecording ? 'Stop recording' : 'Record voice input'}
+            >
+              {isRecording ? (
+                <span className="flex items-center">
+                  <span role="img" aria-label="Stop">🛑</span>
+                  <span className="ml-2 animate-pulse text-xs">Recording...</span>
+                  <span className="ml-2 w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin"></span>
+                </span>
+              ) : isTranscribing ? (
+                <span className="flex items-center">
+                  <span className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin"></span>
+                  <span className="ml-2 text-xs">Transcribing...</span>
+                </span>
+              ) : (
+                <span role="img" aria-label="Mic">🎤</span>
+              )}
             </Button>
           </form>
         </div>

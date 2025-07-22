@@ -366,3 +366,21 @@ MIT License
 - [Redis](https://redis.io/) - Caching layer
 - [Tailwind CSS](https://tailwindcss.com/) - Styling framework
 - [Vite](https://vitejs.dev/) - Build tool 
+
+## Deployment Guide
+
+### Environment Variables
+- **Frontend:** Set `VITE_API_URL` in `frontend/.env` to your backend URL (e.g., `https://your-backend-domain.com`).
+- **Backend:** Set `FRONTEND_ORIGIN` in the backend environment (or Dockerfile) to your frontend URL (e.g., `https://your-frontend-domain.com`).
+
+### Docker
+- Both frontend and backend Dockerfiles support these environment variables for deployment.
+- See each Dockerfile for usage and example ENV lines.
+
+### Steps
+1. Build and run backend with correct `FRONTEND_ORIGIN`.
+2. Build and run frontend with correct `VITE_API_URL`.
+3. Ensure Ollama and ChromaDB are running and accessible.
+4. Access the app via your frontend URL.
+
+See `frontend/README.md` and `backend/Dockerfile` for more details. 
