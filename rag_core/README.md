@@ -18,7 +18,8 @@ This package contains all core logic for the PITB RAG Chatbot.
 ```mermaid
 graph TD;
     app.py --> ui.py;
-    ui.py --> vectorstore.py;
+    ui.py --> vectorstore.py; 
+
     ui.py --> llm.py;
     ui.py --> document.py;
     ui.py --> cache.py;
