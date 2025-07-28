@@ -3,8 +3,9 @@ import { Send, Upload, FileText, X, Settings, Trash2, Plus, Bot, User, Sparkles,
 import { useChat } from '../contexts/ChatContext';
 import Button from '../components/ui/Button';
 import Card from '../components/ui/Card';
+import SourceDisplay from '../components/SourceDisplay';
+import DomainFilter from '../components/DomainFilter';
 import { useGlobalLoading } from '../App';
-import { useStreamingAssistant } from './useStreamingAssistant';
 import debounce from 'lodash.debounce';
 import { v4 as uuidv4 } from 'uuid';
 import ReactMarkdown from 'react-markdown';
@@ -39,6 +40,8 @@ const ChatInterface: React.FC = () => {
   const [isRecording, setIsRecording] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [audioDuration, setAudioDuration] = useState<number | null>(null);
+  const [selectedDomain, setSelectedDomain] = useState<string | null>(null);
+  const [currentSources, setCurrentSources] = useState<any[]>([]);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const audioUrlRef = useRef<string | null>(null);
@@ -201,6 +204,7 @@ const ChatInterface: React.FC = () => {
         formData.append('n_results', '3');
         formData.append('expand', '2');
         formData.append('filename', '');
+        formData.append('domain_filter', selectedDomain || '');
         formData.append('conversation_history', JSON.stringify(conversationHistory));
         formData.append('file', attachedFile);
         response = await fetch('/api/query/stream', {
@@ -226,6 +230,7 @@ const ChatInterface: React.FC = () => {
             n_results: '3',
             expand: '2',
             filename: '',
+            domain_filter: selectedDomain || '',
             conversation_history: JSON.stringify(conversationHistory)
           })
         });
@@ -721,6 +726,9 @@ const ChatInterface: React.FC = () => {
             <div className={`text-xs mt-2 ${message.role === 'user' ? 'text-white/70' : 'text-muted-foreground'}`}>
               {message.timestamp ? new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
             </div>
+            {message.role === 'assistant' && message.sources && (
+              <SourceDisplay sources={message.sources} className="mt-3" />
+            )}
           </Card>
         </div>
       </div>
@@ -1011,9 +1019,15 @@ const ChatInterface: React.FC = () => {
               <span className="text-xl font-bold text-muted-foreground">No conversation loaded</span>
             )}
           </div>
-          <div className="flex items-center space-x-2">
-            <div className="w-2 h-2 bg-primary rounded-full animate-pulse"></div>
-            <span className="text-sm text-muted-foreground">Online</span>
+          <div className="flex items-center space-x-4">
+            <DomainFilter 
+              selectedDomain={selectedDomain}
+              onDomainChange={setSelectedDomain}
+            />
+            <div className="flex items-center space-x-2">
+              <div className="w-2 h-2 bg-primary rounded-full animate-pulse"></div>
+              <span className="text-sm text-muted-foreground">Online</span>
+            </div>
           </div>
         </div>
 

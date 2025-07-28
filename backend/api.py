@@ -17,6 +17,8 @@ import re
 import logging
 from rag_core.whisper_asr import transcribe_audio_with_ollama
 import os
+import psutil
+import time
 
 app = FastAPI()
 
@@ -32,11 +34,68 @@ app.add_middleware(
 
 @app.get("/health")
 def health_check():
-    return {"status": "ok"}
+    """Basic health check endpoint."""
+    return {"status": "ok", "timestamp": time.time()}
+
+@app.get("/health/detailed")
+def detailed_health_check():
+    """Detailed health check with system metrics."""
+    try:
+        # System metrics
+        cpu_percent = psutil.cpu_percent(interval=1)
+        memory = psutil.virtual_memory()
+        disk = psutil.disk_usage('/')
+        
+        # Service health checks
+        vectorstore_healthy = False
+        ollama_healthy = False
+        redis_healthy = False
+        
+        try:
+            collection = VectorStore.get_vector_collection()
+            vectorstore_healthy = collection is not None
+        except:
+            pass
+        
+        try:
+            import ollama
+            response = ollama.chat(
+                model="llama3.2:3b",
+                messages=[{"role": "user", "content": "test"}],
+                options={"base_url": "http://localhost:11434"}
+            )
+            ollama_healthy = True
+        except:
+            pass
+        
+        try:
+            from rag_core.redis_cache import redis_client
+            redis_client.ping()
+            redis_healthy = True
+        except:
+            pass
+        
+        return {
+            "status": "ok",
+            "timestamp": time.time(),
+            "system": {
+                "cpu_percent": cpu_percent,
+                "memory_percent": memory.percent,
+                "disk_percent": disk.percent,
+                "memory_available_gb": memory.available / (1024**3)
+            },
+            "services": {
+                "vectorstore": vectorstore_healthy,
+                "ollama": ollama_healthy,
+                "redis": redis_healthy
+            }
+        }
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
 
 @app.get("/test_vectorstore")
 def test_vectorstore():
-    """Test if vector stosre can be initialized and Ollama is working."""
+    """Test if vector store can be initialized and Ollama is working."""
     try:
         collection = VectorStore.get_vector_collection()
         if collection:
@@ -45,6 +104,15 @@ def test_vectorstore():
             return {"status": "error", "message": "Failed to initialize vector store"}
     except Exception as e:
         return {"status": "error", "message": f"Vector store error: {str(e)}"}
+
+@app.get("/api/domains")
+def get_domains():
+    """Get available domains in the knowledge base."""
+    try:
+        domains = VectorStore.get_domains()
+        return {"domains": domains}
+    except Exception as e:
+        return {"domains": [], "error": str(e)}
 
 @app.post("/upload")
 async def upload_document(
@@ -98,6 +166,7 @@ async def query_rag(
     n_results: int = Form(3),
     expand: int = Form(2),
     filename: str = Form(None),
+    domain_filter: str = Form(None),
     conversation_history: str = Form("[]")
 ):
     try:
@@ -110,41 +179,59 @@ async def query_rag(
             return {
                 "answer": "There is nothing in the knowledge base right now. Please upload a document before continuing.",
                 "context": "",
-                "status": "empty_kb"
+                "status": "empty_kb",
+                "sources": []
             }
-        # Always search all documents for context
+        
+        # Enhanced query with domain filtering and source attribution
         results = VectorStore.query_with_expanded_context(
             question,
             n_results=n_results,
             expand=expand,
-            filename=None  # Always search all documents
+            filename=filename,
+            domain_filter=domain_filter
         )
-        # Group context by document
+        
+        # Group context by document with source attribution
         context_by_doc = {}
         docs = results.get('documents', [[]])[0]
         metas = results.get('metadatas', [[]])[0]
-        for chunk, meta in zip(docs, metas):
+        sources = results.get('sources', [])
+        
+        for chunk, meta, source in zip(docs, metas, sources):
             fname = meta.get('filename', 'unknown')
-            context_by_doc.setdefault(fname, []).append(chunk)
-        # Build a prompt that shows context grouped by document
+            context_by_doc.setdefault(fname, []).append({
+                'content': chunk,
+                'source': source
+            })
+        
+        # Build a prompt that shows context grouped by document with sources
         context_str = ''
         for fname, chunks in context_by_doc.items():
-            context_str += f'Context from {fname}:\n' + '\n'.join(chunks) + '\n\n'
+            context_str += f'Context from {fname}:\n'
+            for chunk_info in chunks:
+                context_str += f'[{chunk_info["source"]["attribution"]}]\n{chunk_info["content"]}\n\n'
+        
         if not context_str.strip():
             return {
                 "answer": "[No relevant context found for your query. Please try rephrasing or uploading more documents.]",
                 "context": "",
-                "status": "no_context"
+                "status": "no_context",
+                "sources": []
             }
+        
         answer = LLMHandler.call_llm(
             question,
             context_str,
             conversation_history=history_list
         )
+        
         return {
             "answer": answer,
             "context": context_str,
-            "status": "success"
+            "status": "success",
+            "sources": sources,
+            "query_classification": results.get('query_classification', {})
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Query failed: {str(e)}")
@@ -155,6 +242,7 @@ async def query_rag_stream(
     n_results: int = Form(3),
     expand: int = Form(2),
     filename: str = Form(None),
+    domain_filter: str = Form(None),
     conversation_history: str = Form("[]"),
     file: UploadFile = File(None)
 ):
@@ -169,27 +257,40 @@ async def query_rag_stream(
                 yield json.dumps({
                     "answer": "There is nothing in the knowledge base right now. Please upload a document before continuing.",
                     "context": "",
-                    "status": "empty_kb"
+                    "status": "empty_kb",
+                    "sources": []
                 })
             return StreamingResponse(empty_kb_stream(), media_type="application/json")
-        # Always search all documents for context
+        
+        # Enhanced query with domain filtering and source attribution
         results = VectorStore.query_with_expanded_context(
             question,
             n_results=n_results,
             expand=expand,
-            filename=None  # Always search all documents
+            filename=filename,
+            domain_filter=domain_filter
         )
-        # Group context by document
+        
+        # Group context by document with source attribution
         context_by_doc = {}
         docs = results.get('documents', [[]])[0]
         metas = results.get('metadatas', [[]])[0]
-        for chunk, meta in zip(docs, metas):
+        sources = results.get('sources', [])
+        
+        for chunk, meta, source in zip(docs, metas, sources):
             fname = meta.get('filename', 'unknown')
-            context_by_doc.setdefault(fname, []).append(chunk)
-        # Build a prompt that shows context grouped by document
+            context_by_doc.setdefault(fname, []).append({
+                'content': chunk,
+                'source': source
+            })
+        
+        # Build a prompt that shows context grouped by document with sources
         context_str = ''
         for fname, chunks in context_by_doc.items():
-            context_str += f'Context from {fname}:\n' + '\n'.join(chunks) + '\n\n'
+            context_str += f'Context from {fname}:\n'
+            for chunk_info in chunks:
+                context_str += f'[{chunk_info["source"]["attribution"]}]\n{chunk_info["content"]}\n\n'
+        
         # --- NEW: Handle attached file (PDF/image) ---
         temp_chunks = []
         temp_filename = None
@@ -271,6 +372,7 @@ async def query_rag_stream(
             except Exception as e:
                 logging.error(f'OCR or file processing failed: {e}')
                 return JSONResponse(status_code=500, content={'error': 'OCR or file processing failed. Please try a different file.'})
+        
         if len(context_str) > 3000:
             context_str = context_str[:3000]
         if not context_str.strip():
@@ -278,7 +380,8 @@ async def query_rag_stream(
                 yield json.dumps({
                 "answer": "[No relevant context found for your query. Please try rephrasing or uploading more documents.]",
                 "context": "",
-                "status": "no_context"
+                "status": "no_context",
+                "sources": []
                 })
             return StreamingResponse(empty_stream(), media_type="application/json")
         def word_stream():
@@ -287,14 +390,31 @@ async def query_rag_stream(
             for word in LLMHandler.call_llm(question, context_str, conversation_history=history_list):
                 got_any = True
                 answer_accum += word
-                yield json.dumps({"answer": word, "context": "", "status": "streaming"}) + "\n"
+                yield json.dumps({
+                    "answer": word, 
+                    "context": "", 
+                    "status": "streaming",
+                    "sources": sources,
+                    "query_classification": results.get('query_classification', {})
+                }) + "\n"
             if not got_any or not answer_accum.strip():
                 answer_accum = "[No answer could be generated. Please try rephrasing your question or uploading more documents.]"
-            yield json.dumps({"answer": answer_accum, "context": "", "status": "success"}) + "\n"
+            yield json.dumps({
+                "answer": answer_accum, 
+                "context": "", 
+                "status": "success",
+                "sources": sources,
+                "query_classification": results.get('query_classification', {})
+            }) + "\n"
         return StreamingResponse(word_stream(), media_type="application/json")
     except Exception as e:
         def error_stream(e=e):
-            yield json.dumps({"answer": f"[Error: {str(e)}]", "context": "", "status": "error"})
+            yield json.dumps({
+                "answer": f"[Error: {str(e)}]", 
+                "context": "", 
+                "status": "error",
+                "sources": []
+            })
         return StreamingResponse(error_stream(), media_type="application/json")
 
 # --- Chat History Endpoints ---
@@ -344,6 +464,7 @@ def get_history_file(conv_id: str):
 def reset_knowledge_base():
     VectorStore.clear_vector_collection()
     return {"status": "knowledge base reset"} 
+
 @app.get("/documents")
 def list_documents():
     docs = VectorStore.list_documents()

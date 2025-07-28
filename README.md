@@ -6,8 +6,24 @@ A robust, production-ready, fully offline RAG (Retrieval-Augmented Generation) c
 
 ## 🚀 Features
 
+### Production-Ready Enhancements
+- **Dynamic Query Routing**: Queries are automatically classified and routed to relevant documents
+  - "Section 304" → Law documents
+  - "Electronegativity of chlorine" → Chemistry documents
+  - "Prayer times" → Religious documents
+- **Hybrid Search**: Combines vector similarity with keyword matching for better results
+- **Cross-encoder Reranking**: Advanced reranking using sentence-transformers for improved accuracy
+- **Source Attribution**: Every response includes source information (document, page, section)
+- **Domain Filtering**: UI allows filtering queries by specific domains
+- **Health Monitoring**: Real-time system metrics and service status
+
 ### Core RAG Capabilities
 - **Multi-format Document Support**: Upload and query PDF, DOCX, CSV, and Excel files
+- **Dynamic Query Routing**: Automatically route queries to relevant documents based on domain classification
+- **Hybrid Search**: Combines dense vector search with sparse keyword matching for improved accuracy
+- **Cross-encoder Reranking**: Uses sentence-transformers for advanced result reranking
+- **Source Attribution**: Display sources with page numbers, sections, and document titles
+- **Domain Filtering**: Filter queries by domain (law, chemistry, physics, etc.) for targeted results
 - **Real-time Embedding Generation**: Instant vector embeddings using Ollama's nomic-embed-text model
 - **Intelligent Context Retrieval**: Advanced semantic search with context expansion
 - **Conversation Memory**: Persistent chat history with context preservation
@@ -27,9 +43,11 @@ A robust, production-ready, fully offline RAG (Retrieval-Augmented Generation) c
 ### Performance & Scalability
 - **Redis Caching**: High-performance caching for embeddings, queries, and chat history
 - **FastAPI Backend**: High-performance async API with automatic documentation
+- **Health Monitoring**: Real-time system metrics and service health checks
 - **Docker Support**: Containerized deployment with docker-compose
 - **Real-time Processing**: Streaming responses and live status updates
 - **Error Handling**: Comprehensive error boundaries and user feedback
+- **Production Ready**: Supports 100-1,000+ documents with intelligent routing
 
 ### Security & Privacy
 - **Fully Offline**: No internet required after initial setup
