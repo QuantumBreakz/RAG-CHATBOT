@@ -1,6 +1,6 @@
-# XOR RAG Chatbot – Secure, Offline, Multi-Document Q&A
+# XOR RAG Chatbot – Secure, Fully Offline, Multi-Document Q&A
 
-A robust, production-ready, fully offline RAG (Retrieval-Augmented Generation) chatbot for document Q&A, built with **React frontend**, **FastAPI backend**, **ChromaDB**, **Ollama**, and **Redis caching**. Designed for governmental and sensitive environments—no internet required after setup.
+A robust, production-ready, **completely offline** RAG (Retrieval-Augmented Generation) chatbot for document Q&A, built with **React frontend**, **FastAPI backend**, **ChromaDB**, **Ollama**, and **Redis caching**. Designed for governmental and sensitive environments—**zero internet required after initial setup**.
 
 ---
 
@@ -16,6 +16,7 @@ A robust, production-ready, fully offline RAG (Retrieval-Augmented Generation) c
 - **Source Attribution**: Every response includes source information (document, page, section)
 - **Domain Filtering**: UI allows filtering queries by specific domains
 - **Health Monitoring**: Real-time system metrics and service status
+- **Complete Offline Operation**: All AI models and services run locally with zero external dependencies
 
 ### Core RAG Capabilities
 - **Multi-format Document Support**: Upload and query PDF, DOCX, CSV, and Excel files
@@ -50,18 +51,78 @@ A robust, production-ready, fully offline RAG (Retrieval-Augmented Generation) c
 - **Production Ready**: Supports 100-1,000+ documents with intelligent routing
 
 ### Security & Privacy
-- **Fully Offline**: No internet required after initial setup
+- **Completely Offline**: Zero internet required after initial setup
 - **Local Data Storage**: All data stored locally in ChromaDB and file system
+- **Local AI Models**: All LLM, embedding, and reranking models run locally
+- **No External APIs**: No cloud services or external dependencies
 - **CORS Protection**: Secure cross-origin request handling
 - **Input Validation**: Comprehensive file and input validation
 
 ---
 
-## 🏗️ Architecture
+## 🔌 Offline Setup & Deployment
 
-<p align="center">
-  <img src="assets/architecture.png" alt="System Architecture Diagram" width="600"/>
-</p>
+### Prerequisites
+- **Docker and Docker Compose** (for containerized deployment)
+- **16-32GB RAM** (recommended for large document collections)
+- **50GB+ disk space** (for models and data)
+- **NVIDIA GPU** (optional, for faster LLM inference)
+
+### Step 1: Initial Setup (Internet Required)
+```bash
+# Clone the repository
+git clone <repository-url>
+cd RAG-CHATBOT-XOR
+
+# Create environment file
+cp .env.example .env
+```
+
+### Step 2: Download All Dependencies (Internet Required)
+```bash
+# Install Python dependencies (all local, no external APIs)
+pip install -r requirements.txt
+
+# Pre-download sentence-transformers model (recommended for full offline use)
+python -c "from sentence_transformers import CrossEncoder; CrossEncoder('cross-encoder/ms-marco-MiniLM-L-6-v2')"
+
+# Pull Ollama models (stored locally in Docker volumes)
+docker run --rm -v ollama_data:/root/.ollama ollama/ollama:latest ollama pull llama3.2:3b
+docker run --rm -v ollama_data:/root/.ollama ollama/ollama:latest ollama pull nomic-embed-text
+```
+
+### Step 3: Deploy (Fully Offline)
+```bash
+# Build and start all services
+docker-compose up --build -d
+
+# Verify deployment
+curl http://localhost:8000/health/detailed
+```
+
+### Step 4: Verify Offline Operation
+```bash
+# Disconnect from internet (optional test)
+# All features should work without any external dependencies
+
+# Test endpoints
+curl http://localhost:8000/health
+curl http://localhost:8000/api/domains
+```
+
+### ✅ Offline Operation Confirmation
+After setup, the system runs **completely offline** with:
+- ✅ **Local LLM**: LLaMA 3.2:3B via Ollama
+- ✅ **Local Embeddings**: nomic-embed-text via Ollama  
+- ✅ **Local Reranking**: sentence-transformers cross-encoder
+- ✅ **Local Vector DB**: ChromaDB with persistent storage
+- ✅ **Local Caching**: Redis with persistent storage
+- ✅ **No External APIs**: Zero cloud dependencies
+- ✅ **No Internet Required**: All models and services local
+
+---
+
+## 🏗️ Architecture
 
 **Figure:** Modern architecture with React frontend, FastAPI backend, Redis caching, ChromaDB vector store, and Ollama LLM.
 
@@ -100,6 +161,8 @@ A robust, production-ready, fully offline RAG (Retrieval-Augmented Generation) c
 ├── frontend/                 # React TypeScript frontend
 │   ├── src/
 │   │   ├── components/       # Reusable UI components
+│   │   │   ├── SourceDisplay.tsx  # Source attribution UI
+│   │   │   └── DomainFilter.tsx   # Domain filtering UI
 │   │   ├── pages/           # Page components
 │   │   ├── contexts/        # React contexts
 │   │   └── main.tsx         # App entry point
@@ -107,15 +170,21 @@ A robust, production-ready, fully offline RAG (Retrieval-Augmented Generation) c
 │   ├── vite.config.ts       # Vite configuration
 │   └── Dockerfile           # Frontend container
 ├── backend/                 # FastAPI backend
-│   └── api.py              # Main API endpoints
+│   └── api.py              # Main API endpoints with health monitoring
 ├── rag_core/               # Core RAG logic
-│   ├── vectorstore.py      # ChromaDB operations
-│   ├── document.py         # Document processing
+│   ├── vectorstore.py      # ChromaDB operations with hybrid search
+│   ├── document.py         # Document processing with semantic chunking
 │   ├── llm.py             # LLM integration
+│   ├── reranker.py         # Cross-encoder reranking
+│   ├── utils.py            # Query/document classification
 │   ├── redis_cache.py     # Redis caching
 │   ├── history.py         # Chat history management
 │   └── config.py          # Configuration management
 ├── demo-rag-chroma/        # ChromaDB persistent storage
+├── log/                    # Application logs and chat history
+├── requirements.txt         # Python dependencies (all local)
+├── docker-compose.yml      # Complete offline deployment
+└── .env                    # Environment configuration
 ├── log/                    # Chat history and logs
 ├── assets/                 # Branding and architecture images
 ├── docker-compose.yml      # Multi-service deployment

@@ -156,8 +156,10 @@ This document summarizes all the production-ready enhancements made to the XOR R
 - **Cache Hit Rate**: >80% for repeated queries
 
 ### Security & Privacy
-- **Fully Offline**: No external API calls
-- **Local Storage**: All data stored locally
+- **Completely Offline**: Zero external API calls or internet dependencies
+- **Local Storage**: All data stored locally in ChromaDB and file system
+- **Local AI Models**: All LLM, embedding, and reranking models run locally
+- **No External APIs**: Zero cloud services or external dependencies
 - **Input Validation**: Comprehensive sanitization
 - **Error Boundaries**: Graceful error handling
 
@@ -247,24 +249,31 @@ Response: "Chlorine has an electronegativity of 3.16..."
 # 1. Setup environment
 cp .env.example .env
 
-# 2. Pull models
+# 2. Install dependencies (Internet required)
+pip install -r requirements.txt
+python -c "from sentence_transformers import CrossEncoder; CrossEncoder('cross-encoder/ms-marco-MiniLM-L-6-v2')"
+
+# 3. Pull models (Internet required)
 docker run --rm -v ollama_data:/root/.ollama ollama/ollama:latest ollama pull llama3.2:3b
 docker run --rm -v ollama_data:/root/.ollama ollama/ollama:latest ollama pull nomic-embed-text
 
-# 3. Deploy
+# 4. Deploy (Fully offline)
 docker-compose up --build -d
 
-# 4. Verify
+# 5. Verify offline operation
 curl http://localhost:8000/health/detailed
 ```
 
 ### Production Checklist
 - [ ] Environment variables configured
-- [ ] Models downloaded
+- [ ] Python dependencies installed (`pip install -r requirements.txt`)
+- [ ] Sentence-transformers model pre-downloaded
+- [ ] Ollama models pulled (llama3.2:3b, nomic-embed-text)
 - [ ] Health monitoring enabled
 - [ ] Backup strategy implemented
 - [ ] Performance testing completed
 - [ ] Security measures in place
+- [ ] Offline operation verified (disconnect internet and test)
 
 ## 📚 Documentation
 

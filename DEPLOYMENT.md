@@ -1,18 +1,19 @@
 # XOR RAG Chatbot - Production Deployment Guide
 
-This guide covers deploying the enhanced XOR RAG Chatbot with production-ready features including dynamic query routing, hybrid search, source attribution, and domain filtering.
+This guide covers deploying the enhanced XOR RAG Chatbot with production-ready features including dynamic query routing, hybrid search, source attribution, and domain filtering. **The system runs completely offline after initial setup.**
 
 ## 🚀 Quick Start
 
 ### Prerequisites
-- Docker and Docker Compose
-- 16-32GB RAM (recommended for large document collections)
-- 50GB+ disk space
-- NVIDIA GPU (optional, for faster LLM inference)
+- **Docker and Docker Compose** (for containerized deployment)
+- **16-32GB RAM** (recommended for large document collections)
+- **50GB+ disk space** (for models and data)
+- **NVIDIA GPU** (optional, for faster LLM inference)
+- **Internet connection** (only for initial setup and model downloads)
 
 ### 1. Clone and Setup
 ```bash
-git clone <repository-url>
+git clone <https://github.com/QuantumBreakz/RAG-CHATBOTl>
 cd RAG-CHATBOT-XOR
 ```
 
@@ -47,16 +48,20 @@ EMBEDDINGS_CACHE_PATH=log/global_embeddings
 FRONTEND_ORIGIN=http://localhost:3000
 ```
 
-### 3. Pull Required Models
+### 3. Download All Dependencies (Internet Required)
 ```bash
-# Pull LLM model
-docker run --rm -v ollama_data:/root/.ollama ollama/ollama:latest ollama pull llama3.2:3b
+# Install Python dependencies (all local, no external APIs)
+pip install -r requirements.txt
 
-# Pull embedding model
+# Pre-download sentence-transformers model (recommended for full offline use)
+python -c "from sentence_transformers import CrossEncoder; CrossEncoder('cross-encoder/ms-marco-MiniLM-L-6-v2')"
+
+# Pull Ollama models (stored locally in Docker volumes)
+docker run --rm -v ollama_data:/root/.ollama ollama/ollama:latest ollama pull llama3.2:3b
 docker run --rm -v ollama_data:/root/.ollama ollama/ollama:latest ollama pull nomic-embed-text
 ```
 
-### 4. Deploy with Docker Compose
+### 4. Deploy (Fully Offline)
 ```bash
 # Build and start all services
 docker-compose up --build -d
@@ -68,11 +73,34 @@ docker-compose ps
 docker-compose logs -f
 ```
 
-### 5. Verify Deployment
+### 5. Verify Offline Operation
+```bash
+# Test that all services work without internet
+curl http://localhost:8000/health/detailed
+
+# Verify all components are local
+# - LLM: LLaMA 3.2:3B via Ollama (local)
+# - Embeddings: nomic-embed-text via Ollama (local)
+# - Reranking: sentence-transformers cross-encoder (local)
+# - Vector DB: ChromaDB (local)
+# - Cache: Redis (local)
+```
+
+### 6. Verify Deployment
 - Frontend: http://localhost:3000
 - Backend API: http://localhost:8000
 - Health Check: http://localhost:8000/health/detailed
 - ChromaDB: http://localhost:8001
+
+### ✅ Offline Operation Confirmation
+After setup, the system runs **completely offline** with:
+- ✅ **Local LLM**: LLaMA 3.2:3B via Ollama
+- ✅ **Local Embeddings**: nomic-embed-text via Ollama  
+- ✅ **Local Reranking**: sentence-transformers cross-encoder
+- ✅ **Local Vector DB**: ChromaDB with persistent storage
+- ✅ **Local Caching**: Redis with persistent storage
+- ✅ **No External APIs**: Zero cloud dependencies
+- ✅ **No Internet Required**: All models and services local
 
 ## 📊 Production Features
 
