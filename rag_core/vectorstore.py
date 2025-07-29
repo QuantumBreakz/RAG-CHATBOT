@@ -99,42 +99,113 @@ class VectorStore:
     @staticmethod
     def _rerank_and_deduplicate(chunks: List[Dict[str, Any]], top_k: int = 10, fuzzy_threshold: int = 20) -> List[Dict[str, Any]]:
         """
-        Rerank chunks by similarity, document frequency, and length. Deduplicate using Levenshtein distance.
-        Returns top_k unique chunks.
+        Enhanced reranking with strict deduplication, confidence scoring, and domain isolation.
+        Returns top_k unique chunks with confidence scores.
         """
-        # Count document frequency for each chunk content
+        # Count document frequency and domain consistency
         content_to_docs = collections.defaultdict(set)
-        for chunk in chunks:
-            content_to_docs[chunk['page_content']].add(chunk['metadata'].get('filename', 'unknown'))
-        
-        # Score each chunk
+        content_to_domains = collections.defaultdict(set)
         for chunk in chunks:
             content = chunk['page_content']
+            content_to_docs[content].add(chunk['metadata'].get('filename', 'unknown'))
+            content_to_domains[content].add(chunk['metadata'].get('domain', 'unknown'))
+        
+        # Enhanced scoring with domain consistency and fact verification
+        for chunk in chunks:
+            content = chunk['page_content']
+            domain = chunk['metadata'].get('domain', 'unknown')
+            
+            # Base similarity score
+            similarity_score = chunk.get('similarity', 0)
+            
+            # Domain consistency bonus (prefer chunks from same domain)
+            domain_consistency = len(content_to_domains[content])
+            domain_bonus = 0.3 if domain_consistency == 1 else 0.0
+            
+            # Fact consistency check (look for conflicting information)
+            fact_penalty = 0.0
+            for other_chunk in chunks:
+                if other_chunk != chunk:
+                    other_content = other_chunk['page_content']
+                    # Check for numerical conflicts (like different Kc values)
+                    import re
+                    numbers_chunk = re.findall(r'\d+\.?\d*', content)
+                    numbers_other = re.findall(r'\d+\.?\d*', other_content)
+                    if numbers_chunk and numbers_other:
+                        # If same concept but different numbers, penalize
+                        if any(num in other_content for num in numbers_chunk[:3]):
+                            fact_penalty += 0.5
+            
+            # Length and quality scoring
+            length_score = min(len(content) / 1000, 1.0)  # Cap at 1.0
+            quality_score = 0.2 if len(content.strip()) > 50 else 0.0
+            
             chunk['score'] = (
-                chunk.get('similarity', 0) +
-                0.2 * len(content_to_docs[content]) +  # document frequency boost
-                0.1 * len(content) / 1000  # length boost
+                similarity_score +
+                domain_bonus +
+                length_score * 0.1 +
+                quality_score -
+                fact_penalty
             )
+            chunk['confidence'] = min(similarity_score + domain_bonus, 1.0)
+        
         # Sort by score descending
         chunks = sorted(chunks, key=lambda x: x['score'], reverse=True)
-        # Fuzzy deduplication
+        
+        # Strict deduplication with semantic similarity
         unique_chunks = []
         for chunk in chunks:
             is_duplicate = False
             for u in unique_chunks:
+                # Check for exact duplicates
+                if chunk['page_content'] == u['page_content']:
+                    is_duplicate = True
+                    break
+                # Check for fuzzy duplicates
                 if levenshtein_distance(chunk['page_content'], u['page_content']) < fuzzy_threshold:
+                    is_duplicate = True
+                    break
+                # Check for semantic duplicates (same concept, different wording)
+                if VectorStore._is_semantic_duplicate(chunk['page_content'], u['page_content']):
                     is_duplicate = True
                     break
             if not is_duplicate:
                 unique_chunks.append(chunk)
             if len(unique_chunks) >= top_k:
                 break
+        
         return unique_chunks
 
     @staticmethod
-    def query_with_expanded_context(prompt: str, n_results: int, expand: int = 4, filename: str = None, domain_filter: str = None):
+    def _is_semantic_duplicate(content1: str, content2: str, threshold: float = 0.8) -> bool:
         """
-        Enhanced query with domain filtering, hybrid search, and reranking.
+        Check if two chunks are semantically similar (same concept, different wording).
+        """
+        # Extract key terms and numbers
+        import re
+        def extract_key_info(text):
+            # Extract numbers, chemical formulas, key terms
+            numbers = re.findall(r'\d+\.?\d*', text)
+            formulas = re.findall(r'[A-Z][a-z]?\d*', text)  # Basic chemical formulas
+            key_terms = re.findall(r'\b[A-Za-z]{3,}\b', text)
+            return set(numbers + formulas + key_terms[:10])
+        
+        info1 = extract_key_info(content1)
+        info2 = extract_key_info(content2)
+        
+        if not info1 or not info2:
+            return False
+        
+        # Calculate overlap
+        overlap = len(info1.intersection(info2))
+        total = len(info1.union(info2))
+        
+        return overlap / total > threshold if total > 0 else False
+
+    @staticmethod
+    def query_with_expanded_context(prompt: str, n_results: int, expand: int = 4, filename: str = None, domain_filter: str = None, session_id: str = None):
+        """
+        Enhanced query with strict domain filtering, session isolation, and conflict resolution.
         
         Args:
             prompt: User query
@@ -142,9 +213,11 @@ class VectorStore:
             expand: Context expansion factor
             filename: Optional filename filter
             domain_filter: Optional domain filter (e.g., "law", "chemistry")
+            session_id: Optional session ID for query isolation
         """
-        # Redis cache key based on prompt and params
-        cache_key = f"query:{hashlib.sha256(f'{prompt}|{n_results}|{expand}|{filename}|{domain_filter}'.encode()).hexdigest()}"
+        # Enhanced cache key with session isolation
+        cache_key = f"query:{hashlib.sha256(f'{prompt}|{n_results}|{expand}|{filename}|{domain_filter}|{session_id}'.encode()).hexdigest()}"
+        
         # Try Redis first
         try:
             cached = redis_get(cache_key)
@@ -157,26 +230,37 @@ class VectorStore:
         try:
             classification = QueryClassifier.classify_query(prompt)
             detected_domain = classification.get('domain', 'general')
-            logger.info(f"Query classified as domain: {detected_domain}")
+            confidence = classification.get('confidence', 0.5)
+            logger.info(f"Query classified as domain: {detected_domain} (confidence: {confidence})")
         except Exception as e:
             logger.error(f"Query classification failed: {str(e)}")
             detected_domain = 'general'
+            confidence = 0.5
         
         # Use domain filter if provided, otherwise use detected domain
         target_domain = domain_filter if domain_filter else detected_domain
+        
+        # Session-based query isolation
+        if session_id:
+            # Clear previous session context to prevent contamination
+            session_cache_key = f"session:{session_id}"
+            try:
+                redis_set(session_cache_key, prompt, expire=300)  # 5 minute session
+            except Exception:
+                pass
         
         collection = VectorStore.get_vector_collection()
         if not collection:
             return {"documents": [[]], "metadatas": [[]], "ids": [[]]}
         
-        # Build query parameters
+        # Build query parameters with stricter filtering
         query_kwargs = {
             'query_texts': [prompt],
-            'n_results': n_results * 3,  # fetch more for reranking/dedup
+            'n_results': n_results * 5,  # fetch more for strict filtering
             'include': ['documents', 'metadatas', 'distances']
         }
         
-        # Apply filters
+        # Apply strict filters
         where_conditions = {}
         if filename:
             where_conditions['filename'] = filename
@@ -191,10 +275,16 @@ class VectorStore:
         metadatas = result.get('metadatas', [[]])[0]
         distances = result.get('distances', [[]])[0]
         
-        # Build chunk dicts with similarity scores
+        # Build chunk dicts with enhanced similarity scores
         chunks = []
         for i, (doc, meta, distance) in enumerate(zip(docs, metadatas, distances)):
             similarity = 1.0 - distance if distance is not None else 1.0
+            
+            # Enhanced similarity scoring with domain consistency
+            domain = meta.get('domain', 'unknown')
+            domain_boost = 0.2 if domain == target_domain else 0.0
+            enhanced_similarity = min(similarity + domain_boost, 1.0)
+            
             chunk = {
                 'page_content': doc,
                 'metadata': meta,

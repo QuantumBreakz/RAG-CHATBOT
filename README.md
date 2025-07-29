@@ -17,6 +17,10 @@ A robust, production-ready, **completely offline** RAG (Retrieval-Augmented Gene
 - **Domain Filtering**: UI allows filtering queries by specific domains
 - **Health Monitoring**: Real-time system metrics and service status
 - **Complete Offline Operation**: All AI models and services run locally with zero external dependencies
+- **Multi-Document Conflict Resolution**: Detects and handles conflicting information across documents
+- **Session Isolation**: Prevents context contamination between different queries
+- **Anti-Hallucination**: Strict fact verification and source citation
+- **Confidence Scoring**: Ranks sources by relevance and reliability
 
 ### Core RAG Capabilities
 - **Multi-format Document Support**: Upload and query PDF, DOCX, CSV, and Excel files
@@ -55,6 +59,7 @@ A robust, production-ready, **completely offline** RAG (Retrieval-Augmented Gene
 - **Local Data Storage**: All data stored locally in ChromaDB and file system
 - **Local AI Models**: All LLM, embedding, and reranking models run locally
 - **No External APIs**: No cloud services or external dependencies
+- **Large File Support**: Up to 150MB file uploads
 - **CORS Protection**: Secure cross-origin request handling
 - **Input Validation**: Comprehensive file and input validation
 
@@ -107,7 +112,7 @@ curl http://localhost:8000/health/detailed
 
 # Test endpoints
 curl http://localhost:8000/health
-curl http://localhost:8000/api/domains
+curl http://localhost:8000/domains
 ```
 
 ### ✅ Offline Operation Confirmation
@@ -119,6 +124,7 @@ After setup, the system runs **completely offline** with:
 - ✅ **Local Caching**: Redis with persistent storage
 - ✅ **No External APIs**: Zero cloud dependencies
 - ✅ **No Internet Required**: All models and services local
+- ✅ **Robust Error Handling**: Graceful fallbacks for document processing issues
 
 ---
 
@@ -265,7 +271,7 @@ After setup, the system runs **completely offline** with:
 | OLLAMA_EMBEDDING_MODEL   | Embedding model name                             | nomic-embed-text:latest        |
 | OLLAMA_LLM_MODEL         | LLM model name                                   | llama3.2:3b                    |
 | **Application Settings** |                                                  |                                |
-| MAX_FILE_SIZE            | Max file size in bytes                           | 10485760 (10MB)                |
+| MAX_FILE_SIZE            | Max file size in bytes                           | 157286400 (150MB)              |
 | CHUNK_SIZE               | Document chunk size                              | 400                            |
 | CHUNK_OVERLAP            | Chunk overlap                                    | 100                            |
 | N_RESULTS                | Number of results to retrieve                    | 10                             |

@@ -160,6 +160,7 @@ This document summarizes all the production-ready enhancements made to the XOR R
 - **Local Storage**: All data stored locally in ChromaDB and file system
 - **Local AI Models**: All LLM, embedding, and reranking models run locally
 - **No External APIs**: Zero cloud services or external dependencies
+- **Large File Support**: Up to 150MB file uploads
 - **Input Validation**: Comprehensive sanitization
 - **Error Boundaries**: Graceful error handling
 

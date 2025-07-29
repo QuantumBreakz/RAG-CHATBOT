@@ -22,18 +22,24 @@ class DocumentProcessor:
     def process_document(uploaded_file, file_bytes=None, chunk_size=DEFAULT_CHUNK_SIZE, chunk_overlap=DEFAULT_CHUNK_OVERLAP):
         """Process an uploaded file and return split document chunks with enhanced metadata. Raises exceptions for errors. Supports OCR for scanned PDFs."""
         # Check file size
+        if not hasattr(uploaded_file, 'size'):
+            raise ValueError("Uploaded file object must have a .size attribute.")
+        
         if uploaded_file.size > MAX_FILE_SIZE:
-            logger.warning(f"File {uploaded_file.name} exceeds size limit")
+            file_name = getattr(uploaded_file, 'filename', None) or getattr(uploaded_file, 'name', 'unknown')
+            logger.warning(f"File {file_name} exceeds size limit")
             raise ValueError(f"File size exceeds limit of {MAX_FILE_SIZE / (1024 * 1024)} MB")
         
         # Use provided file_bytes or read from uploaded_file
         if file_bytes is None:
+            if not hasattr(uploaded_file, 'read'):
+                raise ValueError("Uploaded file object must have a .read() method.")
             file_bytes = uploaded_file.read()
         
         # Determine file type (handle both .name and .filename for compatibility)
-        file_basename = getattr(uploaded_file, 'name', None) or getattr(uploaded_file, 'filename', None)
+        file_basename = getattr(uploaded_file, 'filename', None) or getattr(uploaded_file, 'name', None)
         if not file_basename:
-            raise ValueError("Uploaded file object must have a .name or .filename attribute.")
+            raise ValueError("Uploaded file object must have a .filename or .name attribute.")
         suffix = os.path.splitext(file_basename)[1].lower()
 
         if suffix == ".pdf":
@@ -84,24 +90,46 @@ class DocumentProcessor:
             return docs
         else:
             # Enhanced chunking with semantic boundaries
-            splits = DocumentProcessor._semantic_chunking(docs, chunk_size, chunk_overlap)
+            try:
+                splits = DocumentProcessor._semantic_chunking(docs, chunk_size, chunk_overlap)
+            except Exception as e:
+                logger.warning(f"Semantic chunking failed for {file_basename}, falling back to standard chunking: {str(e)}")
+                # Fallback to standard chunking
+                text_splitter = RecursiveCharacterTextSplitter(
+                    chunk_size=chunk_size,
+                    chunk_overlap=chunk_overlap,
+                    length_function=len,
+                    separators=["\n\n", "\n", " ", ""]
+                )
+                splits = text_splitter.split_documents(docs)
             
             # Failsafe: if no chunks or only empty chunks, try OCR fallback
             if (not splits) or all(not getattr(s, 'page_content', '').strip() for s in splits):
                 logger.warning(f"Initial chunking failed for {file_basename}, attempting OCR fallback.")
                 if suffix == ".pdf":
-                    text = extract_text_from_pdf(temp_file.name)
-                    docs = [Document(page_content=text, metadata={"filename": file_basename})]
-                    splits = DocumentProcessor._semantic_chunking(docs, chunk_size, chunk_overlap)
-                    logger.info(f"OCR fallback produced {len(splits)} chunks for {file_basename}")
+                    # Create a new temporary file for OCR fallback
+                    temp_file_ocr = tempfile.NamedTemporaryFile("wb", suffix=suffix, delete=False)
+                    temp_file_ocr.write(file_bytes)
+                    temp_file_ocr.close()
+                    try:
+                        text = extract_text_from_pdf(temp_file_ocr.name)
+                        docs = [Document(page_content=text, metadata={"filename": file_basename})]
+                        splits = DocumentProcessor._semantic_chunking(docs, chunk_size, chunk_overlap)
+                        logger.info(f"OCR fallback produced {len(splits)} chunks for {file_basename}")
+                    finally:
+                        os.unlink(temp_file_ocr.name)
             
-            # Enhanced metadata extraction
+                    # Enhanced metadata extraction
+        try:
             DocumentProcessor._enhance_metadata(splits, file_basename)
-            
-            logger.info(f"Processed {len(splits)} chunks from {file_basename}")
-            for i, split in enumerate(splits[:3]):
-                logger.info(f"Chunk {i} metadata: {split.metadata}")
-            return splits
+        except Exception as e:
+            logger.warning(f"Metadata enhancement failed for {file_basename}: {str(e)}")
+            # Continue without enhanced metadata
+        
+        logger.info(f"Processed {len(splits)} chunks from {file_basename}")
+        for i, split in enumerate(splits[:3]):
+            logger.info(f"Chunk {i} metadata: {split.metadata}")
+        return splits
     
     @staticmethod
     def _semantic_chunking(docs: List[Document], chunk_size: int, chunk_overlap: int) -> List[Document]:

@@ -83,7 +83,7 @@ Create a `.env` file in the root directory:
 
 ```env
 VITE_API_URL=http://localhost:8000
-VITE_MAX_FILE_SIZE=10485760
+VITE_MAX_FILE_SIZE=157286400
 VITE_SUPPORTED_FORMATS=pdf,docx,txt
 VITE_CHUNK_SIZE=1000
 VITE_CHUNK_OVERLAP=200

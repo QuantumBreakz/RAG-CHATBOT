@@ -43,10 +43,16 @@ class LLMHandler:
                     "role": role,
                     "content": content
                 })
-            # Append the current user prompt as the last message
+            # Enhanced prompt with strict fact verification and anti-hallucination measures
+            enhanced_prompt = f"""Context: {context}
+
+Question: {prompt}
+
+Instructions: Answer the question using ONLY the information from the provided context. Present the information clearly and concisely. Always cite your sources. Provide only the direct answer without any meta-commentary, verification text, or statements about what is not in the context. Do not repeat the question or add explanatory notes about the context."""
+            
             messages.append({
                 "role": "user",
-                "content": f"Context: {context}\nQuestion: {prompt}"
+                "content": enhanced_prompt
             })
             # Debug: print prompt and context
             print("[LLM CALL] Prompt:", prompt)

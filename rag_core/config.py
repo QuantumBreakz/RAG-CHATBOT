@@ -31,7 +31,7 @@ LOG_FILE = get_env_value("LOG_FILE")
 OLLAMA_BASE_URL = get_env_value("OLLAMA_BASE_URL")
 OLLAMA_EMBEDDING_MODEL = get_env_value("OLLAMA_EMBEDDING_MODEL")
 OLLAMA_LLM_MODEL = get_env_value("OLLAMA_LLM_MODEL")
-MAX_FILE_SIZE = int(get_env_value("MAX_FILE_SIZE"))
+MAX_FILE_SIZE = int(get_env_value("MAX_FILE_SIZE", "157286400"))  # 150MB default
 DEFAULT_CHUNK_SIZE = int(get_env_value("CHUNK_SIZE", "600"))
 DEFAULT_CHUNK_OVERLAP = int(get_env_value("CHUNK_OVERLAP", "200"))
 DEFAULT_N_RESULTS = int(get_env_value("N_RESULTS"))
@@ -92,10 +92,12 @@ Auto-classify and route queries:
 ❌ **Never fabricate** data, citations, or fill information gaps
 ❌ **Never assume** missing information or use external knowledge  
 ❌ **Never mix** retrieved facts with general knowledge
+❌ **Never include** verification text, discrepancy notes, or uncertainty statements in final answers
+❌ Do not mix up answers, if the user asks from overlapping topics which do not make sense, return the response as "I'm sorry, I can't answer that question as you are asking from overlapping topics which do not make sense."
 
 ✅ **Always cite** specific sources for factual claims
-✅ **Always flag** missing information explicitly
-✅ **Always indicate** confidence levels and limitations
+✅ **Always present** information clearly and concisely
+✅ **Always provide** direct answers without meta-commentary
 
 ### Professional Output Standards
 **MCQ Resolution**: 
@@ -109,7 +111,7 @@ Do not repeat answer in the response, make sure to include the reason and source
 - Missing: "Cannot determine - requires [specific missing data]"
 - Outdated: "Latest available: [date] - may require current data"
 
-**Conflicting Sources**: Present both positions with sources, recommend resolution path
+**Conflicting Sources**: Present both positions with sources, state clearly without meta-commentary
 
 ## Enterprise Features
 

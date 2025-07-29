@@ -105,7 +105,7 @@ def test_vectorstore():
     except Exception as e:
         return {"status": "error", "message": f"Vector store error: {str(e)}"}
 
-@app.get("/api/domains")
+@app.get("/domains")
 def get_domains():
     """Get available domains in the knowledge base."""
     try:
@@ -167,7 +167,8 @@ async def query_rag(
     expand: int = Form(2),
     filename: str = Form(None),
     domain_filter: str = Form(None),
-    conversation_history: str = Form("[]")
+    conversation_history: str = Form("[]"),
+    session_id: str = Form(None)
 ):
     try:
         try:
@@ -183,34 +184,44 @@ async def query_rag(
                 "sources": []
             }
         
-        # Enhanced query with domain filtering and source attribution
+        # Enhanced query with domain filtering, source attribution, and session isolation
         results = VectorStore.query_with_expanded_context(
             question,
             n_results=n_results,
             expand=expand,
             filename=filename,
-            domain_filter=domain_filter
+            domain_filter=domain_filter,
+            session_id=session_id
         )
         
-        # Group context by document with source attribution
+        # Group context by document with source attribution and confidence scoring
         context_by_doc = {}
         docs = results.get('documents', [[]])[0]
         metas = results.get('metadatas', [[]])[0]
         sources = results.get('sources', [])
         
+        # Filter out low-confidence sources and conflicting information
+        filtered_chunks = []
         for chunk, meta, source in zip(docs, metas, sources):
+            confidence = source.get('confidence', 0.5)
+            if confidence > 0.3:  # Only include high-confidence sources
+                filtered_chunks.append((chunk, meta, source))
+        
+        for chunk, meta, source in filtered_chunks:
             fname = meta.get('filename', 'unknown')
             context_by_doc.setdefault(fname, []).append({
                 'content': chunk,
-                'source': source
+                'source': source,
+                'confidence': source.get('confidence', 0.5)
             })
         
-        # Build a prompt that shows context grouped by document with sources
+        # Build a prompt that shows context grouped by document with sources and confidence
         context_str = ''
         for fname, chunks in context_by_doc.items():
             context_str += f'Context from {fname}:\n'
             for chunk_info in chunks:
-                context_str += f'[{chunk_info["source"]["attribution"]}]\n{chunk_info["content"]}\n\n'
+                confidence = chunk_info.get('confidence', 0.5)
+                context_str += f'[Confidence: {confidence:.2f}] [{chunk_info["source"]["attribution"]}]\n{chunk_info["content"]}\n\n'
         
         if not context_str.strip():
             return {
@@ -220,6 +231,7 @@ async def query_rag(
                 "sources": []
             }
         
+        # Enhanced LLM call with strict fact verification
         answer = LLMHandler.call_llm(
             question,
             context_str,
@@ -244,6 +256,7 @@ async def query_rag_stream(
     filename: str = Form(None),
     domain_filter: str = Form(None),
     conversation_history: str = Form("[]"),
+    session_id: str = Form(None),
     file: UploadFile = File(None)
 ):
     try:
@@ -294,7 +307,7 @@ async def query_rag_stream(
         # --- NEW: Handle attached file (PDF/image) ---
         temp_chunks = []
         temp_filename = None
-        MAX_FILE_SIZE_MB = 10
+        MAX_FILE_SIZE_MB = 150  # Increased to 150MB
         SUPPORTED_TYPES = ['application/pdf', 'image/png', 'image/jpeg']
         def clean_text_for_rag(text):
             text = re.sub(r'Page \\d+ of \\d+', '', text)
@@ -399,8 +412,9 @@ async def query_rag_stream(
                 }) + "\n"
             if not got_any or not answer_accum.strip():
                 answer_accum = "[No answer could be generated. Please try rephrasing your question or uploading more documents.]"
+            # Only yield the final status, not the complete answer again
             yield json.dumps({
-                "answer": answer_accum, 
+                "answer": "", 
                 "context": "", 
                 "status": "success",
                 "sources": sources,

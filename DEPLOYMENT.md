@@ -31,7 +31,7 @@ OLLAMA_EMBEDDING_MODEL=nomic-embed-text
 OLLAMA_LLM_MODEL=llama3.2:3b
 
 # Document Processing
-MAX_FILE_SIZE=52428800
+MAX_FILE_SIZE=157286400
 CHUNK_SIZE=800
 CHUNK_OVERLAP=200
 N_RESULTS=5
@@ -90,6 +90,7 @@ curl http://localhost:8000/health/detailed
 - Frontend: http://localhost:3000
 - Backend API: http://localhost:8000
 - Health Check: http://localhost:8000/health/detailed
+- Domains API: http://localhost:8000/domains
 - ChromaDB: http://localhost:8001
 
 ### ✅ Offline Operation Confirmation
