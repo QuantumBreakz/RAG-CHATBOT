@@ -265,6 +265,9 @@ python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
 uvicorn backend.api:app --reload --host 0.0.0.0 --port 8000
+redis-server --daemonize yes
+redis-cli ping
+redis-cli set test_key "Hello Redis" && redis-cli get test_key
 ```
 
 ## 4. Frontend Setup
