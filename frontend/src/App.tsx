@@ -5,6 +5,7 @@ import { ChatProvider } from './contexts/ChatContext';
 import Header from './components/layout/Header';
 import Homepage from './pages/Homepage';
 import ChatInterface from './pages/ChatInterface';
+import ConversationManager from './pages/ConversationManager';
 import Settings from './pages/Settings';
 import About from './pages/About';
 
@@ -46,7 +47,7 @@ function App() {
       <ErrorBoundary>
     <ThemeProvider>
       <ChatProvider>
-        <Router>
+        <Router future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
           <div className="min-h-screen bg-background text-foreground transition-all duration-500">
                 {loading && (
                   <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
@@ -58,6 +59,7 @@ function App() {
               <Routes>
                 <Route path="/" element={<Homepage />} />
                 <Route path="/chat" element={<ChatInterface />} />
+                <Route path="/conversation-manager" element={<ConversationManager />} />
                 <Route path="/settings" element={<Settings />} />
                 <Route path="/about" element={<About />} />
               </Routes>

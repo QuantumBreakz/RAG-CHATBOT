@@ -25,7 +25,7 @@ const DomainFilter: React.FC<DomainFilterProps> = ({
   const fetchDomains = async () => {
     setLoading(true);
     try {
-      const response = await fetch('/domains');
+      const response = await fetch('/api/domains');
       const data = await response.json();
       if (data.domains) {
         setDomains(data.domains);

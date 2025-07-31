@@ -1,14 +1,40 @@
-import React, { useState, useRef, useEffect, useMemo } from 'react';
-import { Send, Upload, FileText, X, Settings, Trash2, Plus, Bot, User, Sparkles, Pencil, ArrowRight } from 'lucide-react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useChat } from '../contexts/ChatContext';
 import Button from '../components/ui/Button';
 import Card from '../components/ui/Card';
-import SourceDisplay from '../components/SourceDisplay';
 import DomainFilter from '../components/DomainFilter';
+import SourceDisplay from '../components/SourceDisplay';
+import ContextPreview from '../components/ContextPreview';
+import MessageActions from '../components/MessageActions';
+import AdvancedSearch from '../components/AdvancedSearch';
+import ReactMarkdown from 'react-markdown';
+import { 
+  Send, 
+  Upload, 
+  Trash2, 
+  Settings, 
+  Plus, 
+  MessageSquare, 
+  FileText, 
+  Sparkles,
+  Mic,
+  MicOff,
+  Volume2,
+  Search,
+  Filter,
+  X,
+  ChevronDown,
+  Edit,
+  RotateCcw,
+  Copy,
+  Eye,
+  EyeOff,
+  Bot,
+  User
+} from 'lucide-react';
 import { useGlobalLoading } from '../App';
 import debounce from 'lodash.debounce';
 import { v4 as uuidv4 } from 'uuid';
-import ReactMarkdown from 'react-markdown';
 
 const CHAT_STATE_KEY = 'xor_rag_chat_state';
 const CONVERSATIONS_KEY = 'xor_rag_conversations';
@@ -42,6 +68,11 @@ const ChatInterface: React.FC = () => {
   const [audioDuration, setAudioDuration] = useState<number | null>(null);
   const [selectedDomain, setSelectedDomain] = useState<string | null>(null);
   const [currentSources, setCurrentSources] = useState<any[]>([]);
+  const [supportedFileTypes, setSupportedFileTypes] = useState<{[key: string]: string}>({});
+  const [showFileTypeInfo, setShowFileTypeInfo] = useState(false);
+  const [showContextPreview, setShowContextPreview] = useState(false);
+  const [contextMetadata, setContextMetadata] = useState<any>(null);
+  const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const audioUrlRef = useRef<string | null>(null);
@@ -98,6 +129,15 @@ const ChatInterface: React.FC = () => {
     }
     setOperationState(s => ({ ...s, loadingDocuments: false }));
     setLoading(false);
+  };
+
+  const fetchSupportedFileTypes = async () => {
+    try {
+      const data = await apiCall('/api/supported-file-types');
+      setSupportedFileTypes(data.supported_types || {});
+    } catch (err) {
+      console.warn('Failed to fetch supported file types:', err);
+    }
   };
 
   const fetchConversations = async () => {
@@ -193,6 +233,8 @@ const ChatInterface: React.FC = () => {
       setStreamingStatus('streaming');
       setStreamingContent('');
       let streamed = '';
+      let contextMetadata = null;
+      let sources = [];
       // Use only the current session's messages for context, and for new conversations, context is empty
       const conversationHistory = isNewConversation ? [] : (sessionToUse?.messages.filter(m => m.role !== 'assistant' || m.content) || []);
       let response;
@@ -265,6 +307,13 @@ const ChatInterface: React.FC = () => {
                     setStreamingContent(streamed);
                     updateStreamingMessage(streamed); // Final update
                   }
+                  // Capture context metadata and sources
+                  if (data.context_metadata) {
+                    contextMetadata = data.context_metadata;
+                  }
+                  if (data.sources) {
+                    sources = data.sources;
+                  }
                   finished = true;
                   break;
                 }
@@ -294,6 +343,13 @@ const ChatInterface: React.FC = () => {
               streamed += data.answer;
               setStreamingContent(streamed);
               updateStreamingMessage(streamed);
+            }
+            // Capture context metadata and sources
+            if (data.context_metadata) {
+              contextMetadata = data.context_metadata;
+            }
+            if (data.sources) {
+              sources = data.sources;
             }
           }
           if (data.status === 'error' && data.answer) {
@@ -325,7 +381,15 @@ const ChatInterface: React.FC = () => {
         // Only append the assistant message if it's not already present as the last message
         const lastMsg = updatedMessages[updatedMessages.length - 1];
         if (!(lastMsg && lastMsg.role === 'assistant' && lastMsg.content === streamed)) {
-          updatedMessages.push({ id: uuidv4(), role: 'assistant', content: streamed, timestamp: new Date(), isStreaming: false });
+          updatedMessages.push({ 
+            id: uuidv4(), 
+            role: 'assistant', 
+            content: streamed, 
+            timestamp: new Date(), 
+            isStreaming: false,
+            sources: sources,
+            contextMetadata: contextMetadata
+          });
         }
         setCurrentSessionFromBackend({
           ...sessionToUse,
@@ -624,6 +688,19 @@ const ChatInterface: React.FC = () => {
     return () => clearInterval(interval);
   }, []);
 
+  useEffect(() => {
+    fetchDocuments();
+    fetchConversations();
+    checkVectorstore();
+    fetchSupportedFileTypes();
+  }, []);
+
+  useEffect(() => {
+    if (currentSession) {
+      setCurrentSources(currentSession.sources || []);
+    }
+  }, [currentSession]);
+
   // Always persist conversations and current session to localStorage after any change
   useEffect(() => {
     const safeSessions = sessions.map(s => ({
@@ -701,6 +778,44 @@ const ChatInterface: React.FC = () => {
     );
   };
 
+  // Message action handlers - moved before memoizedMessages
+  const handleEditMessage = (messageId: string, newContent: string) => {
+    if (currentSession) {
+      const updatedMessages = currentSession.messages.map(msg => 
+        msg.id === messageId ? { ...msg, content: newContent } : msg
+      );
+      
+      // Update the session with edited message
+      const updatedSession = { ...currentSession, messages: updatedMessages };
+      // This would typically update the backend and local storage
+      console.log('Message edited:', messageId, newContent);
+    }
+    setEditingMessageId(null);
+  };
+
+  const handleResendMessage = (messageId: string) => {
+    if (currentSession) {
+      const message = currentSession.messages.find(msg => msg.id === messageId);
+      if (message && message.role === 'user') {
+        setInputValue(message.content);
+        // Trigger send with the message content
+        handleSendMessage(new Event('submit') as any);
+      }
+    }
+  };
+
+  const handleCopyMessage = (content: string) => {
+    navigator.clipboard.writeText(content).then(() => {
+      showBanner('Message copied to clipboard', 'success');
+    }).catch(() => {
+      showBanner('Failed to copy message', 'error');
+    });
+  };
+
+  const handleContextPreviewToggle = () => {
+    setShowContextPreview(!showContextPreview);
+  };
+
   // Memoized messages
   const memoizedMessages = useMemo(() =>
     currentSession?.messages?.map((message, idx) => (
@@ -717,22 +832,46 @@ const ChatInterface: React.FC = () => {
               <Bot className="h-4 w-4 text-primary" />
             )}
           </div>
-          <Card variant={message.role === 'user' ? 'default' : 'elevated'} className={`p-4 rounded-lg shadow-sm w-full ${
+          <Card variant={message.role === 'user' ? 'default' : 'elevated'} className={`p-4 rounded-lg shadow-sm w-full group ${
             message.role === 'user' ? 'bg-primary text-white border-primary/30' : 'bg-surface-elevated'
           }`}>
-            <ReactMarkdown components={{p: ({node, ...props}) => <p className="text-sm leading-relaxed whitespace-pre-line" {...props} />}}>
-              {message.content || ''}
-            </ReactMarkdown>
-            <div className={`text-xs mt-2 ${message.role === 'user' ? 'text-white/70' : 'text-muted-foreground'}`}>
-              {message.timestamp ? new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
+            <div className="flex items-start justify-between">
+              <div className="flex-1">
+                <ReactMarkdown components={{p: ({node, ...props}) => <p className="text-sm leading-relaxed whitespace-pre-line" {...props} />}}>
+                  {message.content || ''}
+                </ReactMarkdown>
+                <div className={`text-xs mt-2 ${message.role === 'user' ? 'text-white/70' : 'text-muted-foreground'}`}>
+                  {message.timestamp ? new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
+                </div>
+                {message.role === 'assistant' && message.sources && (
+                  <SourceDisplay sources={message.sources} className="mt-3" />
+                )}
+              </div>
+              <MessageActions
+                messageId={message.id || `msg-${idx}`}
+                content={message.content || ''}
+                role={message.role}
+                onEdit={handleEditMessage}
+                onResend={handleResendMessage}
+                onCopy={handleCopyMessage}
+                isEditing={editingMessageId === (message.id || `msg-${idx}`)}
+                onCancelEdit={() => setEditingMessageId(null)}
+              />
             </div>
-            {message.role === 'assistant' && message.sources && (
-              <SourceDisplay sources={message.sources} className="mt-3" />
+            
+            {/* Context Preview for Assistant Messages */}
+            {message.role === 'assistant' && message.contextMetadata && (
+              <ContextPreview
+                contextMetadata={message.contextMetadata}
+                sources={message.sources || []}
+                isVisible={showContextPreview}
+                onToggleVisibility={handleContextPreviewToggle}
+              />
             )}
           </Card>
         </div>
       </div>
-    )) || [], [currentSession?.messages]);
+    )) || [], [currentSession?.messages, showContextPreview, editingMessageId]);
 
   // Restore handleSelectSession and handleCreateNewConversation with correct logic
   const handleSelectSession = async (convId: string) => {
@@ -921,10 +1060,55 @@ const ChatInterface: React.FC = () => {
               <FileText className="mr-2 h-4 w-4" />
               Knowledge Base
             </h3>
-            <Button onClick={() => fileInputRef.current?.click()} variant="ghost" size="sm" className="p-2">
-              <Upload className="h-4 w-4" />
-            </Button>
+            <div className="flex items-center space-x-2">
+              <Button 
+                onClick={() => setShowFileTypeInfo(!showFileTypeInfo)} 
+                variant="ghost" 
+                size="sm" 
+                className="p-1"
+                title="Supported file types"
+              >
+                <Sparkles className="h-4 w-4" />
+              </Button>
+              <Button onClick={() => fileInputRef.current?.click()} variant="ghost" size="sm" className="p-2">
+                <Upload className="h-4 w-4" />
+              </Button>
+            </div>
           </div>
+          
+          {/* Supported File Types Info */}
+          {showFileTypeInfo && (
+            <Card className="p-3 mb-3 rounded-lg shadow-sm bg-blue-50 dark:bg-blue-900/20">
+              <div className="text-xs text-muted-foreground mb-2">
+                <strong>Supported file types:</strong>
+              </div>
+              <div className="grid grid-cols-2 gap-1 text-xs">
+                {Object.entries(supportedFileTypes).map(([ext, desc]) => (
+                  <div key={ext} className="flex items-center space-x-1">
+                    <span className="text-primary font-mono">{ext}</span>
+                    <span className="text-muted-foreground">-</span>
+                    <span className="truncate">{desc}</span>
+                  </div>
+                ))}
+              </div>
+            </Card>
+          )}
+          
+          {/* Advanced Search */}
+          <div className="mb-4">
+            <AdvancedSearch
+              onSearch={(query, filters) => {
+                console.log('Search performed:', query, filters);
+                // Could integrate with chat or show results in a modal
+              }}
+              onResultSelect={(result) => {
+                console.log('Search result selected:', result);
+                // Could add the content to chat or show details
+              }}
+              placeholder="Search documents..."
+            />
+          </div>
+          
           <div className="space-y-2 max-h-40 overflow-y-auto">
             {operationState.loadingDocuments ? (
               <div className="text-xs text-muted-foreground">Loading documents...</div>
@@ -933,7 +1117,12 @@ const ChatInterface: React.FC = () => {
                 <Card key={index} className="p-3 group flex items-center justify-between rounded-lg shadow-sm">
                   <div className="flex items-center space-x-2">
                     <FileText className="h-4 w-4 text-primary flex-shrink-0" />
-                    <span className="text-xs text-foreground truncate">{doc.filename}</span>
+                    <div className="flex flex-col">
+                      <span className="text-xs text-foreground truncate">{doc.filename}</span>
+                      {doc.file_type && (
+                        <span className="text-xs text-muted-foreground capitalize">{doc.file_type}</span>
+                      )}
+                    </div>
                   </div>
                   <Button onClick={() => handleDeleteDocument(doc.filename)} variant="ghost" size="sm" 
                     className="p-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200">

@@ -1,0 +1,16 @@
+{
+  "id": "4f37a4e5-fdf4-4c4b-9715-61abe4cd4ca5",
+  "name": "Technical Support",
+  "description": "Template for technical support conversations",
+  "category": "support",
+  "system_prompt": "You are a helpful technical support assistant.",
+  "initial_messages": [
+    {
+      "role": "assistant",
+      "content": "Hello! I'm here to help with technical support. How can I assist you today?"
+    }
+  ],
+  "tags": [],
+  "created_at": "2025-07-31 16:01:53.539031",
+  "usage_count": 1
+}

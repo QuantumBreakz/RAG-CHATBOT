@@ -1,0 +1,24 @@
+{
+  "id": "4430635e-b942-4e9d-aa50-798e663ab96a",
+  "title": "Test",
+  "messages": [
+    {
+      "id": "37c58ad7-364a-4e2c-a2a7-f77ae9d9dd18",
+      "content": "what is lewis concept of acid and base?",
+      "role": "user",
+      "timestamp": "2025-07-31T10:45:30.010Z",
+      "isStreaming": false
+    },
+    {
+      "id": "ee610e21-9597-43af-b6aa-68128597dd18",
+      "content": "According to the provided document context, the Lewis concept of acids and bases states that:\n\n* An acid is a substance (molecule or ion) which can **accept** a pair of electrons.\n* A base is a substance (molecule or ion) which can **donate** a pair of electrons.\n\nIn other words, acids are electron pair acceptors, while bases are electron pair donors. This concept broadens the definition of acids and bases beyond the Arrhenius and Bronsted-Lowry concepts, which were limited to substances containing protons (H+).",
+      "role": "assistant",
+      "timestamp": "2025-07-31T10:45:30.010Z",
+      "isStreaming": false
+    }
+  ],
+  "createdAt": "2025-07-31T10:43:56.960Z",
+  "documents": [],
+  "created_at": "2025-07-31T10:43:56.960Z",
+  "uploads": []
+}

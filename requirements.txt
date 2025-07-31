@@ -7,6 +7,7 @@ anyio==4.9.0
 attrs==25.3.0
 backoff==2.2.1
 bcrypt==4.3.0
+beautifulsoup4==4.12.3
 blinker==1.9.0
 build==1.2.2.post1
 cachetools==5.5.2

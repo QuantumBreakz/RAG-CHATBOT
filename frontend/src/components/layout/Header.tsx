@@ -10,6 +10,7 @@ const Header: React.FC = () => {
   const navItems = [
     { path: '/', label: 'Home' },
     { path: '/chat', label: 'Chat' },
+    { path: '/conversation-manager', label: 'Conversation Manager' },
     { path: '/settings', label: 'Settings' },
     { path: '/about', label: 'About' }
   ];
