@@ -88,16 +88,30 @@
     },
     {
       "id": "d49e28b7-2e0d-486d-aa65-e96343b8d6eb",
-      "role": "user",
       "content": "what is an adjective phrase?",
+      "role": "user",
       "timestamp": "2025-07-29T08:45:00.439Z",
       "isStreaming": false
     },
     {
       "id": "e9f0c0b4-5588-49ac-838e-fea206010164",
-      "role": "assistant",
       "content": "[timestamp: 2025-07-29T08:48:20.012Z] An adjective phrase is a group of words that functions like an Adjective. Examples include \"(a) | The black umbrella is mine.\" and \"(6) | The umbrella with a broken handle is mine.\"",
+      "role": "assistant",
       "timestamp": "2025-07-29T08:45:00.439Z",
+      "isStreaming": false
+    },
+    {
+      "id": "28490c78-181f-4c79-a159-25a1f41f42db",
+      "role": "user",
+      "content": "what is NATURAL RADIOACTIVITY?",
+      "timestamp": "2025-07-29T09:43:46.803Z",
+      "isStreaming": false
+    },
+    {
+      "id": "a401693e-b194-4901-b2b9-8d33581a8c83",
+      "role": "assistant",
+      "content": "[timestamp: 2025-07-29T08:46:02.115Z] According to the provided context, Natural Radioactivity is defined as \"The spontaneous emission of radiation by unstable nuclei\".\n\n[timestamp: 2025-07-29T08:46:04.342Z] The definition does not specify a syntax.\n\n[timestamp: 2025-07-29T08:46:09.911Z] No information about unit 2 Chinese New Year is provided in the context.\n\n[timestamp: 2025-07-29T08:46:13.457Z] Solving the equation Vx + 3 + Vx + 6 = Vx + 11, we get 2Vx - Vx = 11 - 9, which simplifies to Vx = 2.\n\n[timestamp: 2025-07-29T08:46:17.823Z] According to the provided context, a reciprocal equation refers to an equation in which each term is inverted or reciprocated, but this definition is not explicitly stated.\n\n[timestamp: 2025-07-29T08:46:21.258Z] An adjective phrase is defined as \"a phrase that functions as an adjective\", but this definition is not explicitly provided in the context.\n\n[timestamp: 2025-07-29T08:46:24.515Z] According to the provided context, isotopes are elements with the same number of protons (atomic number) but different numbers of neutrons.\n\n[timestamp: 2025-07-29T08:46:26.742Z] The context does not provide information about radioactive elements beyond those mentioned in the passage.\n\n[timestamp: 2025-07-29T08:46:29.029Z] According to the provided context, the positively charged protons in a nucleus have huge electrical forces of repulsion between them due to the strong force, but this does not directly answer what is meant by the \"strong force\".\n\n[timestamp: 2025-07-29T08:46:31.316Z] The size of an atom and its constituents are described as follows:\nNucleus Proton Neutron Electron Atom\n10 m m m m\n10^10 <10^-18 -15 -14 -10",
+      "timestamp": "2025-07-29T09:43:46.803Z",
       "isStreaming": false
     }
   ],

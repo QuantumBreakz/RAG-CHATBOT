@@ -161,12 +161,12 @@ class VectorStore:
                 if chunk['page_content'] == u['page_content']:
                     is_duplicate = True
                     break
-                # Check for fuzzy duplicates
-                if levenshtein_distance(chunk['page_content'], u['page_content']) < fuzzy_threshold:
+                # Check for fuzzy duplicates (more strict threshold)
+                if levenshtein_distance(chunk['page_content'], u['page_content']) < 10:  # Reduced from 20
                     is_duplicate = True
                     break
                 # Check for semantic duplicates (same concept, different wording)
-                if VectorStore._is_semantic_duplicate(chunk['page_content'], u['page_content']):
+                if VectorStore._is_semantic_duplicate(chunk['page_content'], u['page_content'], threshold=0.9):  # Increased threshold
                     is_duplicate = True
                     break
             if not is_duplicate:
@@ -253,10 +253,10 @@ class VectorStore:
         if not collection:
             return {"documents": [[]], "metadatas": [[]], "ids": [[]]}
         
-        # Build query parameters with stricter filtering
+        # Build query parameters with stricter filtering - reduce multiplier to prevent too many chunks
         query_kwargs = {
             'query_texts': [prompt],
-            'n_results': n_results * 5,  # fetch more for strict filtering
+            'n_results': min(n_results * 3, 15),  # fetch fewer chunks, max 15
             'include': ['documents', 'metadatas', 'distances']
         }
         
@@ -285,16 +285,21 @@ class VectorStore:
             domain_boost = 0.2 if domain == target_domain else 0.0
             enhanced_similarity = min(similarity + domain_boost, 1.0)
             
+            # Filter out low-quality chunks
+            if enhanced_similarity < 0.3:  # Only include chunks with decent similarity
+                continue
+                
             chunk = {
                 'page_content': doc,
                 'metadata': meta,
                 'similarity': similarity,
-                'distance': distance
+                'distance': distance,
+                'confidence': enhanced_similarity
             }
             chunks.append(chunk)
         
         # Apply hybrid search if we have enough chunks
-        if len(chunks) > 5:
+        if len(chunks) > 3:
             chunks = VectorStore._apply_hybrid_search(prompt, chunks, n_results)
         
         # Apply reranking
@@ -310,7 +315,7 @@ class VectorStore:
         metas_out = [c['metadata'] for c in reranked]
         ids_out = [f"{c['metadata'].get('filename','unknown')}_{c['metadata'].get('chunk_index',0)}" for c in reranked]
         
-        # Add source attributions
+        # Add source attributions with better formatting
         sources = []
         for meta in metas_out:
             sources.append({

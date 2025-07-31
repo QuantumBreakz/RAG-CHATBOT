@@ -175,6 +175,11 @@ async def query_rag(
             history_list = json.loads(conversation_history) if conversation_history else []
         except json.JSONDecodeError:
             history_list = []
+        
+        # Limit conversation history to prevent context pollution
+        if len(history_list) > 5:  # Only keep last 5 exchanges
+            history_list = history_list[-5:]
+        
         # Check if knowledge base is empty
         if not VectorStore.list_documents():
             return {
@@ -264,6 +269,11 @@ async def query_rag_stream(
             history_list = json.loads(conversation_history) if conversation_history else []
         except json.JSONDecodeError:
             history_list = []
+        
+        # Limit conversation history to prevent context pollution
+        if len(history_list) > 5:  # Only keep last 5 exchanges
+            history_list = history_list[-5:]
+        
         # Check if knowledge base is empty
         if not VectorStore.list_documents():
             def empty_kb_stream():
@@ -290,19 +300,37 @@ async def query_rag_stream(
         metas = results.get('metadatas', [[]])[0]
         sources = results.get('sources', [])
         
+        # Filter sources by confidence and quality
+        filtered_sources = []
         for chunk, meta, source in zip(docs, metas, sources):
+            # Only include high-confidence sources
+            confidence = meta.get('confidence', 0.0)
+            if confidence < 0.3:  # Filter out low-confidence chunks
+                continue
+                
             fname = meta.get('filename', 'unknown')
             context_by_doc.setdefault(fname, []).append({
                 'content': chunk,
-                'source': source
+                'source': source,
+                'confidence': confidence
             })
+            filtered_sources.append(source)
         
         # Build a prompt that shows context grouped by document with sources
         context_str = ''
         for fname, chunks in context_by_doc.items():
             context_str += f'Context from {fname}:\n'
             for chunk_info in chunks:
-                context_str += f'[{chunk_info["source"]["attribution"]}]\n{chunk_info["content"]}\n\n'
+                # Clean up the attribution format
+                attribution = chunk_info["source"]["attribution"]
+                # Remove any timestamp-like patterns from attribution
+                attribution = re.sub(r'\[timestamp: [^\]]+\]', '', attribution)
+                attribution = re.sub(r'\s+', ' ', attribution).strip()
+                
+                context_str += f'[{attribution}]\n{chunk_info["content"]}\n\n'
+        
+        # Use filtered sources for the response
+        sources = filtered_sources
         
         # --- NEW: Handle attached file (PDF/image) ---
         temp_chunks = []

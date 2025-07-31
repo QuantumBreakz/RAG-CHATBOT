@@ -29,35 +29,38 @@ class LLMHandler:
                     role = "user"
                 else:
                     continue  # skip unknown roles
-                # Build metadata string
-                meta = []
-                if "timestamp" in msg:
-                    meta.append(f"timestamp: {msg['timestamp']}")
-                if "file" in msg:
-                    meta.append(f"file: {msg['file']}")
-                if "chunk" in msg:
-                    meta.append(f"chunk: {msg['chunk']}")
-                meta_str = " ".join(f"[{m}]" for m in meta)
-                content = f"{meta_str} {msg['content']}" if meta_str else msg['content']
-                messages.append({
-                    "role": role,
-                    "content": content
-                })
-            # Enhanced prompt with strict fact verification and anti-hallucination measures
-            enhanced_prompt = f"""Context: {context}
+                
+                # Clean content - remove timestamp pollution and metadata
+                content = msg['content']
+                # Remove timestamp patterns like [timestamp: 2025-07-29T08:46:02.115Z]
+                import re
+                content = re.sub(r'\[timestamp: [^\]]+\]', '', content)
+                content = re.sub(r'\[file: [^\]]+\]', '', content)
+                content = re.sub(r'\[chunk: [^\]]+\]', '', content)
+                # Clean up extra whitespace
+                content = re.sub(r'\s+', ' ', content).strip()
+                
+                if content:  # Only add if content is not empty after cleaning
+                    messages.append({
+                        "role": role,
+                        "content": content
+                    })
+            
+            # Use only the system prompt from config.py to avoid conflicts
+            user_prompt = f"""Context: {context}
 
-Question: {prompt}
-
-Instructions: Answer the question using ONLY the information from the provided context. Present the information clearly and concisely. Always cite your sources. Provide only the direct answer without any meta-commentary, verification text, or statements about what is not in the context. Do not repeat the question or add explanatory notes about the context."""
+Question: {prompt}"""
             
             messages.append({
                 "role": "user",
-                "content": enhanced_prompt
+                "content": user_prompt
             })
+            
             # Debug: print prompt and context
             print("[LLM CALL] Prompt:", prompt)
             print("[LLM CALL] Context:", context)
             print("[LLM CALL] Messages:", messages)
+            
             response_chunks = ollama.chat(
                 model=OLLAMA_LLM_MODEL,
                 stream=True,

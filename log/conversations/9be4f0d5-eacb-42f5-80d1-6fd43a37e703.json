@@ -1,0 +1,24 @@
+{
+  "id": "9be4f0d5-eacb-42f5-80d1-6fd43a37e703",
+  "title": "New Conversation",
+  "messages": [
+    {
+      "id": "5a5449bc-5d6a-4c09-8543-ccc55b44ae99",
+      "role": "user",
+      "content": "explain what is organic chemistry?",
+      "timestamp": "2025-07-29T17:11:00.647Z",
+      "isStreaming": false
+    },
+    {
+      "id": "791a1f32-31dc-4a83-ad69-3183bb7a3ab7",
+      "role": "assistant",
+      "content": "",
+      "timestamp": "2025-07-29T17:11:00.647Z",
+      "isStreaming": false
+    }
+  ],
+  "createdAt": "2025-07-29T17:10:08.490Z",
+  "documents": [],
+  "created_at": "2025-07-29T17:10:08.490Z",
+  "uploads": []
+}

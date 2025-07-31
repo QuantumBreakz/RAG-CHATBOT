@@ -303,10 +303,16 @@ def format_source_attribution(metadata: Dict[str, Any]) -> str:
     page = metadata.get('page_number')
     section = metadata.get('section')
     
+    # Clean up title - remove file extensions and common prefixes
+    title = re.sub(r'\.(pdf|docx|txt)$', '', title, flags=re.IGNORECASE)
+    title = re.sub(r'^[0-9]+\s*[-_]\s*', '', title)  # Remove leading numbers
+    
     attribution = f"From: {title}"
     if page:
         attribution += f", Page {page}"
     if section:
-        attribution += f", {section}"
+        # Clean up section formatting
+        section = re.sub(r'^[Ss]ection\s*', '', section)
+        attribution += f", Section {section}"
     
     return attribution 

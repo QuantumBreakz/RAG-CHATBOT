@@ -1,6 +1,6 @@
 # app.py
 """
-Entry point for the PITB RAG Application.
+Entry point for the XOR RAG Application.
 Delegates all UI and workflow logic to rag_core.ui.main().
 """
 
