@@ -46,6 +46,22 @@ class CacheEntry:
     ttl_seconds: int
     metadata: Dict[str, Any] = None
 
+def get_file_hash(file_bytes: bytes) -> str:
+    """Generate a hash for file content"""
+    return hashlib.sha256(file_bytes).hexdigest()
+
+def global_embeddings_exist(file_hash: str) -> bool:
+    """Check if global embeddings exist for a file hash"""
+    # For now, return False as we don't have a global embeddings cache implemented
+    # This can be enhanced later with actual embedding storage
+    return False
+
+def load_global_embeddings(file_hash: str) -> Optional[np.ndarray]:
+    """Load global embeddings for a file hash"""
+    # For now, return None as we don't have a global embeddings cache implemented
+    # This can be enhanced later with actual embedding storage
+    return None
+
 class ResponseCache:
     """Advanced response caching with multiple strategies"""
     
@@ -138,7 +154,7 @@ class ResponseCache:
                 entry = self.cache[key]
                 
                 # Check TTL
-                if datetime.now() - entry.created_at > timedelta(seconds=entry.ttl_seconds):
+                if time.time() - entry.created_at.timestamp() > entry.ttl_seconds:
                     del self.cache[key]
                     if key in self.access_counts:
                         del self.access_counts[key]
@@ -149,27 +165,29 @@ class ResponseCache:
                 entry.access_count += 1
                 self.access_counts[key] = entry.access_count
                 
-                # Move to end (LRU)
-                self.cache.move_to_end(key)
+                # Move to end for LRU
+                if self.strategy == CacheStrategy.LRU:
+                    self.cache.move_to_end(key)
                 
-                logger.info(f"Cache hit for query: {query[:50]}...")
                 return entry.value
-            
-            return None
+        
+        return None
     
     def set(self, query: str, response: Dict[str, Any], context: str = "", 
             session_id: str = "", ttl_seconds: int = CACHE_TTL) -> bool:
         """Set cached response"""
         key = self._generate_key(query, context, session_id)
-        value_size = self._calculate_size(response)
+        size = self._calculate_size(response)
         
         with self.lock:
             # Check if we need to evict entries
-            current_size = sum(entry.size_bytes for entry in self.cache.values())
-            if current_size + value_size > self.max_size * 1000:  # Convert to bytes
-                self._evict_entries(value_size)
+            if size > self.max_size:
+                return False
             
-            # Create cache entry
+            # Evict if necessary
+            while len(self.cache) > 0 and size > self.max_size:
+                self._evict_entries(size)
+            
             entry = CacheEntry(
                 key=key,
                 value=response,
@@ -177,51 +195,39 @@ class ResponseCache:
                 created_at=datetime.now(),
                 accessed_at=datetime.now(),
                 access_count=1,
-                size_bytes=value_size,
-                ttl_seconds=ttl_seconds,
-                metadata={'query': query[:100], 'context_length': len(context)}
+                size_bytes=size,
+                ttl_seconds=ttl_seconds
             )
             
             self.cache[key] = entry
             self.access_counts[key] = 1
             
-            logger.info(f"Cached response for query: {query[:50]}...")
             return True
     
     def get_stats(self) -> Dict[str, Any]:
         """Get cache statistics"""
         with self.lock:
-            total_entries = len(self.cache)
             total_size = sum(entry.size_bytes for entry in self.cache.values())
-            total_accesses = sum(self.access_counts.values())
-            
-            if total_entries > 0:
-                avg_accesses = total_accesses / total_entries
-                hit_rate = sum(1 for entry in self.cache.values() if entry.access_count > 1) / total_entries
-            else:
-                avg_accesses = 0
-                hit_rate = 0
+            avg_access = sum(self.access_counts.values()) / len(self.access_counts) if self.access_counts else 0
             
             return {
-                'total_entries': total_entries,
-                'total_size_bytes': total_size,
-                'total_size_mb': total_size / (1024 * 1024),
-                'total_accesses': total_accesses,
-                'average_accesses': avg_accesses,
-                'hit_rate': hit_rate,
-                'strategy': self.strategy.value,
-                'max_size': self.max_size
+                "entries": len(self.cache),
+                "total_size_bytes": total_size,
+                "max_size": self.max_size,
+                "strategy": self.strategy.value,
+                "avg_access_count": avg_access,
+                "oldest_entry": min(entry.created_at for entry in self.cache.values()) if self.cache else None
             }
 
 class EmbeddingCache:
-    """Optimized embedding cache with similarity search"""
+    """Cache for embeddings with similarity search"""
     
     def __init__(self, max_size: int = 10000):
         self.max_size = max_size
         self.cache: Dict[str, np.ndarray] = {}
-        self.text_to_key: Dict[str, str] = {}
+        self.texts: Dict[str, str] = {}
         self.lock = threading.Lock()
-        
+    
     def _generate_key(self, text: str) -> str:
         """Generate cache key for text"""
         return hashlib.sha256(text.encode('utf-8')).hexdigest()
@@ -236,34 +242,29 @@ class EmbeddingCache:
         
         with self.lock:
             if key in self.cache:
-                logger.debug(f"Embedding cache hit for text: {text[:50]}...")
                 return self.cache[key]
-            return None
+        
+        return None
     
     def get_similar(self, text: str, threshold: float = 0.95) -> Optional[np.ndarray]:
-        """Get similar embedding if available"""
+        """Get similar embedding based on text similarity"""
         key = self._generate_key(text)
         
         with self.lock:
             if key in self.cache:
                 return self.cache[key]
             
-            # Search for similar embeddings
-            for cached_text, cached_key in self.text_to_key.items():
-                if cached_key in self.cache:
-                    cached_embedding = self.cache[cached_key]
-                    
-                    # Simple text similarity check first
-                    if len(text) > 10 and len(cached_text) > 10:
-                        text_similarity = self._text_similarity(text, cached_text)
-                        if text_similarity > threshold:
-                            logger.debug(f"Found similar embedding for text: {text[:50]}...")
-                            return cached_embedding
-            
-            return None
+            # Check for similar texts
+            for cached_text, embedding in self.cache.items():
+                similarity = self._text_similarity(text, self.texts[cached_text])
+                if similarity >= threshold:
+                    return embedding
+        
+        return None
     
     def _text_similarity(self, text1: str, text2: str) -> float:
-        """Calculate text similarity using word overlap"""
+        """Calculate text similarity using simple heuristics"""
+        # Simple word overlap similarity
         words1 = set(text1.lower().split())
         words2 = set(text2.lower().split())
         
@@ -280,101 +281,68 @@ class EmbeddingCache:
         key = self._generate_key(text)
         
         with self.lock:
-            # Check cache size
             if len(self.cache) >= self.max_size:
                 # Remove oldest entry (simple FIFO)
                 oldest_key = next(iter(self.cache))
                 del self.cache[oldest_key]
-                
-                # Remove from text mapping
-                for cached_text, cached_key in list(self.text_to_key.items()):
-                    if cached_key == oldest_key:
-                        del self.text_to_key[cached_text]
-                        break
+                del self.texts[oldest_key]
             
             self.cache[key] = embedding
-            self.text_to_key[text] = key
+            self.texts[key] = text
             
-            logger.debug(f"Cached embedding for text: {text[:50]}...")
             return True
     
     def get_stats(self) -> Dict[str, Any]:
         """Get embedding cache statistics"""
         with self.lock:
-            total_embeddings = len(self.cache)
-            total_texts = len(self.text_to_key)
-            
             return {
-                'total_embeddings': total_embeddings,
-                'total_texts': total_texts,
-                'max_size': self.max_size,
-                'utilization': total_embeddings / self.max_size if self.max_size > 0 else 0
+                "entries": len(self.cache),
+                "max_size": self.max_size,
+                "memory_usage_mb": sum(emb.nbytes for emb in self.cache.values()) / (1024 * 1024)
             }
 
 class PerformanceMonitor:
-    """Monitor and track performance metrics"""
+    """Monitor performance metrics"""
     
     def __init__(self):
-        self.metrics: Dict[str, List[float]] = {
-            'response_times': [],
-            'embedding_times': [],
-            'cache_hit_rates': [],
-            'memory_usage': []
-        }
+        self.response_times: List[float] = []
+        self.embedding_times: List[float] = []
+        self.cache_hit_rates: List[float] = []
         self.lock = threading.Lock()
-        self.start_time = time.time()
     
     def record_response_time(self, duration: float):
         """Record response time"""
         with self.lock:
-            self.metrics['response_times'].append(duration)
-            # Keep only last 1000 measurements
-            if len(self.metrics['response_times']) > 1000:
-                self.metrics['response_times'] = self.metrics['response_times'][-1000:]
+            self.response_times.append(duration)
+            if len(self.response_times) > 1000:
+                self.response_times.pop(0)
     
     def record_embedding_time(self, duration: float):
         """Record embedding generation time"""
         with self.lock:
-            self.metrics['embedding_times'].append(duration)
-            if len(self.metrics['embedding_times']) > 1000:
-                self.metrics['embedding_times'] = self.metrics['embedding_times'][-1000:]
+            self.embedding_times.append(duration)
+            if len(self.embedding_times) > 1000:
+                self.embedding_times.pop(0)
     
     def record_cache_hit_rate(self, hit_rate: float):
         """Record cache hit rate"""
         with self.lock:
-            self.metrics['cache_hit_rates'].append(hit_rate)
-            if len(self.metrics['cache_hit_rates']) > 100:
-                self.metrics['cache_hit_rates'] = self.metrics['cache_hit_rates'][-100:]
+            self.cache_hit_rates.append(hit_rate)
+            if len(self.cache_hit_rates) > 1000:
+                self.cache_hit_rates.pop(0)
     
     def get_stats(self) -> Dict[str, Any]:
         """Get performance statistics"""
         with self.lock:
-            stats = {}
-            
-            for metric_name, values in self.metrics.items():
-                if values:
-                    stats[f'{metric_name}_count'] = len(values)
-                    stats[f'{metric_name}_avg'] = sum(values) / len(values)
-                    stats[f'{metric_name}_min'] = min(values)
-                    stats[f'{metric_name}_max'] = max(values)
-                    if len(values) > 1:
-                        stats[f'{metric_name}_std'] = np.std(values)
-                    else:
-                        stats[f'{metric_name}_std'] = 0
-                else:
-                    stats[f'{metric_name}_count'] = 0
-                    stats[f'{metric_name}_avg'] = 0
-                    stats[f'{metric_name}_min'] = 0
-                    stats[f'{metric_name}_max'] = 0
-                    stats[f'{metric_name}_std'] = 0
-            
-            # Uptime
-            stats['uptime_seconds'] = time.time() - self.start_time
-            stats['uptime_hours'] = stats['uptime_seconds'] / 3600
-            
-            return stats
+            return {
+                "avg_response_time": sum(self.response_times) / len(self.response_times) if self.response_times else 0,
+                "avg_embedding_time": sum(self.embedding_times) / len(self.embedding_times) if self.embedding_times else 0,
+                "avg_cache_hit_rate": sum(self.cache_hit_rates) / len(self.cache_hit_rates) if self.cache_hit_rates else 0,
+                "total_requests": len(self.response_times),
+                "total_embeddings": len(self.embedding_times)
+            }
 
-# Global instances
-response_cache = ResponseCache()
-embedding_cache = EmbeddingCache()
-performance_monitor = PerformanceMonitor() 
+# Global cache instances
+_response_cache = ResponseCache()
+_embedding_cache = EmbeddingCache()
+_performance_monitor = PerformanceMonitor() 

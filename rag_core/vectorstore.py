@@ -27,21 +27,10 @@ class VectorStore:
             
             chroma_client = chromadb.PersistentClient(path=CHROMA_DB_PATH)
             
-            # Advanced indexing configuration for large-scale operations
+            # Simple configuration without problematic HNSW parameters
             collection = chroma_client.get_or_create_collection(
                 name=CHROMA_COLLECTION_NAME,
                 embedding_function=ollama_ef,
-                metadata={
-                    "hnsw:space": "cosine",  # Similarity metric
-                    "hnsw:construction_ef": 128,  # Higher for better index quality
-                    "hnsw:search_ef": 64,  # Balance between speed and accuracy
-                    "hnsw:m": 16,  # Number of connections per element (default: 16)
-                    "hnsw:num_threads": 4,  # Parallel processing for index building
-                    "hnsw:ef_construction": 128,  # Construction time vs quality trade-off
-                    "hnsw:ef_search": 64,  # Search time vs recall trade-off
-                    "hnsw:max_elements": 1000000,  # Maximum elements in index
-                    "hnsw:random_seed": 42,  # For reproducible results
-                },
             )
             return collection
         except Exception as e:
@@ -256,7 +245,7 @@ class VectorStore:
             # Clear previous session context to prevent contamination
             session_cache_key = f"session:{session_id}"
             try:
-                redis_set(session_cache_key, prompt, expire=300)  # 5 minute session
+                redis_set(session_cache_key, prompt, ex=300)  # 5 minute session
             except Exception:
                 pass
         
@@ -350,7 +339,7 @@ class VectorStore:
         
         # Cache the result
         try:
-            redis_set(cache_key, pickle.dumps(result), expire=3600)  # 1 hour cache
+                            redis_set(cache_key, pickle.dumps(result), ex=3600)  # 1 hour cache
         except Exception:
             pass
         

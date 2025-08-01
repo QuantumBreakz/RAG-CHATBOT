@@ -67,19 +67,19 @@ class QueryClassifier:
             if json_match:
                 result = json.loads(json_match.group())
                 # Cache the result
-                redis_set(cache_key, json.dumps(result), expire=3600)  # 1 hour cache
+                redis_set(cache_key, json.dumps(result), ex=3600)  # 1 hour cache
                 logger.info(f"Query classification: {query[:50]}... → {result.get('domain', 'unknown')}")
                 return result
             else:
                 # Fallback classification
                 fallback = QueryClassifier._fallback_classification(query)
-                redis_set(cache_key, json.dumps(fallback), expire=3600)
+                redis_set(cache_key, json.dumps(fallback), ex=3600)
                 return fallback
                 
         except Exception as e:
             logger.error(f"Query classification failed: {str(e)}")
             fallback = QueryClassifier._fallback_classification(query)
-            redis_set(cache_key, json.dumps(fallback), expire=3600)
+            redis_set(cache_key, json.dumps(fallback), ex=3600)
             return fallback
     
     @staticmethod
@@ -177,19 +177,19 @@ class DocumentClassifier:
             if json_match:
                 result = json.loads(json_match.group())
                 # Cache the result
-                redis_set(cache_key, json.dumps(result), expire=86400)  # 24 hour cache
+                redis_set(cache_key, json.dumps(result), ex=86400)  # 24 hour cache
                 logger.info(f"Document classification: {filename} → {result.get('domain', 'unknown')}")
                 return result
             else:
                 # Fallback classification
                 fallback = DocumentClassifier._fallback_classification(text_sample, filename)
-                redis_set(cache_key, json.dumps(fallback), expire=86400)
+                redis_set(cache_key, json.dumps(fallback), ex=86400)
                 return fallback
                 
         except Exception as e:
             logger.error(f"Document classification failed: {str(e)}")
             fallback = DocumentClassifier._fallback_classification(text_sample, filename)
-            redis_set(cache_key, json.dumps(fallback), expire=86400)
+            redis_set(cache_key, json.dumps(fallback), ex=86400)
             return fallback
     
     @staticmethod

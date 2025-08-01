@@ -153,23 +153,23 @@ async def upload_document(
     file_hash = cache.get_file_hash(file_bytes)
     
     try:
-    docs = DocumentProcessor.process_document(file, file_bytes, chunk_size=chunk_size, chunk_overlap=chunk_overlap)
-    if not docs or all(not getattr(doc, 'page_content', '').strip() for doc in docs):
-        return JSONResponse(status_code=400, content={'error': 'No text could be extracted from the document. If this is a scanned PDF, ensure OCR is working and Tesseract is installed.'})
-        
-    # Check if embeddings already exist for this file
-    if cache.global_embeddings_exist(file_hash):
-        embeddings = cache.load_global_embeddings(file_hash)
-        if embeddings is not None:
-            # Use cached embeddings for upsert
-            VectorStore.add_to_vector_collection(docs, file.filename, embeddings=embeddings)
+        docs = DocumentProcessor.process_document(file_bytes, file.filename, chunk_size=chunk_size, chunk_overlap=chunk_overlap)
+        if not docs or all(not getattr(doc, 'page_content', '').strip() for doc in docs):
+            return JSONResponse(status_code=400, content={'error': 'No text could be extracted from the document. If this is a scanned PDF, ensure OCR is working and Tesseract is installed.'})
+            
+        # Check if embeddings already exist for this file
+        if cache.global_embeddings_exist(file_hash):
+            embeddings = cache.load_global_embeddings(file_hash)
+            if embeddings is not None:
+                # Use cached embeddings for upsert
+                VectorStore.add_to_vector_collection(docs, file.filename, embeddings=embeddings)
                 return {
                     "num_chunks": len(docs), 
                     "status": "embeddings already exist for this file (reused from cache)",
                     "file_type": docs[0].metadata.get('file_type', 'unknown') if docs else 'unknown'
                 }
-        
-    # Otherwise, create embeddings as usual
+            
+        # Otherwise, create embeddings as usual
         success = VectorStore.add_to_vector_collection(docs, file.filename)
         if success:
             # Save new embeddings to cache (if possible to retrieve them)

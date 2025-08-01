@@ -30,7 +30,9 @@ import {
   Eye,
   EyeOff,
   Bot,
-  User
+  User,
+  Pencil,
+  ArrowRight
 } from 'lucide-react';
 import { useGlobalLoading } from '../App';
 import debounce from 'lodash.debounce';

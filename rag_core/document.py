@@ -20,7 +20,6 @@ import xml.etree.ElementTree as ET
 from rag_core.utils import DocumentClassifier, sanitize_text, extract_page_numbers
 # --- Add OCR import ---
 from rag_core.ocr import extract_text_from_pdf, is_scanned_pdf
-from rag_core.ocr import extract_text_from_image
 import time
 
 # Enhanced Document Processing Classes
@@ -338,68 +337,58 @@ class DocumentProcessor:
                     return chunks
             
             # Process document based on file type
-            text_content = ""
+            documents = []
             
             if file_ext == '.pdf':
-                text_content = DocumentProcessor._process_pdf(file_content, filename)
+                documents = DocumentProcessor._process_pdf(file_content, filename)
             elif file_ext in ['.docx', '.doc']:
-                text_content = DocumentProcessor._process_word(file_content, filename)
+                documents = DocumentProcessor._process_word(file_content, filename)
             elif file_ext == '.txt':
-                text_content = DocumentProcessor._process_text(file_content, filename)
+                documents = DocumentProcessor._process_text(file_content, filename)
             elif file_ext == '.csv':
-                text_content = DocumentProcessor._process_csv(file_content, filename)
+                documents = DocumentProcessor._process_csv(file_content, filename)
             elif file_ext in ['.xlsx', '.xls']:
-                text_content = DocumentProcessor._process_excel(file_content, filename)
+                documents = DocumentProcessor._process_excel(file_content, filename)
             elif file_ext in ['.html', '.htm']:
-                text_content = DocumentProcessor._process_html(file_content, filename)
+                documents = DocumentProcessor._process_html(file_content, filename)
             elif file_ext == '.json':
-                text_content = DocumentProcessor._process_json(file_content, filename)
+                documents = DocumentProcessor._process_json(file_content, filename)
             elif file_ext == '.xml':
-                text_content = DocumentProcessor._process_xml(file_content, filename)
+                documents = DocumentProcessor._process_xml(file_content, filename)
             elif file_ext == '.md':
-                text_content = DocumentProcessor._process_markdown(file_content, filename)
+                documents = DocumentProcessor._process_markdown(file_content, filename)
             elif file_ext in ['.jpg', '.jpeg', '.png', '.tiff', '.bmp']:
-                text_content = DocumentProcessor._process_image(file_content, filename)
+                documents = DocumentProcessor._process_image(file_content, filename)
             else:
                 raise ValueError(f"Unsupported file type: {file_ext}")
             
-            # Clean and sanitize text
-            text_content = sanitize_text(text_content)
+            if not documents:
+                raise ValueError("No content extracted from document")
             
-            if not text_content.strip():
+            # Combine all text content for domain classification
+            all_text = " ".join([doc.page_content for doc in documents])
+            all_text = sanitize_text(all_text)
+            
+            if not all_text.strip():
                 raise ValueError("No text content extracted from document")
             
             # Classify domain
             classifier = DocumentClassifier()
-            domain = classifier.classify_domain(text_content)
+            classification_result = classifier.classify_document(all_text[:1000], filename)
+            domain = classification_result.get('domain', 'general')
             
-            # Split into chunks
-            text_splitter = RecursiveCharacterTextSplitter(
-                chunk_size=chunk_size,
-                chunk_overlap=chunk_overlap,
-                length_function=len,
-                separators=["\n\n", "\n", " ", ""]
-            )
-            
-            chunks = text_splitter.split_text(text_content)
-            
-            # Create Document objects with enhanced metadata
-            documents = []
-            for idx, chunk in enumerate(chunks):
-                doc = Document(
-                    page_content=chunk,
-                    metadata={
-                        'filename': filename,
-                        'chunk_index': idx,
-                        'file_type': file_ext[1:],  # Remove the dot
-                        'domain': domain,
-                        'word_count': len(chunk.split()),
-                        'char_count': len(chunk),
-                        'chunk_id': f"{filename}_{idx}",
-                        'processing_timestamp': datetime.now().isoformat()
-                    }
-                )
-                documents.append(doc)
+            # Enhance metadata for all documents
+            for idx, doc in enumerate(documents):
+                doc.metadata.update({
+                    'filename': filename,
+                    'chunk_index': idx,
+                    'file_type': file_ext[1:],  # Remove the dot
+                    'domain': domain,
+                    'word_count': len(doc.page_content.split()),
+                    'char_count': len(doc.page_content),
+                    'chunk_id': f"{filename}_{idx}",
+                    'processing_timestamp': datetime.now().isoformat()
+                })
             
             # Create enhanced document record
             processing_time = time.time() - start_time
@@ -485,7 +474,7 @@ class DocumentProcessor:
             # Add file type metadata
             for doc in docs:
                 doc.metadata["file_type"] = "word"
-            finally:
+        finally:
             os.unlink(temp_file.name)
         
         return docs
