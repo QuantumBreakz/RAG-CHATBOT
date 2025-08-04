@@ -321,20 +321,17 @@ class DocumentProcessor:
                 # Return existing chunks if available
                 if filename in processor.documents_db:
                     doc = processor.documents_db[filename]
-                    # Reconstruct chunks from metadata (simplified)
-                    chunks = []
-                    for i in range(doc.chunk_count):
-                        chunk = Document(
-                            page_content=f"Chunk {i+1} of {filename}",
-                            metadata={
-                                'filename': filename,
-                                'chunk_index': i,
-                                'file_type': doc.file_type,
-                                'domain': doc.domain
-                            }
-                        )
-                        chunks.append(chunk)
-                    return chunks
+                    # Return the actual stored chunks, not fake ones
+                    logger.info(f"Returning existing chunks for {filename}")
+                    # Retrieve existing chunks from vector store
+                    existing_chunks = DocumentProcessor._retrieve_existing_chunks(filename)
+                    if existing_chunks:
+                        logger.info(f"Retrieved {len(existing_chunks)} existing chunks for {filename}")
+                        return existing_chunks
+                    else:
+                        logger.info(f"No existing chunks found for {filename}, forcing reprocessing")
+                        # Force reprocessing by setting has_changes to True
+                        has_changes = True
             
             # Process document based on file type
             documents = []
@@ -365,8 +362,13 @@ class DocumentProcessor:
             if not documents:
                 raise ValueError("No content extracted from document")
             
+            # CHUNK THE DOCUMENTS - THIS WAS MISSING!
+            logger.info(f"Chunking {len(documents)} documents for {filename}")
+            chunked_documents = DocumentProcessor._semantic_chunking(documents, chunk_size, chunk_overlap)
+            logger.info(f"Created {len(chunked_documents)} chunks from {len(documents)} documents")
+            
             # Combine all text content for domain classification
-            all_text = " ".join([doc.page_content for doc in documents])
+            all_text = " ".join([doc.page_content for doc in chunked_documents])
             all_text = sanitize_text(all_text)
             
             if not all_text.strip():
@@ -378,7 +380,7 @@ class DocumentProcessor:
             domain = classification_result.get('domain', 'general')
             
             # Enhance metadata for all documents
-            for idx, doc in enumerate(documents):
+            for idx, doc in enumerate(chunked_documents):
                 doc.metadata.update({
                     'filename': filename,
                     'chunk_index': idx,
@@ -393,7 +395,7 @@ class DocumentProcessor:
             # Create enhanced document record
             processing_time = time.time() - start_time
             enhanced_doc = processor._create_enhanced_document(
-                filename, file_content, documents, processing_time, domain, file_ext[1:]
+                filename, file_content, chunked_documents, processing_time, domain, file_ext[1:]
             )
             
             # Store enhanced document
@@ -401,9 +403,9 @@ class DocumentProcessor:
             processor._save_persistent_data()
             
             logger.info(f"Enhanced document processing completed for {filename}: "
-                       f"{len(documents)} chunks, {processing_time:.2f}s, domain: {domain}")
+                       f"{len(chunked_documents)} chunks, {processing_time:.2f}s, domain: {domain}")
             
-            return documents
+            return chunked_documents
             
         except Exception as e:
             processing_time = time.time() - start_time
@@ -438,28 +440,98 @@ class DocumentProcessor:
 
     @staticmethod
     def _process_pdf(file_bytes: bytes, filename: str) -> List[Document]:
-        """Process PDF files with OCR support for scanned documents."""
+        """Process PDF files with enhanced multi-OCR support for scanned documents."""
         temp_file = tempfile.NamedTemporaryFile("wb", suffix=".pdf", delete=False)
         temp_file.write(file_bytes)
         temp_file.close()
         
         try:
-            # Check if it's a scanned PDF
-            if is_scanned_pdf(temp_file.name):
-                logger.info(f"PDF {filename} detected as scanned. Using OCR.")
-                text = extract_text_from_pdf(temp_file.name)
-                docs = [Document(page_content=text, metadata={"filename": filename, "file_type": "pdf", "processing": "ocr"})]
-            else:
-                loader = PyMuPDFLoader(temp_file.name)
-                docs = loader.load()
-                # Add file type metadata
-                for doc in docs:
-                    doc.metadata["file_type"] = "pdf"
-                    doc.metadata["processing"] = "native"
+            # First try native text extraction
+            try:
+                from PyPDF2 import PdfReader
+                reader = PdfReader(temp_file.name)
+                native_text = '\n'.join([page.extract_text() or '' for page in reader.pages])
+                
+                if native_text.strip():
+                    logger.info(f"PDF {filename} contains extractable text, using native extraction")
+                    docs = [Document(
+                        page_content=native_text,
+                        metadata={
+                            "filename": filename,
+                            "file_type": "pdf",
+                            "processing": "native",
+                            "pages": len(reader.pages)
+                        }
+                    )]
+                    return docs
+            except Exception as e:
+                logger.warning(f"Native text extraction failed for {filename}: {e}")
+            
+            # If native extraction fails, try OCR
+            logger.info(f"PDF {filename} appears to be scanned, attempting OCR")
+            try:
+                from .multi_ocr import MultiOCREngine, OCRConfidence
+                multi_ocr = MultiOCREngine()
+                results = multi_ocr.process_pdf(temp_file.name)
+                
+                if results:
+                    # Combine results with confidence weighting
+                    combined_text = []
+                    for result in results:
+                        if result.confidence != OCRConfidence.REJECTED and result.text.strip():
+                            combined_text.append(result.text)
+                    
+                    if combined_text:
+                        final_text = '\n\n'.join(combined_text)
+                        logger.info(f"OCR completed for {filename} with {len(combined_text)} text blocks")
+                        docs = [Document(
+                            page_content=final_text,
+                            metadata={
+                                "filename": filename,
+                                "file_type": "pdf",
+                                "processing": "ocr",
+                                "ocr_blocks": len(combined_text)
+                            }
+                        )]
+                        return docs
+            except Exception as e:
+                logger.error(f"OCR processing failed for {filename}: {e}")
+            
+            # Final fallback - try basic text extraction
+            try:
+                from PyPDF2 import PdfReader
+                reader = PdfReader(temp_file.name)
+                fallback_text = '\n'.join([page.extract_text() or '' for page in reader.pages])
+                if fallback_text.strip():
+                    logger.info(f"Using fallback text extraction for {filename}")
+                    docs = [Document(
+                        page_content=fallback_text,
+                        metadata={
+                            "filename": filename,
+                            "file_type": "pdf",
+                            "processing": "fallback",
+                            "pages": len(reader.pages)
+                        }
+                    )]
+                    return docs
+            except Exception as e:
+                logger.error(f"Fallback extraction failed for {filename}: {e}")
+            
+            # If all methods fail, return empty document
+            logger.error(f"All PDF processing methods failed for {filename}")
+            docs = [Document(
+                page_content="",
+                metadata={
+                    "filename": filename,
+                    "file_type": "pdf",
+                    "processing": "failed",
+                    "error": "No text could be extracted"
+                }
+            )]
+            return docs
+            
         finally:
             os.unlink(temp_file.name)
-        
-        return docs
 
     @staticmethod
     def _process_word(file_bytes: bytes, filename: str) -> List[Document]:
@@ -763,6 +835,48 @@ class DocumentProcessor:
             raise ValueError(f"Failed to process Markdown file: {str(e)}")
     
     @staticmethod
+    def _process_image(file_bytes: bytes, filename: str) -> List[Document]:
+        """Process image files using OCR."""
+        try:
+            from PIL import Image
+            import pytesseract
+            import io
+            
+            # Open image
+            img = Image.open(io.BytesIO(file_bytes))
+            
+            # Extract text using OCR
+            text = pytesseract.image_to_string(img)
+            
+            if not text.strip():
+                logger.warning(f"No text extracted from image {filename}")
+                return [Document(
+                    page_content="[Image with no extractable text]",
+                    metadata={
+                        "filename": filename,
+                        "file_type": "image",
+                        "chunk_type": "image_no_text",
+                        "ocr_result": "no_text"
+                    }
+                )]
+            
+            return [Document(
+                page_content=text,
+                metadata={
+                    "filename": filename,
+                    "file_type": "image",
+                    "chunk_type": "image_ocr",
+                    "ocr_result": "success"
+                }
+            )]
+        except ImportError:
+            logger.error(f"PIL or pytesseract not available for image processing {filename}")
+            raise ValueError(f"Image processing requires PIL and pytesseract: {filename}")
+        except Exception as e:
+            logger.error(f"Error processing image file {filename}: {str(e)}")
+            raise ValueError(f"Failed to process image file: {str(e)}")
+    
+    @staticmethod
     def _semantic_chunking(docs: List[Document], chunk_size: int, chunk_overlap: int) -> List[Document]:
         """
         Enhanced chunking that respects semantic boundaries like chapters, sections, and paragraphs.
@@ -899,6 +1013,87 @@ class DocumentProcessor:
         # Fallback to middle
         return len(lines) // 2
     
+    @staticmethod
+    def _retrieve_existing_chunks(filename: str) -> List[Document]:
+        """Retrieve existing chunks from the vector store for a given filename."""
+        try:
+            from .vectorstore import VectorStore
+            
+            # Query the vector store for chunks with this filename
+            collection = VectorStore.get_vector_collection()
+            if not collection:
+                logger.error("No vector collection available")
+                return []
+            
+            # Query for chunks with this filename - use a more reliable approach
+            try:
+                # First try to get all documents to find chunks for this filename
+                all_results = collection.query(
+                    query_texts=["."],  # Dummy query to get all chunks
+                    n_results=10000,  # Get a very large number
+                    include=["documents", "metadatas"]
+                )
+                
+                documents = all_results.get('documents', [[]])[0]
+                metadatas = all_results.get('metadatas', [[]])[0]
+                
+                # Filter for chunks with this filename
+                filtered_docs = []
+                filtered_metas = []
+                for doc, meta in zip(documents, metadatas):
+                    if meta.get('filename') == filename:
+                        filtered_docs.append(doc)
+                        filtered_metas.append(meta)
+                
+                if not filtered_docs:
+                    logger.warning(f"No chunks found in vector store for {filename}")
+                    return []
+                
+                # Convert back to Document objects
+                chunks = []
+                for i, (doc_content, metadata) in enumerate(zip(filtered_docs, filtered_metas)):
+                    chunk = Document(
+                        page_content=doc_content,
+                        metadata=metadata
+                    )
+                    chunks.append(chunk)
+                
+                logger.info(f"Retrieved {len(chunks)} chunks from vector store for {filename}")
+                return chunks
+                
+            except Exception as e:
+                logger.error(f"Error in first retrieval attempt: {str(e)}")
+                # Fallback: try direct query
+                result = collection.query(
+                    query_texts=["."],  # Dummy query to get all chunks
+                    n_results=1000,  # Get a large number to ensure we get all chunks
+                    where={"filename": filename},
+                    include=["documents", "metadatas"]
+                )
+            
+            documents = result.get('documents', [[]])[0]
+            metadatas = result.get('metadatas', [[]])[0]
+            
+            if not documents:
+                logger.warning(f"No chunks found in vector store for {filename}")
+                return []
+            
+            # Convert back to Document objects
+            chunks = []
+            for i, (doc_content, metadata) in enumerate(zip(documents, metadatas)):
+                chunk = Document(
+                    page_content=doc_content,
+                    metadata=metadata
+                )
+                chunks.append(chunk)
+            
+            logger.info(f"Retrieved {len(chunks)} chunks from vector store for {filename}")
+            return chunks
+            
+        except Exception as e:
+            logger.error(f"Error retrieving existing chunks for {filename}: {str(e)}")
+            return []
+
     @staticmethod
     def _enhance_metadata(splits: List[Document], filename: str):
         """

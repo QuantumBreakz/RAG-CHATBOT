@@ -5,6 +5,8 @@ from rag_core.vectorstore import VectorStore
 from rag_core.llm import LLMHandler
 from rag_core import history
 from rag_core.context_manager import context_manager
+from rag_core.multi_ocr import MultiOCREngine  # Add multi-OCR import
+from rag_core.ocr_config import get_config  # Add OCR config import
 import json
 from fastapi.middleware.cors import CORSMiddleware
 from rag_core import cache
@@ -22,6 +24,9 @@ import psutil
 import time
 from rag_core.conversation_manager import conversation_manager, asdict
 from datetime import datetime, timedelta
+from rag_core.agentic_rag import AgenticRAG, QueryType, DataSourceType
+from rag_core.config import logger
+import asyncio
 
 app = FastAPI()
 
@@ -248,7 +253,16 @@ async def query_rag(
         
         # Filter out low-confidence sources and conflicting information
         filtered_chunks = []
-        for chunk, meta, source in zip(docs, metas, sources):
+        
+        # Ensure we have matching lengths
+        min_length = min(len(docs), len(metas), len(sources))
+        logger.info(f"Processing {min_length} chunks (docs: {len(docs)}, metas: {len(metas)}, sources: {len(sources)})")
+        
+        for i in range(min_length):
+            chunk = docs[i]
+            meta = metas[i]
+            source = sources[i] if i < len(sources) else {}
+            
             confidence = source.get('confidence', 0.5)
             if confidence > 0.3:  # Only include high-confidence sources
                 filtered_chunks.append((chunk, meta, source))
@@ -370,7 +384,16 @@ async def query_rag_stream(
         
         # Filter out low-confidence sources and conflicting information
         filtered_chunks = []
-        for chunk, meta, source in zip(docs, metas, sources):
+        
+        # Ensure we have matching lengths
+        min_length = min(len(docs), len(metas), len(sources))
+        logger.info(f"Processing {min_length} chunks (docs: {len(docs)}, metas: {len(metas)}, sources: {len(sources)})")
+        
+        for i in range(min_length):
+            chunk = docs[i]
+            meta = metas[i]
+            source = sources[i] if i < len(sources) else {}
+            
             confidence = source.get('confidence', 0.5)
             if confidence > 0.3:  # Only include high-confidence sources
                 filtered_chunks.append((chunk, meta, source))
@@ -1428,3 +1451,384 @@ async def transcribe_audio(file: UploadFile = File(...)):
         return {"text": text}
     except Exception as e:
         return JSONResponse(status_code=500, content={"error": f"Transcription failed: {str(e)}"}) 
+
+@app.get("/ocr/config")
+def get_ocr_config(config_name: str = "default"):
+    """Get OCR configuration"""
+    try:
+        config = get_config(config_name)
+        return {
+            "status": "success",
+            "config_name": config_name,
+            "config": config
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get OCR config: {str(e)}")
+
+@app.get("/ocr/configs")
+def get_available_ocr_configs():
+    """Get list of available OCR configurations"""
+    try:
+        configs = [
+            {"name": "default", "description": "Default balanced configuration"},
+            {"name": "fast_performance", "description": "Fast performance (Tesseract only)"},
+            {"name": "offline", "description": "Offline mode (all engines)"},
+            {"name": "high_accuracy", "description": "High accuracy configuration"},
+            {"name": "fast", "description": "Fast processing configuration"}
+        ]
+        return {
+            "status": "success",
+            "configs": configs
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get OCR configs: {str(e)}")
+
+@app.post("/ocr/test")
+async def test_ocr_engine(
+    file: UploadFile = File(...),
+    config_name: str = Form("default")
+):
+    """Test OCR engine with a specific configuration"""
+    try:
+        # Get configuration
+        config = get_config(config_name)
+        multi_ocr = MultiOCREngine(config)
+        
+        # Read file content
+        file_content = await file.read()
+        
+        # Create temporary file
+        with tempfile.NamedTemporaryFile(delete=False, suffix=f".{file.filename.split('.')[-1]}") as temp_file:
+            temp_file.write(file_content)
+            temp_file_path = temp_file.name
+        
+        try:
+            # Process with OCR
+            start_time = time.time()
+            results = multi_ocr.process_pdf(temp_file_path)
+            processing_time = time.time() - start_time
+            
+            # Extract results
+            extracted_text = ""
+            confidence_scores = []
+            engines_used = []
+            
+            for result in results:
+                if result.text:
+                    extracted_text += result.text + "\n\n"
+                    confidence_scores.append(result.agreement_score)
+                    engines_used.extend(result.contributing_engines)
+            
+            # Remove duplicates from engines used
+            engines_used = list(set(engines_used))
+            
+            return {
+                "status": "success",
+                "config_name": config_name,
+                "processing_time": processing_time,
+                "text_length": len(extracted_text),
+                "confidence_score": sum(confidence_scores) / len(confidence_scores) if confidence_scores else 0.0,
+                "engines_used": engines_used,
+                "extracted_text": extracted_text[:1000] + "..." if len(extracted_text) > 1000 else extracted_text
+            }
+            
+        finally:
+            # Clean up temporary file
+            if os.path.exists(temp_file_path):
+                os.unlink(temp_file_path)
+                
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"OCR test failed: {str(e)}")
+
+@app.get("/ocr/performance")
+def get_ocr_performance_stats():
+    """Get OCR performance statistics"""
+    try:
+        # This would typically come from a monitoring system
+        # For now, return basic stats
+        return {
+            "status": "success",
+            "stats": {
+                "total_documents_processed": 0,  # Would be tracked in production
+                "average_processing_time": 0.0,
+                "success_rate": 0.0,
+                "engines_available": {
+                    "tesseract": True,
+                    "paddleocr": False,  # Would check actual availability
+                    "easyocr": False
+                }
+            }
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get OCR performance: {str(e)}")
+
+@app.post("/ocr/optimize")
+async def optimize_ocr_performance(
+    config_name: str = Form("fast_performance")
+):
+    """Optimize OCR performance with specific configuration"""
+    try:
+        # Get optimized configuration
+        config = get_config(config_name)
+        
+        # Test the configuration
+        multi_ocr = MultiOCREngine(config)
+        
+        return {
+            "status": "success",
+            "message": f"OCR optimized with {config_name} configuration",
+            "config": {
+                "engines_enabled": [k for k, v in config["engines"].items() if v["enabled"]],
+                "parallel_processing": config["performance"]["parallel_processing"],
+                "caching_enabled": config["performance"]["enable_caching"]
+            }
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"OCR optimization failed: {str(e)}") 
+
+# Initialize agentic RAG system
+try:
+    agentic_rag = AgenticRAG()
+    logger.info("Agentic RAG system initialized successfully")
+except Exception as e:
+    logger.error(f"Failed to initialize agentic RAG system: {str(e)}")
+    agentic_rag = None
+
+@app.post("/agentic/query")
+async def agentic_query(
+    question: str = Form(...),
+    user_context: str = Form("{}"),
+    query_type: str = Form(None)
+):
+    """Process query using agentic RAG system"""
+    try:
+        # Check if agentic_rag is properly initialized
+        if agentic_rag is None or not hasattr(agentic_rag, 'process_query'):
+            return {
+                "status": "error",
+                "message": "Agentic RAG system not properly initialized",
+                "answer": "The agentic RAG system is not available. Please use the regular RAG system.",
+                "sources": [],
+                "reasoning": "System not initialized",
+                "query_type": "semantic_search",
+                "confidence": 0.0,
+                "processing_time": 0.0,
+                "metadata": {}
+            }
+        
+        # Parse user context
+        try:
+            context = json.loads(user_context) if user_context else {}
+        except:
+            context = {}
+        
+        # Process query with agentic RAG
+        response = await agentic_rag.process_query(question, context)
+        
+        return {
+            "status": "success",
+            "answer": response.answer,
+            "sources": response.sources,
+            "reasoning": response.reasoning,
+            "query_type": response.query_type.value,
+            "confidence": response.confidence,
+            "processing_time": response.processing_time,
+            "metadata": response.metadata
+        }
+        
+    except Exception as e:
+        logger.error(f"Agentic query failed: {str(e)}")
+        return {
+            "status": "error",
+            "message": f"Agentic query failed: {str(e)}",
+            "answer": f"Sorry, I encountered an error processing your query: {str(e)}",
+            "sources": [],
+            "reasoning": "Error occurred during processing",
+            "query_type": "semantic_search",
+            "confidence": 0.0,
+            "processing_time": 0.0,
+            "metadata": {"error": str(e)}
+        }
+
+@app.post("/agentic/query/stream")
+async def agentic_query_stream(
+    question: str = Form(...),
+    user_context: str = Form("{}"),
+    query_type: str = Form(None)
+):
+    """Stream agentic query response"""
+    try:
+        # Check if agentic_rag is properly initialized
+        if agentic_rag is None or not hasattr(agentic_rag, 'process_query'):
+            def error_stream():
+                yield f"data: {json.dumps({'type': 'error', 'content': 'Agentic RAG system not available'})}\n\n"
+                yield f"data: {json.dumps({'type': 'done'})}\n\n"
+            return StreamingResponse(error_stream(), media_type="text/plain")
+        
+        # Parse user context
+        try:
+            context = json.loads(user_context) if user_context else {}
+        except:
+            context = {}
+        
+        # Process query with agentic RAG
+        response = await agentic_rag.process_query(question, context)
+        
+        def stream_response():
+            # Stream the reasoning first
+            yield f"data: {json.dumps({'type': 'reasoning', 'content': response.reasoning})}\n\n"
+            
+            # Stream the answer
+            words = response.answer.split()
+            for word in words:
+                yield f"data: {json.dumps({'type': 'word', 'content': word + ' '})}\n\n"
+                time.sleep(0.05)  # Small delay for streaming effect
+            
+            # Stream final metadata
+            yield f"data: {json.dumps({'type': 'metadata', 'content': response.metadata})}\n\n"
+            yield f"data: {json.dumps({'type': 'done'})}\n\n"
+        
+        return StreamingResponse(
+            stream_response(),
+            media_type="text/plain"
+        )
+        
+    except Exception as e:
+        return JSONResponse(
+            status_code=500,
+            content={"error": f"Agentic query streaming failed: {str(e)}"}
+        )
+
+@app.get("/agentic/performance")
+def get_agentic_performance():
+    """Get agentic RAG performance metrics"""
+    try:
+        metrics = agentic_rag.get_performance_metrics()
+        return {
+            "status": "success",
+            "metrics": metrics
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get performance metrics: {str(e)}")
+
+@app.post("/agentic/upload/spreadsheet")
+async def upload_spreadsheet_for_analysis(
+    file: UploadFile = File(...),
+    description: str = Form("")
+):
+    """Upload spreadsheet for numerical analysis"""
+    try:
+        # Save uploaded file
+        temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=f".{file.filename.split('.')[-1]}")
+        content = await file.read()
+        temp_file.write(content)
+        temp_file.close()
+        
+        try:
+            # Process spreadsheet with numerical processor
+            df = agentic_rag.numerical_processor.process_spreadsheet(temp_file.name)
+            
+            # Store full document context if it's a text-based spreadsheet
+            if description:
+                # Extract text content for context
+                text_content = df.to_string()
+                agentic_rag.context_manager.store_full_document(
+                    file.filename, 
+                    text_content,
+                    {"type": "spreadsheet", "description": description}
+                )
+            
+            return {
+                "status": "success",
+                "message": f"Spreadsheet processed successfully",
+                "filename": file.filename,
+                "rows": len(df),
+                "columns": len(df.columns),
+                "column_names": df.columns.tolist(),
+                "data_types": df.dtypes.to_dict()
+            }
+            
+        finally:
+            # Clean up temporary file
+            if os.path.exists(temp_file.name):
+                os.unlink(temp_file.name)
+                
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Spreadsheet upload failed: {str(e)}")
+
+@app.get("/agentic/sources")
+def get_available_sources():
+    """Get available data sources for agentic RAG"""
+    try:
+        # Check if agentic_rag is properly initialized
+        if agentic_rag is None or not hasattr(agentic_rag, '_get_available_sources'):
+            return {
+                "status": "error",
+                "message": "Agentic RAG system not properly initialized",
+                "sources": {
+                    "vector_db": [],
+                    "documents": [],
+                    "spreadsheets": []
+                }
+            }
+        
+        sources = {
+            "vector_db": agentic_rag._get_available_sources(),
+            "documents": agentic_rag._get_available_documents(),
+            "spreadsheets": list(agentic_rag.numerical_processor.data_cache.keys())
+        }
+        
+        return {
+            "status": "success",
+            "sources": sources
+        }
+    except Exception as e:
+        logger.error(f"Error getting agentic sources: {str(e)}")
+        return {
+            "status": "error",
+            "message": f"Failed to get sources: {str(e)}",
+            "sources": {
+                "vector_db": [],
+                "documents": [],
+                "spreadsheets": []
+            }
+        }
+
+@app.post("/agentic/analyze")
+def analyze_query_intent(
+    query: str = Form(...)
+):
+    """Analyze query intent without processing"""
+    try:
+        # Check if agentic_rag is properly initialized
+        if agentic_rag is None or not hasattr(agentic_rag, 'query_analyzer'):
+            return {
+                "status": "error",
+                "message": "Agentic RAG system not properly initialized",
+                "query": query,
+                "query_type": "semantic_search",
+                "data_sources": [],
+                "reasoning": "System not available",
+                "confidence": 0.0,
+                "metadata": {}
+            }
+        
+        # Use query analyzer to determine intent
+        query_context = agentic_rag.query_analyzer.analyze_query(
+            query, 
+            agentic_rag._get_available_sources()
+        )
+        
+        return {
+            "status": "success",
+            "query": query,
+            "query_type": query_context.query_type.value,
+            "data_sources": [ds.value for ds in query_context.data_sources],
+            "reasoning": query_context.reasoning,
+            "confidence": query_context.confidence,
+            "metadata": query_context.metadata
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Query analysis failed: {str(e)}") 

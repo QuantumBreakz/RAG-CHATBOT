@@ -32,7 +32,9 @@ import {
   Bot,
   User,
   Pencil,
-  ArrowRight
+  ArrowRight,
+  Zap,
+  Brain
 } from 'lucide-react';
 import { useGlobalLoading } from '../App';
 import debounce from 'lodash.debounce';
@@ -75,6 +77,8 @@ const ChatInterface: React.FC = () => {
   const [showContextPreview, setShowContextPreview] = useState(false);
   const [contextMetadata, setContextMetadata] = useState<any>(null);
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
+  const [agenticAIEnabled, setAgenticAIEnabled] = useState(true);
+  const [agenticSources, setAgenticSources] = useState<any>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const audioUrlRef = useRef<string | null>(null);
@@ -175,11 +179,81 @@ const ChatInterface: React.FC = () => {
   };
 
   const resetStreaming = () => {
-    setStreamingContent('');
-    setStreamingStatus('idle');
+    setOperationState(prev => ({ ...prev, sending: false }));
   };
 
-  // Event handlers
+  // Agentic AI functions
+  const fetchAgenticSources = async () => {
+    try {
+      const response = await apiCall('/agentic/sources');
+      if (response.status === 'success') {
+        setAgenticSources(response.sources);
+      } else {
+        console.warn('Agentic sources not available:', response.message);
+        setAgenticSources({
+          vector_db: [],
+          documents: [],
+          spreadsheets: []
+        });
+      }
+    } catch (error) {
+      console.error('Failed to fetch agentic sources:', error);
+      setAgenticSources({
+        vector_db: [],
+        documents: [],
+        spreadsheets: []
+      });
+    }
+  };
+
+  const handleAgenticQuery = async (question: string, userContext: any = {}) => {
+    try {
+      const formData = new FormData();
+      formData.append('question', question);
+      formData.append('user_context', JSON.stringify(userContext));
+
+      const response = await apiCall('/agentic/query', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (response.status === 'success') {
+        return {
+          answer: response.answer,
+          sources: response.sources,
+          reasoning: response.reasoning,
+          query_type: response.query_type,
+          confidence: response.confidence,
+          processing_time: response.processing_time,
+          metadata: response.metadata
+        };
+      } else {
+        // Return a fallback response instead of throwing
+        return {
+          answer: response.answer || "The agentic RAG system is not available. Using regular RAG instead.",
+          sources: response.sources || [],
+          reasoning: response.reasoning || "System not available",
+          query_type: response.query_type || "semantic_search",
+          confidence: response.confidence || 0.0,
+          processing_time: response.processing_time || 0.0,
+          metadata: response.metadata || {}
+        };
+      }
+    } catch (error) {
+      console.error('Agentic query error:', error);
+      // Return a fallback response instead of throwing
+      return {
+        answer: "The agentic RAG system is not available. Using regular RAG instead.",
+        sources: [],
+        reasoning: "System not available",
+        query_type: "semantic_search",
+        confidence: 0.0,
+        processing_time: 0.0,
+        metadata: {}
+      };
+    }
+  };
+
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!inputValue.trim() || operationState.sending || streamingStatus === 'streaming') return;
@@ -240,6 +314,63 @@ const ChatInterface: React.FC = () => {
       // Use only the current session's messages for context, and for new conversations, context is empty
       const conversationHistory = isNewConversation ? [] : (sessionToUse?.messages.filter(m => m.role !== 'assistant' || m.content) || []);
       let response;
+
+      // Use agentic AI if enabled
+      if (agenticAIEnabled && !attachedFile) {
+        try {
+          const agenticResponse = await handleAgenticQuery(userMessage, {
+            conversation_history: conversationHistory,
+            domain_filter: selectedDomain
+          });
+          
+          // Update the streaming message with agentic response
+          updateStreamingMessage(agenticResponse.answer);
+          setStreamingStatus('idle');
+          setOperationState(s => ({ ...s, sending: false }));
+          
+          // Store agentic metadata for display
+          setContextMetadata({
+            query_type: agenticResponse.query_type,
+            confidence: agenticResponse.confidence,
+            processing_time: agenticResponse.processing_time,
+            reasoning: agenticResponse.reasoning,
+            sources: agenticResponse.sources
+          });
+          
+          // Add agentic response to conversation history
+          if (sessionToUse) {
+            const updatedMessages = [...sessionToUse.messages];
+            // Remove the empty assistant message and add the complete response
+            if (updatedMessages.length > 0 && updatedMessages[updatedMessages.length - 1].role === 'assistant' && !updatedMessages[updatedMessages.length - 1].content) {
+              updatedMessages.pop();
+            }
+            updatedMessages.push({
+              id: uuidv4(),
+              role: 'assistant',
+              content: agenticResponse.answer,
+              timestamp: new Date().toISOString(),
+              sources: agenticResponse.sources,
+              contextMetadata: {
+                query_type: agenticResponse.query_type,
+                confidence: agenticResponse.confidence,
+                processing_time: agenticResponse.processing_time,
+                reasoning: agenticResponse.reasoning
+              }
+            });
+            
+            setCurrentSessionFromBackend({
+              ...sessionToUse,
+              messages: updatedMessages
+            });
+          }
+          
+          return;
+        } catch (error) {
+          console.error('Agentic query failed, falling back to regular RAG:', error);
+          // Fall back to regular RAG if agentic fails
+        }
+      }
+
       if (attachedFile) {
         setFileProcessing(true);
         // Use multipart/form-data if file is attached
@@ -695,6 +826,7 @@ const ChatInterface: React.FC = () => {
     fetchConversations();
     checkVectorstore();
     fetchSupportedFileTypes();
+    fetchAgenticSources();
   }, []);
 
   useEffect(() => {
@@ -1146,6 +1278,28 @@ const ChatInterface: React.FC = () => {
 
         {/* Settings & Admin */}
         <div className="p-4 border-t border-border">
+          {/* Agentic AI Status */}
+          {agenticAIEnabled && (
+            <div className="mb-4 p-3 bg-gradient-to-r from-purple-50 to-blue-50 dark:from-purple-900/20 dark:to-blue-900/20 rounded-lg border border-purple-200 dark:border-purple-800">
+              <div className="flex items-center space-x-2 mb-2">
+                <Brain className="h-4 w-4 text-purple-600 dark:text-purple-400" />
+                <span className="text-sm font-medium text-purple-700 dark:text-purple-300">Agentic AI Active</span>
+              </div>
+              <div className="text-xs text-purple-600 dark:text-purple-400">
+                Intelligent query analysis and multi-source processing enabled
+              </div>
+              {agenticSources && (
+                <div className="mt-2 text-xs text-purple-600 dark:text-purple-400">
+                  <div>Available sources:</div>
+                  <div className="flex flex-wrap gap-1 mt-1">
+                    {agenticSources.vector_db && <span className="px-2 py-1 bg-purple-100 dark:bg-purple-800 rounded text-xs">Vector DB</span>}
+                    {agenticSources.documents && agenticSources.documents.length > 0 && <span className="px-2 py-1 bg-purple-100 dark:bg-purple-800 rounded text-xs">Documents</span>}
+                    {agenticSources.spreadsheets && agenticSources.spreadsheets.length > 0 && <span className="px-2 py-1 bg-purple-100 dark:bg-purple-800 rounded text-xs">Spreadsheets</span>}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
           <div className="flex space-x-2 mb-2">
             <Button variant="outline" size="sm" className="flex-1" onClick={handleHealthCheck}>
               <Sparkles className="mr-2 h-4 w-4" />
@@ -1211,6 +1365,26 @@ const ChatInterface: React.FC = () => {
             )}
           </div>
           <div className="flex items-center space-x-4">
+            {/* Agentic AI Toggle */}
+            <div className="flex items-center space-x-2">
+              <button
+                onClick={() => setAgenticAIEnabled(!agenticAIEnabled)}
+                className={`flex items-center space-x-2 px-3 py-2 rounded-lg transition-all duration-200 ${
+                  agenticAIEnabled 
+                    ? 'bg-gradient-to-r from-purple-500 to-blue-500 text-white shadow-lg' 
+                    : 'bg-surface border border-border hover:bg-surface-elevated'
+                }`}
+                title={agenticAIEnabled ? 'Agentic AI Enabled' : 'Enable Agentic AI'}
+              >
+                <Brain className={`h-4 w-4 ${agenticAIEnabled ? 'text-white' : 'text-primary'}`} />
+                <span className="text-sm font-medium">
+                  {agenticAIEnabled ? 'Agentic AI' : 'AI'}
+                </span>
+                {agenticAIEnabled && (
+                  <div className="w-2 h-2 bg-white rounded-full animate-pulse"></div>
+                )}
+              </button>
+            </div>
             <DomainFilter 
               selectedDomain={selectedDomain}
               onDomainChange={setSelectedDomain}
@@ -1294,7 +1468,7 @@ const ChatInterface: React.FC = () => {
                 <textarea
                   value={inputValue}
                   onChange={(e) => setInputValue(e.target.value)}
-                  placeholder="Ask me anything about your documents..."
+                  placeholder={agenticAIEnabled ? "Ask me anything with intelligent analysis..." : "Ask me anything about your documents..."}
                   className="w-full p-4 bg-transparent text-foreground placeholder-muted-foreground focus:outline-none resize-none min-h-[60px] max-h-32 rounded-lg"
                   disabled={operationState.sending || streamingStatus === 'streaming' || isRecording || isTranscribing}
                   rows={1}
@@ -1305,6 +1479,12 @@ const ChatInterface: React.FC = () => {
                     }
                   }}
                 />
+                {agenticAIEnabled && (
+                  <div className="absolute top-2 right-2 flex items-center space-x-1">
+                    <Brain className="h-3 w-3 text-purple-500" />
+                    <span className="text-xs text-purple-500 font-medium">Agentic</span>
+                  </div>
+                )}
               </Card>
               {/* Show attached file name if present */}
               {attachedFile && (
@@ -1339,10 +1519,18 @@ const ChatInterface: React.FC = () => {
             <Button
               type="submit"
               disabled={!inputValue.trim() || operationState.sending || streamingStatus === 'streaming' || isRecording || isTranscribing}
-              className="p-4 group rounded-full shadow-md hover:bg-primary-dark transition-colors duration-200"
+              className={`p-4 group rounded-full shadow-md transition-colors duration-200 ${
+                agenticAIEnabled 
+                  ? 'bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white' 
+                  : 'hover:bg-primary-dark'
+              }`}
               size="lg"
             >
-              <Send className="h-5 w-5 group-hover:translate-x-1 transition-transform duration-300" />
+              {agenticAIEnabled ? (
+                <Brain className="h-5 w-5 group-hover:scale-110 transition-transform duration-300" />
+              ) : (
+                <Send className="h-5 w-5 group-hover:translate-x-1 transition-transform duration-300" />
+              )}
             </Button>
             <Button
               type="button"

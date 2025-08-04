@@ -122,20 +122,19 @@ class DocumentClassifier:
     """Classifies documents by domain for intelligent storage and retrieval."""
     
     @staticmethod
-    @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=4, max=10))
     def classify_document(text_sample: str, filename: str) -> Dict[str, Any]:
         """
-        Classify a document by domain using LLaMA 3.2:3B.
+        Classify a document by domain and topic using LLaMA 3.2:3B.
         
         Args:
             text_sample: Sample text from the document
-            filename: Document filename
+            filename: Document filename for context
             
         Returns:
-            Dictionary with domain, title, and metadata
+            Dictionary with domain, topic, confidence, and keywords
         """
         # Check cache first
-        cache_key = f"doc_classification:{hashlib.sha256((text_sample[:500] + filename).encode()).hexdigest()}"
+        cache_key = f"doc_classification:{hashlib.sha256((text_sample + filename).encode()).hexdigest()}"
         cached = redis_get(cache_key)
         if cached:
             try:
@@ -146,20 +145,20 @@ class DocumentClassifier:
         try:
             # Classification prompt
             classification_prompt = f"""
-            Classify this document sample and extract metadata:
+            Classify the domain and topic of this document: "{filename}"
             
-            Filename: {filename}
-            Sample text: {text_sample[:1000]}
+            Sample text: "{text_sample[:500]}..."
             
             Return a JSON object with:
-            - domain: The main domain (e.g., "law", "physics", "chemistry", "religion", "medicine", "finance", "engineering", "education", "government", "technology")
-            - title: Document title (extract from text or use filename)
+            - domain: The main domain (e.g., "law", "physics", "chemistry", "religion", "medicine", "finance", "engineering", "education", "government", "technology", "general")
+            - topic: Specific topic within the domain
             - confidence: Confidence score (0.0 to 1.0)
-            - type: Document type (e.g., "textbook", "manual", "code", "guide", "reference")
+            - keywords: List of relevant keywords for search
             
             Examples:
-            - Law document → {{"domain": "law", "title": "Pakistan Penal Code", "confidence": 0.95, "type": "code"}}
-            - Chemistry textbook → {{"domain": "chemistry", "title": "Chemistry Grade 10", "confidence": 0.9, "type": "textbook"}}
+            - Legal document → {{"domain": "law", "topic": "legal document", "confidence": 0.9, "keywords": ["legal", "law", "document"]}}
+            - Chemistry textbook → {{"domain": "chemistry", "topic": "chemistry education", "confidence": 0.95, "keywords": ["chemistry", "science", "education"]}}
+            - Religious text → {{"domain": "religion", "topic": "religious text", "confidence": 0.85, "keywords": ["religion", "faith", "spiritual"]}}
             
             Response (JSON only):
             """
@@ -177,19 +176,19 @@ class DocumentClassifier:
             if json_match:
                 result = json.loads(json_match.group())
                 # Cache the result
-                redis_set(cache_key, json.dumps(result), ex=86400)  # 24 hour cache
+                redis_set(cache_key, json.dumps(result), ex=3600)  # 1 hour cache
                 logger.info(f"Document classification: {filename} → {result.get('domain', 'unknown')}")
                 return result
             else:
                 # Fallback classification
                 fallback = DocumentClassifier._fallback_classification(text_sample, filename)
-                redis_set(cache_key, json.dumps(fallback), ex=86400)
+                redis_set(cache_key, json.dumps(fallback), ex=3600)
                 return fallback
                 
         except Exception as e:
             logger.error(f"Document classification failed: {str(e)}")
             fallback = DocumentClassifier._fallback_classification(text_sample, filename)
-            redis_set(cache_key, json.dumps(fallback), ex=86400)
+            redis_set(cache_key, json.dumps(fallback), ex=3600)
             return fallback
     
     @staticmethod
@@ -275,12 +274,34 @@ class HybridSearch:
         return combined
 
 def sanitize_text(text: str) -> str:
-    """Sanitize text for safe processing."""
-    # Remove control characters
-    text = re.sub(r'[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]', '', text)
+    """Sanitize text by removing special characters and normalizing whitespace."""
+    if not text:
+        return ""
+    
+    # Remove special characters but keep basic punctuation
+    text = re.sub(r'[^\w\s\.\,\!\?\;\:\-\(\)\[\]\{\}]', '', text)
+    
     # Normalize whitespace
-    text = re.sub(r'\s+', ' ', text)
-    return text.strip()
+    text = re.sub(r'\s+', ' ', text).strip()
+    
+    return text
+
+def sanitize_input(text: str) -> str:
+    """Sanitize user input for safe processing."""
+    if not text:
+        return ""
+    
+    # Remove potentially dangerous characters
+    text = re.sub(r'[<>\"\']', '', text)
+    
+    # Normalize whitespace
+    text = re.sub(r'\s+', ' ', text).strip()
+    
+    # Limit length to prevent abuse
+    if len(text) > 10000:
+        text = text[:10000]
+    
+    return text
 
 def extract_page_numbers(text: str) -> List[int]:
     """Extract page numbers from text."""

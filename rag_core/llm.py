@@ -5,6 +5,25 @@ MAX_HISTORY_MESSAGES = 10  # Number of previous messages to include (excluding s
 
 class LLMHandler:
     """Handles LLM interactions with retry logic."""
+    
+    def __init__(self):
+        """Initialize LLM handler"""
+        pass
+    
+    def generate_response(self, prompt: str, context: str = "") -> str:
+        """
+        Generate a complete response from the LLM.
+        Returns the full response as a string.
+        """
+        response_parts = []
+        try:
+            for word in self.call_llm(prompt, context):
+                response_parts.append(word)
+            return "".join(response_parts)
+        except Exception as e:
+            logger.error(f"Failed to generate response: {e}")
+            return f"Error generating response: {str(e)}"
+    
     @staticmethod
     @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=4, max=10))
     def call_llm(prompt: str, context: str, conversation_history=None):

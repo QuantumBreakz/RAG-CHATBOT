@@ -116,34 +116,41 @@ class AdvancedSearch:
                 clean_query = query
             
             # Get base results from vector store
-            results = self.vectorstore.search(clean_query, n_results=limit * 2)  # Get more for filtering
+            query_results = self.vectorstore.query_collection(clean_query, n_results=limit * 2)  # Get more for filtering
             
-            # Apply filters
-            if filters:
-                results = self._apply_filters(results, filters)
+            # Check if we got results
+            if not query_results or 'documents' not in query_results or not query_results['documents']:
+                return []
+            
+            # Extract results from ChromaDB response
+            documents = query_results['documents'][0]  # First query text
+            metadatas = query_results['metadatas'][0] if 'metadatas' in query_results else []
+            distances = query_results['distances'][0] if 'distances' in query_results else []
             
             # Convert to SearchResult objects
             search_results = []
-            for i, result in enumerate(results[:limit]):
-                if hasattr(result, 'metadata'):
-                    metadata = result.metadata
-                else:
-                    metadata = {}
+            for i, (doc, metadata, distance) in enumerate(zip(documents, metadatas, distances)):
+                # Convert distance to similarity score (ChromaDB returns distances, lower is better)
+                score = 1.0 - (distance / 2.0) if distance is not None else 0.0
                 
                 # Extract highlights
-                highlights = self._extract_highlights(clean_query, result.page_content)
+                highlights = self._extract_highlights(clean_query, doc)
                 
                 search_result = SearchResult(
-                    content=result.page_content,
+                    content=doc,
                     filename=metadata.get('filename', 'unknown'),
                     domain=metadata.get('domain'),
                     file_type=metadata.get('file_type'),
                     chunk_index=metadata.get('chunk_index', i),
-                    score=getattr(result, 'score', 0.0),
+                    score=score,
                     highlights=highlights,
                     metadata=metadata
                 )
                 search_results.append(search_result)
+            
+            # Apply filters
+            if filters:
+                search_results = self._apply_filters(search_results, filters)
             
             # Filter by minimum score
             search_results = [r for r in search_results if r.score >= min_score]

@@ -1,6 +1,7 @@
 from rag_core.config import OLLAMA_BASE_URL, OLLAMA_EMBEDDING_MODEL, CHROMA_DB_PATH, CHROMA_COLLECTION_NAME, CACHE_TTL, logger
 import chromadb
 from chromadb.utils.embedding_functions.ollama_embedding_function import OllamaEmbeddingFunction
+import requests
 import time
 from tenacity import retry, stop_after_attempt, wait_exponential
 from rag_core.redis_cache import redis_get, redis_set
@@ -13,6 +14,18 @@ import numpy as np
 from rag_core.utils import QueryClassifier, HybridSearch, format_source_attribution
 from rag_core.reranker import get_reranker
 
+class FixedOllamaEmbeddingFunction(OllamaEmbeddingFunction):
+    """Fixed Ollama embedding function that uses the correct /api/embeddings endpoint"""
+    
+    def __init__(self, url: str, model_name: str):
+        # Override the URL to use the correct endpoint
+        if url.endswith('/api/embed'):
+            url = url.replace('/api/embed', '/api/embeddings')
+        elif not url.endswith('/api/embeddings'):
+            url = url + '/api/embeddings'
+        
+        super().__init__(url=url, model_name=model_name)
+
 class VectorStore:
     """Handles vector collection operations for ChromaDB with enhanced hybrid search and domain filtering."""
     
@@ -20,8 +33,9 @@ class VectorStore:
     def get_vector_collection():
         """Initialize and return a Chroma vector collection with advanced indexing for large-scale operations."""
         try:
-            ollama_ef = OllamaEmbeddingFunction(
-                url=f"{OLLAMA_BASE_URL}/api/embeddings",
+            # Use fixed embedding function with correct endpoint
+            ollama_ef = FixedOllamaEmbeddingFunction(
+                url=f"{OLLAMA_BASE_URL}/api/embed",  # Will be corrected to /api/embeddings
                 model_name=OLLAMA_EMBEDDING_MODEL,
             )
             
@@ -38,7 +52,6 @@ class VectorStore:
             return None
 
     @staticmethod
-    @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=4, max=10))
     def add_to_vector_collection(all_splits, file_name, embeddings=None):
         """Add document chunks to the vector collection with retry logic and batching. If embeddings are provided, use them."""
         try:
@@ -46,7 +59,7 @@ class VectorStore:
             if not collection:
                 return False
             
-            batch_size = 50  # Adjust based on your system performance
+            batch_size = 10  # Reduced batch size to prevent overwhelming
             total_chunks = len(all_splits)
             
             for i in range(0, total_chunks, batch_size):
@@ -70,9 +83,9 @@ class VectorStore:
                         collection.upsert(documents=documents, metadatas=metadatas, ids=ids)
                         logger.info(f"Added batch {i//batch_size + 1} ({len(documents)} chunks) for {file_name}")
 
-                    # Small delay between batches to prevent overwhelming the system
+                    # Increased delay between batches to prevent overwhelming
                     if batch_end < total_chunks:
-                        time.sleep(0.5)
+                        time.sleep(1.0)
                 except Exception as batch_error:
                     logger.error(f"Error adding batch {i//batch_size + 1} for {file_name}: {str(batch_error)}")
                     raise batch_error
@@ -161,12 +174,12 @@ class VectorStore:
                 if chunk['page_content'] == u['page_content']:
                     is_duplicate = True
                     break
-                # Check for fuzzy duplicates (more strict threshold)
-                if levenshtein_distance(chunk['page_content'], u['page_content']) < 10:  # Reduced from 20
+                # Check for fuzzy duplicates (less strict threshold)
+                if levenshtein_distance(chunk['page_content'], u['page_content']) < 5:  # Reduced from 10
                     is_duplicate = True
                     break
-                # Check for semantic duplicates (same concept, different wording)
-                if VectorStore._is_semantic_duplicate(chunk['page_content'], u['page_content'], threshold=0.9):  # Increased threshold
+                # Check for semantic duplicates (same concept, different wording) - less strict
+                if VectorStore._is_semantic_duplicate(chunk['page_content'], u['page_content'], threshold=0.95):  # Increased threshold
                     is_duplicate = True
                     break
             if not is_duplicate:
@@ -251,44 +264,46 @@ class VectorStore:
         
         collection = VectorStore.get_vector_collection()
         if not collection:
+            logger.error("No vector collection available")
             return {"documents": [[]], "metadatas": [[]], "ids": [[]]}
         
-        # Build query parameters with stricter filtering - reduce multiplier to prevent too many chunks
+        # Build query parameters with simpler filtering
         query_kwargs = {
             'query_texts': [prompt],
-            'n_results': min(n_results * 3, 15),  # fetch fewer chunks, max 15
+            'n_results': n_results * 2,  # Get more results for better coverage
             'include': ['documents', 'metadatas', 'distances']
         }
         
-        # Apply strict filters
+        # Apply basic filters only
         where_conditions = {}
         if filename:
             where_conditions['filename'] = filename
-        if target_domain and target_domain != 'general':
-            where_conditions['domain'] = target_domain
         
         if where_conditions:
             query_kwargs['where'] = where_conditions
+        
+        logger.info(f"Query parameters: {query_kwargs}")
         
         result = collection.query(**query_kwargs)
         docs = result.get('documents', [[]])[0]
         metadatas = result.get('metadatas', [[]])[0]
         distances = result.get('distances', [[]])[0]
         
+        logger.info(f"Raw query results - docs: {len(docs)}, metadatas: {len(metadatas)}, distances: {len(distances)}")
+        
         # Build chunk dicts with enhanced similarity scores
         chunks = []
         for i, (doc, meta, distance) in enumerate(zip(docs, metadatas, distances)):
-            similarity = 1.0 - distance if distance is not None else 1.0
+            similarity = 1.0 - (distance / 2.0) if distance is not None else 0.0
             
             # Enhanced similarity scoring with domain consistency
             domain = meta.get('domain', 'unknown')
             domain_boost = 0.2 if domain == target_domain else 0.0
             enhanced_similarity = min(similarity + domain_boost, 1.0)
             
-            # Filter out low-quality chunks
-            if enhanced_similarity < 0.3:  # Only include chunks with decent similarity
-                continue
-                
+            logger.info(f"Chunk {i}: similarity={similarity:.3f}, enhanced_similarity={enhanced_similarity:.3f}, domain={domain}, target_domain={target_domain}")
+            
+            # Remove threshold filtering - include all chunks
             chunk = {
                 'page_content': doc,
                 'metadata': meta,
@@ -297,6 +312,8 @@ class VectorStore:
                 'confidence': enhanced_similarity
             }
             chunks.append(chunk)
+        
+        logger.info(f"Total chunks found: {len(chunks)}")
         
         # Apply hybrid search if we have enough chunks
         if len(chunks) > 3:
@@ -307,8 +324,10 @@ class VectorStore:
         if reranker.is_available():
             chunks = reranker.rerank_chunks(prompt, chunks, top_k=n_results)
         
-        # Final reranking and deduplication
-        reranked = VectorStore._rerank_and_deduplicate(chunks, top_k=n_results)
+        # Final reranking and deduplication - be less aggressive
+        reranked = VectorStore._rerank_and_deduplicate(chunks, top_k=min(n_results * 2, len(chunks)))
+        
+        logger.info(f"Final reranked chunks: {len(reranked)}")
         
         # Prepare return format with source attribution
         docs_out = [c['page_content'] for c in reranked]
@@ -317,13 +336,18 @@ class VectorStore:
         
         # Add source attributions with better formatting
         sources = []
-        for meta in metas_out:
+        for i, meta in enumerate(metas_out):
+            # Get the corresponding chunk for confidence score
+            chunk = reranked[i] if i < len(reranked) else None
+            confidence = chunk.get('confidence', 0.5) if chunk else 0.5
+            
             sources.append({
                 'title': meta.get('title', meta.get('filename', 'Unknown Document')),
                 'page': meta.get('page_number'),
                 'section': meta.get('section_number'),
                 'domain': meta.get('domain', 'general'),
-                'attribution': format_source_attribution(meta)
+                'attribution': format_source_attribution(meta),
+                'confidence': confidence
             })
         
         result = {
@@ -339,7 +363,7 @@ class VectorStore:
         
         # Cache the result
         try:
-                            redis_set(cache_key, pickle.dumps(result), ex=3600)  # 1 hour cache
+            redis_set(cache_key, pickle.dumps(result), ex=3600)  # 1 hour cache
         except Exception:
             pass
         
@@ -453,8 +477,8 @@ class VectorStore:
     def embed_text(text: str) -> List[float]:
         """Embed text using the Ollama embedding model."""
         try:
-            ollama_ef = OllamaEmbeddingFunction(
-                url=f"{OLLAMA_BASE_URL}/api/embeddings",
+            ollama_ef = FixedOllamaEmbeddingFunction(
+                url=f"{OLLAMA_BASE_URL}/api/embed",  # Will be corrected to /api/embeddings
                 model_name=OLLAMA_EMBEDDING_MODEL,
             )
             return ollama_ef([text])[0]

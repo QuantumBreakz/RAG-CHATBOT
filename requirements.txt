@@ -101,6 +101,10 @@ python-dateutil==2.9.0.post0
 python-dotenv==1.1.1
 python-Levenshtein==0.27.1
 python-multipart==0.0.20
+opencv-python==4.9.0.80
+nltk==3.8.1
+paddleocr==2.7.0.3
+easyocr==1.7.0
 pytz==2025.2
 PyYAML==6.0.2
 RapidFuzz==3.13.0
@@ -142,3 +146,8 @@ websockets==15.0.1
 yarl==1.20.1
 zipp==3.23.0
 zstandard==0.23.0
+
+# Agentic RAG Dependencies
+pandas==2.1.4
+numpy==1.24.3
+openpyxl==3.1.2  # For Excel file support
