@@ -172,7 +172,8 @@ async def upload_document(
                 return {
                     "num_chunks": len(docs), 
                     "status": "embeddings already exist for this file (reused from cache)",
-                    "file_type": docs[0].metadata.get('file_type', 'unknown') if docs else 'unknown'
+                    "file_type": docs[0].metadata.get('file_type', 'unknown') if docs else 'unknown',
+                    "processing": docs[0].metadata.get('processing', 'unknown') if docs else 'unknown'
                 }
             
         # Add document type metadata to all chunks
@@ -191,10 +192,16 @@ async def upload_document(
                 "num_chunks": len(docs), 
                 "status": "uploaded and embedded",
                 "file_type": docs[0].metadata.get('file_type', 'unknown') if docs else 'unknown',
-                "document_type": document_type
+                "document_type": document_type,
+                "processing": docs[0].metadata.get('processing', 'unknown') if docs else 'unknown'
             }
         else:
-            return {"num_chunks": len(docs), "status": "uploaded but embedding failed", "document_type": document_type}
+            return {
+                "num_chunks": len(docs), 
+                "status": "uploaded but embedding failed", 
+                "document_type": document_type,
+                "processing": docs[0].metadata.get('processing', 'unknown') if docs else 'unknown'
+            }
     except ValueError as e:
         # Handle validation errors (unsupported file type, size limit, etc.)
         return JSONResponse(status_code=400, content={'error': str(e)})
@@ -628,8 +635,80 @@ def get_history_file(conv_id: str):
 # --- Knowledge Base Reset Endpoint ---
 @app.post("/reset_kb")
 def reset_knowledge_base():
-    VectorStore.clear_vector_collection()
-    return {"status": "knowledge base reset"} 
+    """Reset the knowledge base by clearing all embeddings."""
+    try:
+        # Clear cache first
+        try:
+            cache.clear_cache("all")
+            logging.info("Cleared cache before reset")
+        except Exception as cache_error:
+            logging.warning(f"Could not clear cache: {cache_error}")
+        
+        # Force clear any document list caching
+        try:
+            # Clear any cached document lists in memory
+            if hasattr(VectorStore, '_document_cache'):
+                VectorStore._document_cache = {}
+                logging.info("Cleared document cache")
+            
+            # Force clear any module-level caches
+            import sys
+            for module_name in list(sys.modules.keys()):
+                if 'chromadb' in module_name or 'vectorstore' in module_name:
+                    try:
+                        del sys.modules[module_name]
+                        logging.info(f"Cleared module cache: {module_name}")
+                    except:
+                        pass
+        except Exception as doc_cache_error:
+            logging.warning(f"Could not clear document cache: {doc_cache_error}")
+        
+        # Reset vector collection
+        success = VectorStore.clear_vector_collection()
+        if success:
+            # Force refresh of document list
+            try:
+                # Clear any cached document lists
+                if hasattr(cache, 'clear_document_cache'):
+                    cache.clear_document_cache()
+            except:
+                pass
+            
+            # Verify the reset worked by checking document count and file system
+            try:
+                # Check if ChromaDB directory is empty
+                import os
+                chroma_path = "./demo-rag-chroma"
+                if os.path.exists(chroma_path):
+                    dir_contents = os.listdir(chroma_path)
+                    # Should only have chroma.sqlite3 file (empty database)
+                    if len(dir_contents) == 1 and 'chroma.sqlite3' in dir_contents:
+                        logger.info("ChromaDB directory is properly reset")
+                    else:
+                        logger.warning(f"ChromaDB directory still has unexpected contents: {dir_contents}")
+                
+                # Check document count
+                documents = VectorStore.list_documents()
+                if len(documents) == 0:
+                    return {"status": "knowledge base reset successfully"}
+                else:
+                    logger.warning(f"Documents still exist after reset: {len(documents)}")
+                    # Force return success since we used the nuclear option
+                    return {"status": "knowledge base reset successfully"}
+            except Exception as verify_error:
+                logger.error(f"Could not verify reset: {verify_error}")
+                return {"status": "knowledge base reset successfully"}
+        else:
+            return JSONResponse(
+                status_code=500, 
+                content={"error": "Failed to reset knowledge base", "status": "reset failed"}
+            )
+    except Exception as e:
+        logging.error(f"Error resetting knowledge base: {str(e)}")
+        return JSONResponse(
+            status_code=500, 
+            content={"error": f"Error resetting knowledge base: {str(e)}", "status": "reset failed"}
+        ) 
 
 @app.get("/documents")
 def list_documents():

@@ -1,0 +1,87 @@
+{
+  "id": "d8c1e8a5-2b68-438b-9b08-da6227cca3c6",
+  "title": "New Conversation",
+  "messages": [
+    {
+      "id": "2791358d-e834-4810-9562-e5ac9e374df8",
+      "role": "user",
+      "content": "what are SITE REQUIREMENTS: COMMERCIAL?",
+      "timestamp": "2025-08-05T11:52:08.694Z",
+      "isStreaming": false
+    },
+    {
+      "id": "4518070b-291c-4630-8b0a-d3c8c1abac08",
+      "role": "assistant",
+      "content": "According to the provided context, \"SITE REQUIREMENTS: COMMERCIAL\" refers to the requirements specified under Chapter-3 of the Model Building Regulations rules 2007 for Town Municipal Administration.\n\nHowever, I was unable to find a detailed explanation of these requirements in the provided documents. The relevant section, \"SITE REQUIREMENTS: COMMERCIAL\", only mentions two points:\n\n1. Predominantly Open Areas (Section 2.3) \n2. Professional Activities Allowed in a Residential Units (Section 2.4)\n\nThe context does not provide further information on what exactly are the Site Requirements for Commercial purposes.\n\nI cannot find information about \"SITE REQUIREMENTS: COMMERCIAL\" in the provided documents, and I must admit that my knowledge is limited to this specific document set.",
+      "timestamp": "2025-08-05T11:52:08.694Z",
+      "isStreaming": false,
+      "sources": [
+        [
+          " \n \n \n2.4 Professional Activities Allowed in a Residential Units  \n \nA part, not exceeding 25% of the floor area of a residential building can be used subject to fo rmal \npermission from a competent authority as office associated with the resident's profession e.g. a \ndoctor's clinic or office, a lawyer's office, accountant\u2019s office or other technical consultant's office \netc. This facility shall be available only to a r esident holding both a professional degree from a \nrecognized University and registration with a Council or statutory body duly constituted under a \nFederal or Provincial Enactment. If the resident of a Housing Unit happens to be a tenant, he will \nalso be re quired to submit a no objection certificate from the owner in this regard.  \n \nChapter -3 \nSITE REQUIREMENTS: COMMERCIAL  ",
+          {
+            "document_type": "master_document",
+            "processing_timestamp": "2025-08-05T16:50:42.708513",
+            "file_type": "pdf",
+            "char_count": 807,
+            "chunk_id": "Model Building Regulations rules 2007 for Town Municipal Administration.pdf_88",
+            "chunk_type": "semantic",
+            "chunk_index": 88,
+            "pages": 86,
+            "master_document": "Model Building Regulations rules 2007 for Town Municipal Administration.pdf",
+            "filename": "Model Building Regulations rules 2007 for Town Municipal Administration.pdf",
+            "domain": "government",
+            "is_master": true,
+            "processing": "native",
+            "word_count": 127
+          },
+          {
+            "title": "Model Building Regulations rules 2007 for Town Municipal Administration.pdf",
+            "page": null,
+            "section": null,
+            "domain": "government",
+            "attribution": "From: Model Building Regulations rules 2007 for Town Municipal Administration",
+            "confidence": 1
+          }
+        ],
+        [
+          "2.3 Predominantly Open Areas  ................................ ................................ .................  15 \n2.4 Professional Activities Allowed in a Residential Units  ................................ ....... 16 \n \nCHAPTER -3: SITE REQUIREMENTS : COMMERICAL  ",
+          {
+            "is_master": true,
+            "chunk_id": "Model Building Regulations rules 2007 for Town Municipal Administration.pdf_2",
+            "char_count": 270,
+            "processing": "native",
+            "chunk_index": 2,
+            "filename": "Model Building Regulations rules 2007 for Town Municipal Administration.pdf",
+            "master_document": "Model Building Regulations rules 2007 for Town Municipal Administration.pdf",
+            "chunk_type": "semantic",
+            "domain": "government",
+            "pages": 86,
+            "file_type": "pdf",
+            "document_type": "master_document",
+            "word_count": 25,
+            "processing_timestamp": "2025-08-05T16:50:42.708231"
+          },
+          {
+            "title": "Model Building Regulations rules 2007 for Town Municipal Administration.pdf",
+            "page": null,
+            "section": null,
+            "domain": "government",
+            "attribution": "From: Model Building Regulations rules 2007 for Town Municipal Administration",
+            "confidence": 1
+          }
+        ]
+      ],
+      "contextMetadata": {
+        "total_chunks": 2,
+        "used_chunks": 2,
+        "history_messages": 0,
+        "has_summary": false,
+        "context_length": 1258
+      }
+    }
+  ],
+  "createdAt": "2025-08-05T11:51:52.062Z",
+  "documents": [],
+  "created_at": "2025-08-05T11:51:52.062Z",
+  "uploads": []
+}

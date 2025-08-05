@@ -655,15 +655,25 @@ const ChatInterface: React.FC = () => {
   };
 
   const handleResetKB = async () => {
-    if (!window.confirm('Are you sure you want to reset the knowledge base?')) return;
+    if (!window.confirm('Are you sure you want to reset the knowledge base? This will delete all uploaded documents.')) return;
     setLoading(true);
     setStatusMessage('Resetting knowledge base...');
     try {
       const data = await apiCall('/api/reset_kb', { method: 'POST' });
-      setStatusMessage(data.status || 'Knowledge base reset.');
-      showBanner('Knowledge base reset.', 'success');
-      fetchDocuments();
+      
+      if (data.status && data.status.includes('successfully')) {
+        setStatusMessage('Knowledge base reset successfully.');
+        showBanner('Knowledge base reset successfully.', 'success');
+        // Clear local document state
+        setDocuments([]);
+        // Refresh documents list
+        await fetchDocuments();
+      } else {
+        setStatusMessage('Failed to reset knowledge base.');
+        showBanner('Failed to reset knowledge base.', 'error');
+      }
     } catch (err) {
+      console.error('Reset KB error:', err);
       setStatusMessage('Failed to reset knowledge base.');
       showBanner('Failed to reset knowledge base.', 'error');
     }

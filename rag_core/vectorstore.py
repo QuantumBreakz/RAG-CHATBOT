@@ -50,6 +50,17 @@ class VectorStore:
         except Exception as e:
             logger.error(f"Error initializing vector collection: {str(e)}")
             return None
+    
+    @staticmethod
+    def _clear_collection_cache():
+        """Clear any cached collection references."""
+        try:
+            # Force garbage collection to clear any cached references
+            import gc
+            gc.collect()
+            logger.info("Cleared collection cache")
+        except Exception as e:
+            logger.warning(f"Could not clear collection cache: {e}")
 
     @staticmethod
     def add_to_vector_collection(all_splits, file_name, embeddings=None):
@@ -404,26 +415,202 @@ class VectorStore:
     def clear_vector_collection():
         """Delete all embeddings from the ChromaDB collection (reset knowledge base)."""
         try:
-            collection = VectorStore.get_vector_collection()
-            if collection:
-                collection.delete(where={})  # Delete all documents
-                logger.info("Cleared all embeddings from the vector collection.")
+            import shutil
+            import os
+            
+            # Method 1: Try to clear via collection API
+            try:
+                collection = VectorStore.get_vector_collection()
+                if collection:
+                    # Get count before deletion for verification
+                    try:
+                        count_before = collection.count()
+                        logger.info(f"Found {count_before} documents to delete")
+                    except Exception as e:
+                        logger.warning(f"Could not get document count: {e}")
+                        count_before = 0
+                    
+                    # Delete all documents
+                    collection.delete(where={})
+                    
+                    # Verify deletion
+                    try:
+                        count_after = collection.count()
+                        logger.info(f"Documents after deletion: {count_after}")
+                        if count_after == 0:
+                            logger.info("Successfully cleared all embeddings from the vector collection.")
+                            return True
+                    except Exception as e:
+                        logger.warning(f"Could not verify deletion: {e}")
+            except Exception as e:
+                logger.warning(f"Collection API clear failed: {e}")
+            
+            # Method 2: Force recreate collection
+            try:
+                import chromadb
+                client = chromadb.PersistentClient(path="./demo-rag-chroma")
+                
+                # Delete existing collection
+                try:
+                    client.delete_collection("rag_collection")
+                    logger.info("Deleted existing collection via API")
+                except Exception as delete_error:
+                    logger.warning(f"Could not delete collection via API: {delete_error}")
+                
+                # Create new empty collection
+                client.create_collection("rag_collection")
+                logger.info("Created new empty collection")
+                return True
+                
+            except Exception as recreate_error:
+                logger.error(f"Failed to recreate collection: {recreate_error}")
+            
+            # Method 3: Nuclear option - delete the entire ChromaDB directory
+            try:
+                chroma_path = "./demo-rag-chroma"
+                if os.path.exists(chroma_path):
+                    # Force close any open connections first
+                    try:
+                        import chromadb
+                        client = chromadb.PersistentClient(path=chroma_path)
+                        # Try to delete collection first
+                        try:
+                            client.delete_collection("rag_collection")
+                            logger.info("Deleted collection before directory removal")
+                        except:
+                            pass
+                    except:
+                        pass
+                    
+                    # Force close any file handles and clear memory
+                    try:
+                        import gc
+                        gc.collect()
+                        logger.info("Forced garbage collection")
+                    except:
+                        pass
+                    
+                    # Remove directory with aggressive retry logic
+                    max_retries = 5
+                    for attempt in range(max_retries):
+                        try:
+                            # Try to remove files individually first
+                            for root, dirs, files in os.walk(chroma_path, topdown=False):
+                                for file in files:
+                                    try:
+                                        os.remove(os.path.join(root, file))
+                                    except:
+                                        pass
+                                for dir in dirs:
+                                    try:
+                                        os.rmdir(os.path.join(root, dir))
+                                    except:
+                                        pass
+                            
+                            # Now remove the main directory
+                            shutil.rmtree(chroma_path)
+                            logger.info(f"Deleted entire ChromaDB directory: {chroma_path}")
+                            break
+                        except PermissionError as pe:
+                            logger.warning(f"Permission error on attempt {attempt + 1}: {pe}")
+                            if attempt == max_retries - 1:
+                                # Last resort: try to delete individual files
+                                try:
+                                    for root, dirs, files in os.walk(chroma_path, topdown=False):
+                                        for file in files:
+                                            try:
+                                                os.remove(os.path.join(root, file))
+                                            except:
+                                                pass
+                                    logger.info("Deleted files individually as fallback")
+                                except:
+                                    pass
+                                raise
+                            import time
+                            time.sleep(2)  # Longer delay
+                        except Exception as e:
+                            logger.error(f"Error deleting directory on attempt {attempt + 1}: {e}")
+                            if attempt == max_retries - 1:
+                                raise
+                            import time
+                            time.sleep(2)  # Longer delay
+                    
+                    # Recreate the directory
+                    os.makedirs(chroma_path, exist_ok=True)
+                    logger.info("Recreated ChromaDB directory")
+                    
+                    # Force refresh the collection reference
+                    try:
+                        import chromadb
+                        client = chromadb.PersistentClient(path=chroma_path)
+                        client.create_collection("rag_collection")
+                        logger.info("Created fresh collection after directory reset")
+                    except Exception as create_error:
+                        logger.warning(f"Could not create fresh collection: {create_error}")
+                    
+                    # Clear any cached references
+                    VectorStore._clear_collection_cache()
+                    
+                    return True
+                else:
+                    logger.warning(f"ChromaDB directory does not exist: {chroma_path}")
+                    return True  # If directory doesn't exist, consider it cleared
+                    
+            except Exception as nuclear_error:
+                logger.error(f"Failed to delete ChromaDB directory: {nuclear_error}")
+                return False
+                
         except Exception as e:
-            logger.error(f"Error clearing vector collection: {str(e)}") 
+            logger.error(f"Error clearing vector collection: {str(e)}")
+            return False 
 
     @staticmethod
     def list_documents():
         """Return a list of unique filenames and their metadata from the collection."""
         collection = VectorStore.get_vector_collection()
         if not collection:
+            logger.warning("No vector collection found for listing documents")
             return []
-        # Query all metadatas (ChromaDB does not have a direct 'list all' API, so we use a broad query)
+        
         try:
-            # Query for a common word to get all docs (hack: n_results very high)
-            result = collection.query(query_texts=["."], n_results=10000, include=["metadatas"])
-            metadatas = result.get("metadatas", [[]])[0]
+            # Force refresh by checking if ChromaDB directory exists and is empty
+            import os
+            chroma_path = "./demo-rag-chroma"
+            if not os.path.exists(chroma_path):
+                logger.info("ChromaDB directory does not exist, returning empty list")
+                return []
+            
+            # Check if directory is empty (except for potential temp files)
+            try:
+                dir_contents = os.listdir(chroma_path)
+                if not dir_contents or all(item.startswith('.') for item in dir_contents):
+                    logger.info("ChromaDB directory is empty, returning empty list")
+                    return []
+            except Exception as dir_error:
+                logger.warning(f"Could not check directory contents: {dir_error}")
+            
+            # First check if collection has any documents
+            try:
+                count = collection.count()
+                logger.info(f"Collection has {count} documents")
+                if count == 0:
+                    return []
+            except Exception as count_error:
+                logger.warning(f"Could not get document count: {count_error}")
+                # If we can't get count, assume collection is empty
+                return []
+            
+            # Get all documents using get() method instead of query
+            result = collection.get(include=["metadatas", "documents"])
+            metadatas = result.get("metadatas", [])
+            documents = result.get("documents", [])
+            
+            if not metadatas:
+                logger.info("No metadata found in collection")
+                return []
+            
             files = {}
-            for meta in metadatas:
+            for i, meta in enumerate(metadatas):
                 fname = meta.get("filename", "unknown")
                 if fname not in files:
                     files[fname] = {
@@ -432,13 +619,22 @@ class VectorStore:
                         "examples": [],
                         "domain": meta.get("domain", "general"),
                         "title": meta.get("title", fname),
-                        "doc_type": meta.get("doc_type", "document")
+                        "doc_type": meta.get("doc_type", "document"),
+                        "file_type": meta.get("file_type", "unknown")
                     }
                 files[fname]["count"] += 1
                 if len(files[fname]["examples"]) < 3:
-                    files[fname]["examples"].append(meta)
+                    # Add a sample of the document content
+                    sample_content = documents[i][:100] + "..." if len(documents[i]) > 100 else documents[i]
+                    files[fname]["examples"].append({
+                        "content": sample_content,
+                        "metadata": meta
+                    })
+            
+            logger.info(f"Found {len(files)} unique documents")
             return list(files.values())
         except Exception as e:
+            logger.error(f"Error listing documents: {str(e)}")
             return []
 
     @staticmethod

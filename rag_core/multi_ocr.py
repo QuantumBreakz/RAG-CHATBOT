@@ -746,34 +746,187 @@ class MultiOCREngine:
         return results
     
     def is_scanned_pdf(self, pdf_path: str, max_pages: int = 3) -> bool:
-        """Enhanced scanned PDF detection"""
+        """Robust scanned PDF detection with comprehensive analysis and fallback mechanisms"""
+        detection_results = {
+            "text_density": 0.0,
+            "total_pages": 0,
+            "pages_checked": 0,
+            "text_found": False,
+            "metadata_indicators": [],
+            "content_indicators": [],
+            "final_decision": False,
+            "confidence": "low"
+        }
+        
         try:
             reader = PdfReader(pdf_path)
             text_content = ""
+            total_pages = len(reader.pages)
+            detection_results["total_pages"] = total_pages
             
-            for i, page in enumerate(reader.pages[:max_pages]):
-                text = page.extract_text()
-                if text:
-                    text_content += text
-            
-            # If very little text is found, likely scanned
-            if len(text_content.strip()) < 100:
+            if total_pages == 0:
+                logger.warning("PDF has no pages")
+                detection_results["final_decision"] = True
+                detection_results["confidence"] = "high"
                 return True
             
-            # Check for common scanned PDF indicators
-            scanned_indicators = [
-                "image", "scan", "scanned", "ocr", "optical character recognition"
-            ]
+            # Check first few pages for extractable text
+            pages_to_check = min(max_pages, total_pages)
+            detection_results["pages_checked"] = pages_to_check
             
-            text_lower = text_content.lower()
-            if any(indicator in text_lower for indicator in scanned_indicators):
+            for i, page in enumerate(reader.pages[:pages_to_check]):
+                try:
+                    text = page.extract_text()
+                    if text:
+                        text_content += text
+                        detection_results["text_found"] = True
+                except Exception as e:
+                    logger.debug(f"Error extracting text from page {i+1}: {e}")
+            
+            # Calculate text density (characters per page)
+            if pages_to_check > 0:
+                text_density = len(text_content.strip()) / pages_to_check
+                detection_results["text_density"] = text_density
+            else:
+                text_density = 0.0
+            
+            # Decision logic with multiple thresholds
+            decision_factors = []
+            
+            # Factor 1: Very low text density (< 30 chars per page) - definitely scanned
+            if text_density < 30:
+                decision_factors.append(f"very_low_density_{text_density:.1f}")
+                detection_results["final_decision"] = True
+                detection_results["confidence"] = "high"
+                logger.info(f"PDF detected as scanned: very low text density ({text_density:.1f} chars/page)")
                 return True
             
+            # Factor 2: No text found at all - definitely scanned
+            if not text_content.strip():
+                decision_factors.append("no_text_found")
+                detection_results["final_decision"] = True
+                detection_results["confidence"] = "high"
+                logger.info(f"PDF detected as scanned: no extractable text found")
+                return True
+            
+            # Factor 3: Low text density (< 100 chars per page) - likely scanned
+            if text_density < 100:
+                decision_factors.append(f"low_density_{text_density:.1f}")
+                detection_results["final_decision"] = True
+                detection_results["confidence"] = "medium"
+                logger.info(f"PDF detected as scanned: low text density ({text_density:.1f} chars/page)")
+                return True
+            
+            # Factor 4: Check metadata for scanned indicators
+            try:
+                info = reader.metadata
+                if info:
+                    metadata_indicators = []
+                    for key, value in info.items():
+                        if value and isinstance(value, str):
+                            value_lower = value.lower()
+                            scanned_keywords = ["scan", "ocr", "image", "scanned", "optical", "recognition"]
+                            for keyword in scanned_keywords:
+                                if keyword in value_lower:
+                                    metadata_indicators.append(f"{key}:{value}")
+                                    break
+                    
+                    if metadata_indicators:
+                        decision_factors.append(f"metadata_indicators_{len(metadata_indicators)}")
+                        detection_results["metadata_indicators"] = metadata_indicators
+                        detection_results["final_decision"] = True
+                        detection_results["confidence"] = "medium"
+                        logger.info(f"PDF detected as scanned: metadata indicators {metadata_indicators}")
+                        return True
+            except Exception as e:
+                logger.debug(f"Error checking metadata: {e}")
+            
+            # Factor 5: Check text content for scanned indicators
+            if text_content.strip():
+                text_lower = text_content.lower()
+                scanned_indicators = [
+                    "image", "scan", "scanned", "ocr", "optical character recognition",
+                    "digitized", "converted", "extracted from image"
+                ]
+                
+                content_indicators = []
+                for indicator in scanned_indicators:
+                    if indicator in text_lower:
+                        content_indicators.append(indicator)
+                
+                if content_indicators:
+                    decision_factors.append(f"content_indicators_{len(content_indicators)}")
+                    detection_results["content_indicators"] = content_indicators
+                    detection_results["final_decision"] = True
+                    detection_results["confidence"] = "medium"
+                    logger.info(f"PDF detected as scanned: content indicators {content_indicators}")
+                    return True
+            
+            # Factor 6: Check for image-heavy content (if we can analyze page structure)
+            try:
+                image_count = 0
+                for i, page in enumerate(reader.pages[:min(2, total_pages)]):
+                    try:
+                        # Try to detect if page contains mostly images
+                        if hasattr(page, 'images') and len(page.images) > 0:
+                            image_count += len(page.images)
+                    except:
+                        pass
+                
+                if image_count > 0:
+                    decision_factors.append(f"image_heavy_{image_count}_images")
+                    detection_results["final_decision"] = True
+                    detection_results["confidence"] = "medium"
+                    logger.info(f"PDF detected as scanned: image-heavy content ({image_count} images)")
+                    return True
+            except Exception as e:
+                logger.debug(f"Error checking for images: {e}")
+            
+            # Factor 7: Check for password protection or encryption
+            try:
+                if reader.is_encrypted:
+                    decision_factors.append("encrypted")
+                    detection_results["final_decision"] = False  # Can't determine if scanned
+                    detection_results["confidence"] = "low"
+                    logger.warning("PDF is encrypted, cannot determine if scanned")
+                    return False
+            except:
+                pass
+            
+            # If we have substantial text content and no indicators, likely not scanned
+            if text_density >= 100 and not decision_factors:
+                detection_results["final_decision"] = False
+                detection_results["confidence"] = "high"
+                logger.info(f"PDF detected as text-based: {text_density:.1f} chars/page")
+                return False
+            
+            # Factor 8: Medium text density with some uncertainty
+            if 50 <= text_density < 100:
+                decision_factors.append(f"medium_density_{text_density:.1f}")
+                detection_results["final_decision"] = True
+                detection_results["confidence"] = "low"
+                logger.info(f"PDF detected as scanned: medium text density ({text_density:.1f} chars/page)")
+                return True
+            
+            # Default: if we have some text but not much, assume scanned
+            if text_density < 50:
+                detection_results["final_decision"] = True
+                detection_results["confidence"] = "low"
+                logger.info(f"PDF detected as scanned: low text density ({text_density:.1f} chars/page)")
+                return True
+            
+            # If we reach here, it's likely text-based
+            detection_results["final_decision"] = False
+            detection_results["confidence"] = "medium"
+            logger.info(f"PDF detected as text-based: {text_density:.1f} chars/page")
             return False
             
         except Exception as e:
-            logger.warning(f"Error detecting scanned PDF: {e}")
-            return True  # Assume scanned if detection fails
+            logger.warning(f"Error in scanned PDF detection: {e}")
+            detection_results["final_decision"] = False  # Don't assume scanned on error
+            detection_results["confidence"] = "low"
+            detection_results["error"] = str(e)
+            return False
 
 def extract_text_from_pdf_enhanced(pdf_path: str, use_multi_ocr: bool = True) -> str:
     """

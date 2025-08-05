@@ -1,0 +1,26 @@
+{
+  "id": "654aaefc-79c9-4a4e-b1d0-8e151c291b96",
+  "title": "New Conversation",
+  "messages": [
+    {
+      "id": "4e57be50-2763-46c1-945e-c96f04327ac6",
+      "role": "user",
+      "content": "HI",
+      "timestamp": "2025-08-05T11:27:31.124Z",
+      "isStreaming": false
+    },
+    {
+      "id": "ad3566e1-dc37-4528-899d-929fb9c183f7",
+      "role": "assistant",
+      "content": "",
+      "timestamp": "2025-08-05T11:27:31.124Z",
+      "isStreaming": false,
+      "sources": [],
+      "contextMetadata": null
+    }
+  ],
+  "createdAt": "2025-08-05T11:25:43.340Z",
+  "documents": [],
+  "created_at": "2025-08-05T11:25:43.340Z",
+  "uploads": []
+}

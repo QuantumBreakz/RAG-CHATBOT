@@ -440,98 +440,318 @@ class DocumentProcessor:
 
     @staticmethod
     def _process_pdf(file_bytes: bytes, filename: str) -> List[Document]:
-        """Process PDF files with enhanced multi-OCR support for scanned documents."""
+        """Process PDF files with robust multi-OCR support and comprehensive error handling."""
         temp_file = tempfile.NamedTemporaryFile("wb", suffix=".pdf", delete=False)
         temp_file.write(file_bytes)
         temp_file.close()
         
+        processing_attempts = []
+        final_docs = None
+        
         try:
-            # First try native text extraction
+            # Validate PDF file first
             try:
                 from PyPDF2 import PdfReader
                 reader = PdfReader(temp_file.name)
+                total_pages = len(reader.pages)
+                logger.info(f"PDF {filename} validation: {total_pages} pages")
+                
+                if total_pages == 0:
+                    raise ValueError("PDF has no pages")
+                    
+            except Exception as e:
+                logger.error(f"PDF validation failed for {filename}: {e}")
+                return [Document(
+                    page_content="",
+                    metadata={
+                        "filename": filename,
+                        "file_type": "pdf",
+                        "processing": "failed",
+                        "error": f"PDF validation failed: {str(e)}"
+                    }
+                )]
+            
+            # Method 1: Native text extraction (fastest)
+            try:
+                logger.info(f"Attempting native text extraction for {filename}")
                 native_text = '\n'.join([page.extract_text() or '' for page in reader.pages])
                 
                 if native_text.strip():
-                    logger.info(f"PDF {filename} contains extractable text, using native extraction")
-                    docs = [Document(
+                    text_length = len(native_text.strip())
+                    logger.info(f"Native extraction successful for {filename}: {text_length} characters")
+                    
+                    processing_attempts.append({
+                        "method": "native",
+                        "success": True,
+                        "text_length": text_length,
+                        "pages": total_pages
+                    })
+                    
+                    final_docs = [Document(
                         page_content=native_text,
                         metadata={
                             "filename": filename,
                             "file_type": "pdf",
                             "processing": "native",
-                            "pages": len(reader.pages)
+                            "pages": total_pages,
+                            "text_length": text_length,
+                            "processing_attempts": processing_attempts
                         }
                     )]
-                    return docs
+                    return final_docs
+                else:
+                    logger.warning(f"Native extraction returned empty text for {filename}")
+                    processing_attempts.append({
+                        "method": "native",
+                        "success": False,
+                        "error": "Empty text extracted"
+                    })
             except Exception as e:
                 logger.warning(f"Native text extraction failed for {filename}: {e}")
+                processing_attempts.append({
+                    "method": "native",
+                    "success": False,
+                    "error": str(e)
+                })
             
-            # If native extraction fails, try OCR
-            logger.info(f"PDF {filename} appears to be scanned, attempting OCR")
+            # Method 2: Enhanced scanned PDF detection and OCR
             try:
                 from .multi_ocr import MultiOCREngine, OCRConfidence
                 multi_ocr = MultiOCREngine()
-                results = multi_ocr.process_pdf(temp_file.name)
                 
-                if results:
-                    # Combine results with confidence weighting
-                    combined_text = []
-                    for result in results:
-                        if result.confidence != OCRConfidence.REJECTED and result.text.strip():
-                            combined_text.append(result.text)
+                # Robust scanned PDF detection with multiple checks
+                is_scanned = False
+                detection_reason = ""
+                
+                try:
+                    is_scanned = multi_ocr.is_scanned_pdf(temp_file.name)
+                    detection_reason = "scanned" if is_scanned else "text-based"
+                    logger.info(f"PDF {filename} detection result: {detection_reason}")
+                except Exception as e:
+                    logger.warning(f"Scanned PDF detection failed for {filename}: {e}")
+                    # Fallback: assume scanned if native extraction failed
+                    is_scanned = True
+                    detection_reason = "fallback_assumption"
+                
+                if is_scanned:
+                    logger.info(f"PDF {filename} detected as scanned, attempting OCR")
+                    results = multi_ocr.process_pdf(temp_file.name)
                     
-                    if combined_text:
-                        final_text = '\n\n'.join(combined_text)
-                        logger.info(f"OCR completed for {filename} with {len(combined_text)} text blocks")
-                        docs = [Document(
-                            page_content=final_text,
-                            metadata={
-                                "filename": filename,
-                                "file_type": "pdf",
-                                "processing": "ocr",
-                                "ocr_blocks": len(combined_text)
-                            }
-                        )]
-                        return docs
+                    if results:
+                        # Combine results with confidence weighting and validation
+                        combined_text = []
+                        valid_results = 0
+                        total_confidence = 0.0
+                        
+                        for result in results:
+                            if (result.confidence != OCRConfidence.REJECTED and 
+                                result.text.strip() and 
+                                len(result.text.strip()) > 10):  # Minimum text length
+                                combined_text.append(result.text)
+                                valid_results += 1
+                                total_confidence += {
+                                    OCRConfidence.HIGH: 1.0,
+                                    OCRConfidence.MEDIUM: 0.7,
+                                    OCRConfidence.LOW: 0.3
+                                }.get(result.confidence, 0.0)
+                        
+                        if combined_text:
+                            final_text = '\n\n'.join(combined_text)
+                            avg_confidence = total_confidence / valid_results if valid_results > 0 else 0.0
+                            
+                            logger.info(f"OCR completed for {filename}: {valid_results} valid blocks, "
+                                      f"avg confidence: {avg_confidence:.2f}")
+                            
+                            processing_attempts.append({
+                                "method": "ocr",
+                                "success": True,
+                                "blocks": valid_results,
+                                "avg_confidence": avg_confidence,
+                                "detection_reason": detection_reason
+                            })
+                            
+                            final_docs = [Document(
+                                page_content=final_text,
+                                metadata={
+                                    "filename": filename,
+                                    "file_type": "pdf",
+                                    "processing": "ocr",
+                                    "ocr_blocks": valid_results,
+                                    "avg_confidence": avg_confidence,
+                                    "detection_reason": detection_reason,
+                                    "processing_attempts": processing_attempts
+                                }
+                            )]
+                            return final_docs
+                        else:
+                            logger.warning(f"OCR produced no valid results for {filename}")
+                            processing_attempts.append({
+                                "method": "ocr",
+                                "success": False,
+                                "error": "No valid OCR results",
+                                "detection_reason": detection_reason
+                            })
+                    else:
+                        logger.warning(f"OCR processing returned no results for {filename}")
+                        processing_attempts.append({
+                            "method": "ocr",
+                            "success": False,
+                            "error": "No OCR results",
+                            "detection_reason": detection_reason
+                        })
+                else:
+                    logger.info(f"PDF {filename} is not scanned, skipping OCR")
+                    processing_attempts.append({
+                        "method": "ocr",
+                        "success": False,
+                        "error": "Not scanned",
+                        "detection_reason": detection_reason
+                    })
+                    
             except Exception as e:
                 logger.error(f"OCR processing failed for {filename}: {e}")
+                processing_attempts.append({
+                    "method": "ocr",
+                    "success": False,
+                    "error": str(e)
+                })
             
-            # Final fallback - try basic text extraction
+            # Method 3: Aggressive fallback text extraction
             try:
-                from PyPDF2 import PdfReader
-                reader = PdfReader(temp_file.name)
-                fallback_text = '\n'.join([page.extract_text() or '' for page in reader.pages])
+                logger.info(f"Attempting aggressive fallback extraction for {filename}")
+                
+                # Try different PDF libraries if available
+                fallback_text = ""
+                
+                # Try PyPDF2 again with different settings
+                try:
+                    fallback_text = '\n'.join([page.extract_text() or '' for page in reader.pages])
+                except:
+                    pass
+                
+                # Try pdfplumber if available
+                if not fallback_text.strip():
+                    try:
+                        import pdfplumber
+                        with pdfplumber.open(temp_file.name) as pdf:
+                            fallback_text = '\n'.join([page.extract_text() or '' for page in pdf.pages])
+                    except ImportError:
+                        logger.debug("pdfplumber not available for fallback extraction")
+                    except Exception as e:
+                        logger.debug(f"pdfplumber fallback failed: {e}")
+                
                 if fallback_text.strip():
-                    logger.info(f"Using fallback text extraction for {filename}")
-                    docs = [Document(
+                    text_length = len(fallback_text.strip())
+                    logger.info(f"Fallback extraction successful for {filename}: {text_length} characters")
+                    
+                    processing_attempts.append({
+                        "method": "fallback",
+                        "success": True,
+                        "text_length": text_length
+                    })
+                    
+                    final_docs = [Document(
                         page_content=fallback_text,
                         metadata={
                             "filename": filename,
                             "file_type": "pdf",
                             "processing": "fallback",
-                            "pages": len(reader.pages)
+                            "pages": total_pages,
+                            "text_length": text_length,
+                            "processing_attempts": processing_attempts
                         }
                     )]
-                    return docs
+                    return final_docs
+                else:
+                    logger.warning(f"Fallback extraction returned empty text for {filename}")
+                    processing_attempts.append({
+                        "method": "fallback",
+                        "success": False,
+                        "error": "Empty text extracted"
+                    })
             except Exception as e:
                 logger.error(f"Fallback extraction failed for {filename}: {e}")
+                processing_attempts.append({
+                    "method": "fallback",
+                    "success": False,
+                    "error": str(e)
+                })
             
-            # If all methods fail, return empty document
+            # Method 4: Last resort - try OCR even if not detected as scanned
+            if not final_docs:
+                try:
+                    logger.info(f"Attempting last-resort OCR for {filename}")
+                    from .multi_ocr import MultiOCREngine, OCRConfidence
+                    multi_ocr = MultiOCREngine()
+                    results = multi_ocr.process_pdf(temp_file.name)
+                    
+                    if results:
+                        combined_text = []
+                        for result in results:
+                            if result.confidence != OCRConfidence.REJECTED and result.text.strip():
+                                combined_text.append(result.text)
+                        
+                        if combined_text:
+                            final_text = '\n\n'.join(combined_text)
+                            logger.info(f"Last-resort OCR successful for {filename}")
+                            
+                            processing_attempts.append({
+                                "method": "last_resort_ocr",
+                                "success": True,
+                                "blocks": len(combined_text)
+                            })
+                            
+                            final_docs = [Document(
+                                page_content=final_text,
+                                metadata={
+                                    "filename": filename,
+                                    "file_type": "pdf",
+                                    "processing": "last_resort_ocr",
+                                    "ocr_blocks": len(combined_text),
+                                    "processing_attempts": processing_attempts
+                                }
+                            )]
+                            return final_docs
+                except Exception as e:
+                    logger.error(f"Last-resort OCR failed for {filename}: {e}")
+                    processing_attempts.append({
+                        "method": "last_resort_ocr",
+                        "success": False,
+                        "error": str(e)
+                    })
+            
+            # If all methods fail, return empty document with detailed error info
             logger.error(f"All PDF processing methods failed for {filename}")
-            docs = [Document(
+            logger.error(f"Processing attempts: {processing_attempts}")
+            
+            return [Document(
                 page_content="",
                 metadata={
                     "filename": filename,
                     "file_type": "pdf",
                     "processing": "failed",
-                    "error": "No text could be extracted"
+                    "error": "No text could be extracted",
+                    "processing_attempts": processing_attempts,
+                    "pages": total_pages
                 }
             )]
-            return docs
             
+        except Exception as e:
+            logger.error(f"Critical error processing PDF {filename}: {e}")
+            return [Document(
+                page_content="",
+                metadata={
+                    "filename": filename,
+                    "file_type": "pdf",
+                    "processing": "critical_error",
+                    "error": str(e)
+                }
+            )]
         finally:
-            os.unlink(temp_file.name)
+            try:
+                os.unlink(temp_file.name)
+            except Exception as e:
+                logger.warning(f"Failed to clean up temp file {temp_file.name}: {e}")
 
     @staticmethod
     def _process_word(file_bytes: bytes, filename: str) -> List[Document]:
