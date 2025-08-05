@@ -140,7 +140,8 @@ def get_domains():
 async def upload_document(
     file: UploadFile = File(...),
     chunk_size: int = Form(DEFAULT_CHUNK_SIZE),
-    chunk_overlap: int = Form(DEFAULT_CHUNK_OVERLAP)
+    chunk_overlap: int = Form(DEFAULT_CHUNK_OVERLAP),
+    document_type: str = Form("default")  # "default" or "master_document"
 ):
     # Validate file type before processing
     from rag_core.document import DocumentProcessor
@@ -174,6 +175,13 @@ async def upload_document(
                     "file_type": docs[0].metadata.get('file_type', 'unknown') if docs else 'unknown'
                 }
             
+        # Add document type metadata to all chunks
+        for doc in docs:
+            doc.metadata['document_type'] = document_type
+            if document_type == "master_document":
+                doc.metadata['is_master'] = True
+                doc.metadata['master_document'] = file.filename
+        
         # Otherwise, create embeddings as usual
         success = VectorStore.add_to_vector_collection(docs, file.filename)
         if success:
@@ -182,10 +190,11 @@ async def upload_document(
             return {
                 "num_chunks": len(docs), 
                 "status": "uploaded and embedded",
-                "file_type": docs[0].metadata.get('file_type', 'unknown') if docs else 'unknown'
+                "file_type": docs[0].metadata.get('file_type', 'unknown') if docs else 'unknown',
+                "document_type": document_type
             }
         else:
-            return {"num_chunks": len(docs), "status": "uploaded but embedding failed"}
+            return {"num_chunks": len(docs), "status": "uploaded but embedding failed", "document_type": document_type}
     except ValueError as e:
         # Handle validation errors (unsupported file type, size limit, etc.)
         return JSONResponse(status_code=400, content={'error': str(e)})
@@ -319,10 +328,27 @@ async def query_rag(
                 sources=sources
         )
         
+        # Prepare detailed source information with chunks
+        detailed_sources = []
+        for chunk, meta, source in filtered_chunks:
+            detailed_sources.append({
+                "content": chunk,
+                "metadata": meta,
+                "source": source,
+                "filename": meta.get('filename', 'unknown'),
+                "page": meta.get('page', None),
+                "section": meta.get('section', None),
+                "document_type": meta.get('document_type', 'default'),
+                "is_master": meta.get('is_master', False),
+                "chunk_id": meta.get('chunk_id', None),
+                "confidence": source.get('confidence', 0.5) if source else 0.5
+            })
+        
         return {
             "answer": answer,
             "context": context_str,
             "sources": sources,
+            "detailed_sources": detailed_sources,
             "context_metadata": context_metadata
         }
         

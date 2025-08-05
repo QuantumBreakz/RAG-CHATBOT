@@ -1,0 +1,67 @@
+{
+  "id": "aa54e88e-b960-4f7d-a26d-ff09f4ee0cfd",
+  "title": "New Conversation",
+  "messages": [
+    {
+      "id": "7d9d970c-fd48-4ed3-9996-444626983914",
+      "role": "user",
+      "content": "hi what is this document about?",
+      "timestamp": "2025-08-05T10:22:39.224Z",
+      "isStreaming": false
+    },
+    {
+      "id": "bd83d4f8-6e2d-4a12-8dc5-f787c4aa3c39",
+      "role": "assistant",
+      "content": "**Document Summary**\n\nThis document appears to be a part of the Model Building Regulations for Town Municipal Administration in 2007. It outlines the requirements for submitting plans and documents related to building constructions, including residential and multi-storey buildings.\n\nThe document covers various aspects such as:\n\n* Documents of Title (e.g., title documents, allotment/transfer orders, lease agreements)\n* Site Plan requirements\n* Building plan preparation and submission\n* Approval procedures for builders and architects\n* Additional documents required for multi-storey buildings and public assembly buildings\n\nSpecifically, it mentions the need for a Structure Stability Certificate, structural design drawings, and soil investigation reports.\n\n**Key Takeaway**\n\nThis document primarily focuses on the regulatory requirements for building constructions in the specified jurisdiction. It provides guidance on what documents must be submitted to support building plans and ensure compliance with local regulations.",
+      "timestamp": "2025-08-05T10:22:39.224Z",
+      "isStreaming": false,
+      "sources": [
+        {
+          "content": "Appendix -A.\u2019 \n  \nb. The building plan shall be prepared by a duly registered architect and shall bear the stamp, \nsigna ture and registration number of the architect and signatures of the builder.  \n \nc. Five copies of every such plans and design drawings shall be furnished to the TMA along \nwith the notice, two of which shall be mounted or drawn on linen. Two copies signed by the \nAuthorized officer of TMA signifying approval shall be returned; one of which (copy \nmounted or drawn on linen) shall be displayed  on the construction site; at a prominent public \nplace, duly laminated to protect it from rain/sunlight.  \n \n10.3.2  Documents  \n \nFor new structure, plans and documents which shall be submitted along the notice are listed \nbelow: - \n \na. Documents of Title: All th e title documents relating to the plot/plots including the allotment \n/ transfer order, site plan and lease etc. showing the right of developer or power of attorney to \ncarry out such work.  ",
+          "snippet": "Appendix -A.\u2019 \n  \nb. The building plan shall be prepared by a duly registered architect and shall bear the stamp, \nsigna ture and registration number of the architect and signatures of the builder.  \n...",
+          "filename": "Model Building Regulations rules 2007 for Town Municipal Administration.pdf",
+          "chunk_index": 230,
+          "section": null,
+          "heading": null,
+          "domain": "government",
+          "file_type": "pdf",
+          "score": 1
+        },
+        {
+          "content": " \na. Documents of Title: All th e title documents relating to the plot/plots including the allotment \n/ transfer order, site plan and lease etc. showing the right of developer or power of attorney to \ncarry out such work.  \n \nb. Site Plan  \ni. A site plan drawn to a scale of 100 ft (30.49m) to an inch (0.03m) (1:1250) to show the \nsite to which it refers, unless its address is a number in a regular sequence of numbers in an \nApproved Scheme.  \nii. A block plan of the site drawn to a scale of not le ss than 32 ft (9.76m) to an inch (0.03m) \n(1:400) showing the position of the proposed building and existing buildings, if any;the \nwidth and level of the streets on which the plot abuts and the adjoining plot numbers \ntogether with cardinal points.  ",
+          "snippet": " \na. Documents of Title: All th e title documents relating to the plot/plots including the allotment \n/ transfer order, site plan and lease etc. showing the right of developer or power of attorney to ...",
+          "filename": "Model Building Regulations rules 2007 for Town Municipal Administration.pdf",
+          "chunk_index": 231,
+          "section": null,
+          "heading": null,
+          "domain": "government",
+          "file_type": "pdf",
+          "score": 1
+        },
+        {
+          "content": "from the District Coordination Officer and any other concerned departments as notified by \nthe Government from time to time.  \n  \n10.3.3 Multi Storey Buildings and Buildings of Public Assembly  \n \n In addition to the plans and documents as specified in sections 10.3.1&10.3.2, the builder shall \nsubmit the following documents:  \n \na. Structure Stability Certificate  \nA structure stability certificate signed by a qualified Structure Engineer along with building \nplans of multi -storey buildings and buildings of public assembly on performa BB -6. \n \nb. Structural Design Drawings  \nThree sets of structural design and documents as listed below duly prepared and signed by a \nconsulting Structural Engineer.  \n \ni. Design criteria, specifying design loads, reference standards and codes, and the methods \nof analysis and design adopted.  \nii. Design computations  \niii. Design drawings  \niv. Relevant technical specifications  \nv. Soil investigation report.  \n \n ",
+          "snippet": "from the District Coordination Officer and any other concerned departments as notified by \nthe Government from time to time.  \n  \n10.3.3 Multi Storey Buildings and Buildings of Public Assembly  \n \n In...",
+          "filename": "Model Building Regulations rules 2007 for Town Municipal Administration.pdf",
+          "chunk_index": 236,
+          "section": null,
+          "heading": null,
+          "domain": "government",
+          "file_type": "pdf",
+          "score": 1
+        }
+      ],
+      "contextMetadata": {
+        "total_chunks": 3,
+        "used_chunks": 3,
+        "history_messages": 0,
+        "has_summary": false,
+        "context_length": 2958
+      }
+    }
+  ],
+  "createdAt": "2025-08-05T10:22:16.123Z",
+  "documents": [],
+  "sources": [],
+  "created_at": "2025-08-05T10:22:16.123Z",
+  "uploads": []
+}

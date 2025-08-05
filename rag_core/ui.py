@@ -356,9 +356,10 @@ def main():
 
         # Helper function to upload file to backend
 
-        def upload_file_to_backend(uploaded_file):
+        def upload_file_to_backend(uploaded_file, document_type="default"):
             files = {'file': (uploaded_file.name, uploaded_file.getvalue())}
-            response = requests.post('http://localhost:8000/upload', files=files)
+            data = {'document_type': document_type}
+            response = requests.post('http://localhost:8000/upload', files=files, data=data)
             if response.ok:
                 return response.json()
             else:
@@ -388,6 +389,18 @@ def main():
                 st.error(f"Error calling backend: {str(e)}")
                 return None
 
+        # Document type selection
+        st.markdown("### 📄 Document Upload Options")
+        document_type = st.selectbox(
+            "Select document type:",
+            options=[
+                ("default", "Default - Process as regular document chunks"),
+                ("master_document", "Master Document - Process as complete document for comprehensive analysis")
+            ],
+            format_func=lambda x: x[1],
+            key="document_type_selector"
+        )
+        
         uploaded_files = st.file_uploader(
             "Upload PDF, DOCX, CSV, or Excel files",
             type=["pdf", "docx", "csv", "xlsx", "xls"],
@@ -397,8 +410,8 @@ def main():
 
         if uploaded_files:
             for uploaded_file in uploaded_files:
-                with st.spinner(f"Uploading and processing {uploaded_file.name}..."):
-                    upload_result = upload_file_to_backend(uploaded_file)
+                with st.spinner(f"Uploading and processing {uploaded_file.name} as {document_type[1].lower()}..."):
+                    upload_result = upload_file_to_backend(uploaded_file, document_type[0])
                 if upload_result:
                     if hasattr(st, 'toast'):
                         st.toast(f"{uploaded_file.name} processed! Chunks created: {upload_result['num_chunks']}", icon="✅")
@@ -592,10 +605,28 @@ def main():
                                 """,
                                 unsafe_allow_html=True
                             )
-                    # Only show context preview in dev mode
-                    if not is_user and msg.get("context_preview") and dev_mode:
-                        with st.expander("Context Used", expanded=False):
-                            st.markdown(f"<div style='font-size:13px; color:#333; background:#f9f9f9; border-radius:8px; padding:8px 12px; margin-bottom:4px;'>{msg['context_preview']}</div>", unsafe_allow_html=True)
+                    # Show sources and context for AI messages
+                    if not is_user:
+                        # Display sources if available
+                        if msg.get("detailed_sources"):
+                            with st.expander("📚 Sources & Chunks", expanded=False):
+                                sources = msg.get("detailed_sources", [])
+                                for idx, source in enumerate(sources):
+                                    with st.container():
+                                        st.markdown(f"**Source {idx + 1}:** {source.get('filename', 'Unknown')}")
+                                        if source.get('page'):
+                                            st.caption(f"Page: {source['page']}")
+                                        if source.get('document_type') == 'master_document':
+                                            st.caption("📋 Master Document")
+                                        st.markdown(f"**Confidence:** {source.get('confidence', 0.5):.2f}")
+                                        st.markdown(f"**Content:**")
+                                        st.markdown(f"```\n{source.get('content', '')[:300]}{'...' if len(source.get('content', '')) > 300 else ''}\n```")
+                                        st.divider()
+                        
+                        # Show context preview in dev mode
+                        if msg.get("context_preview") and dev_mode:
+                            with st.expander("Context Used", expanded=False):
+                                st.markdown(f"<div style='font-size:13px; color:#333; background:#f9f9f9; border-radius:8px; padding:8px 12px; margin-bottom:4px;'>{msg['context_preview']}</div>", unsafe_allow_html=True)
         # End of chat rendering loop
 
         # --- Floating Chat Input Area Implementation ---
@@ -703,12 +734,14 @@ def main():
                     answer = query_result.get('answer', '')
                     context_str = query_result.get('context', '')
                     
-                    # Display the response (for now, non-streaming)
+                    # Display the response with enhanced source information
                     st.session_state["conversation_history"].append({
                         "role": "ai", 
                         "content": answer, 
                         "timestamp": datetime.now().isoformat(timespec='seconds'),
-                        "context_preview": context_str
+                        "context_preview": context_str,
+                        "detailed_sources": query_result.get('detailed_sources', []),
+                        "sources": query_result.get('sources', [])
                     })
                     # Save to disk immediately
                     save_session_to_disk()

@@ -8,6 +8,11 @@ interface Source {
   section?: string;
   domain: string;
   attribution: string;
+  content?: string;
+  filename?: string;
+  document_type?: string;
+  is_master?: boolean;
+  confidence?: number;
 }
 
 interface SourceDisplayProps {
@@ -77,6 +82,32 @@ const SourceDisplay: React.FC<SourceDisplayProps> = ({ sources, className = '' }
                 
                 <div className="mt-2 text-xs text-muted-foreground bg-muted/50 p-2 rounded">
                   {source.attribution}
+                </div>
+                
+                {/* Show chunk content if available */}
+                {source.content && (
+                  <div className="mt-2">
+                    <div className="text-xs font-medium text-muted-foreground mb-1">Chunk Content:</div>
+                    <div className="text-xs bg-muted/30 p-2 rounded border-l-2 border-primary">
+                      {source.content.length > 200 
+                        ? `${source.content.substring(0, 200)}...` 
+                        : source.content}
+                    </div>
+                  </div>
+                )}
+                
+                {/* Show additional metadata */}
+                <div className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
+                  {source.confidence && (
+                    <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded">
+                      Confidence: {(source.confidence * 100).toFixed(0)}%
+                    </span>
+                  )}
+                  {source.is_master && (
+                    <span className="bg-purple-100 text-purple-800 px-2 py-1 rounded">
+                      Master Document
+                    </span>
+                  )}
                 </div>
               </div>
               

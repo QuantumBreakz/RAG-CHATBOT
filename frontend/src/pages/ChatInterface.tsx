@@ -79,6 +79,12 @@ const ChatInterface: React.FC = () => {
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [agenticAIEnabled, setAgenticAIEnabled] = useState(true);
   const [agenticSources, setAgenticSources] = useState<any>(null);
+  const [sidebarWidth, setSidebarWidth] = useState(() => {
+    const saved = localStorage.getItem('xor-rag-sidebar-width');
+    return saved ? parseInt(saved) : 320;
+  });
+  const [isResizing, setIsResizing] = useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const audioUrlRef = useRef<string | null>(null);
@@ -557,7 +563,7 @@ const ChatInterface: React.FC = () => {
     }
   };
 
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, documentType: string = 'default') => {
     const files = e.target.files;
     if (!files) return;
 
@@ -575,6 +581,10 @@ const ChatInterface: React.FC = () => {
       const formData = new FormData();
       formData.append('file', file);
       formData.append('chunk_size', chunkSize.toString());
+      
+      // Get the selected document type from localStorage
+      const selectedDocType = localStorage.getItem('xor-rag-document-type') || 'default';
+      formData.append('document_type', selectedDocType);
 
       try {
         const data = await apiCall('/api/upload', {
@@ -583,7 +593,8 @@ const ChatInterface: React.FC = () => {
         });
 
         if (data.status?.includes('uploaded and embedded')) {
-          showBanner(`Embeddings created for "${file.name}" (${data.num_chunks} chunks).`, 'success');
+          const docType = data.document_type === 'master_document' ? 'Master Document' : 'Regular Document';
+          showBanner(`${docType} embeddings created for "${file.name}" (${data.num_chunks} chunks).`, 'success');
         } else if (data.status?.includes('already exist')) {
           showBanner(`Embeddings already exist for "${file.name}".`, 'success');
         } else {
@@ -1107,10 +1118,82 @@ const ChatInterface: React.FC = () => {
     }
   };
 
+  // Sidebar resize handlers
+  const handleResizeStart = (e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsResizing(true);
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+  };
+
+  const handleResizeMove = (e: MouseEvent) => {
+    if (!isResizing) return;
+    
+    const newWidth = e.clientX;
+    const minWidth = 240; // Minimum sidebar width
+    const maxWidth = window.innerWidth * 0.6; // Maximum 60% of screen width
+    
+    if (newWidth >= minWidth && newWidth <= maxWidth) {
+      setSidebarWidth(newWidth);
+      localStorage.setItem('xor-rag-sidebar-width', newWidth.toString());
+    }
+  };
+
+  const toggleSidebar = () => {
+    if (isSidebarCollapsed) {
+      setIsSidebarCollapsed(false);
+      setSidebarWidth(320); // Restore to default width
+      localStorage.setItem('xor-rag-sidebar-width', '320');
+    } else {
+      setIsSidebarCollapsed(true);
+      setSidebarWidth(60); // Collapsed width
+      localStorage.setItem('xor-rag-sidebar-width', '60');
+    }
+  };
+
+  const handleResizeEnd = () => {
+    setIsResizing(false);
+    document.body.style.cursor = '';
+    document.body.style.userSelect = '';
+  };
+
+  // Add and remove event listeners
+  useEffect(() => {
+    if (isResizing) {
+      document.addEventListener('mousemove', handleResizeMove);
+      document.addEventListener('mouseup', handleResizeEnd);
+      
+      return () => {
+        document.removeEventListener('mousemove', handleResizeMove);
+        document.removeEventListener('mouseup', handleResizeEnd);
+      };
+    }
+  }, [isResizing]);
+
   return (
     <div className="flex h-screen w-screen bg-background">
       {/* Sidebar */}
-      <div className="bg-surface border-r border-border flex flex-col w-80 flex-none h-screen z-40 fixed left-0 top-0 overflow-y-auto max-h-screen shadow-lg">
+      <div 
+        className="bg-surface border-r border-border flex flex-col h-screen z-40 fixed left-0 top-0 overflow-y-auto max-h-screen shadow-lg transition-all duration-200"
+        style={{ width: `${sidebarWidth}px` }}
+      >
+        {/* Sidebar Toggle Button */}
+        <div className="absolute top-4 right-4 z-50">
+          <Button
+            onClick={toggleSidebar}
+            variant="ghost"
+            size="sm"
+            className="p-2 rounded-full bg-surface/80 backdrop-blur-sm border border-border hover:bg-surface-elevated"
+            title={isSidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+          >
+            {isSidebarCollapsed ? (
+              <ChevronRight className="h-4 w-4" />
+            ) : (
+              <ChevronDown className="h-4 w-4" />
+            )}
+          </Button>
+        </div>
+
         {bannerMessage && (
           <div className={`p-2 text-xs text-center rounded-b ${bannerType === 'success' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'} shadow`}>
             {bannerMessage}
@@ -1119,67 +1202,91 @@ const ChatInterface: React.FC = () => {
         
         {/* New Chat & Rename Buttons */}
         <div className="p-4 border-b border-border flex flex-col gap-2 mt-16">
-          <Button onClick={handleCreateNewConversation} className="w-full group rounded-lg shadow-sm" variant="outline">
-            <Plus className="mr-2 h-4 w-4 group-hover:rotate-90 transition-transform duration-300" />
-            New Conversation
-          </Button>
+          {isSidebarCollapsed ? (
+            <Button 
+              onClick={handleCreateNewConversation} 
+              className="w-full group rounded-lg shadow-sm p-2" 
+              variant="outline"
+              title="New Conversation"
+            >
+              <Plus className="h-4 w-4 group-hover:rotate-90 transition-transform duration-300" />
+            </Button>
+          ) : (
+            <Button onClick={handleCreateNewConversation} className="w-full group rounded-lg shadow-sm" variant="outline">
+              <Plus className="mr-2 h-4 w-4 group-hover:rotate-90 transition-transform duration-300" />
+              New Conversation
+            </Button>
+          )}
         </div>
 
         {/* Chat Sessions */}
         <div className="flex-1 overflow-y-auto p-4 space-y-2 custom-scrollbar max-h-[calc(100vh-300px)]">
-          <h3 className="text-sm font-semibold text-muted-foreground mb-4 flex items-center">
-            <Sparkles className="mr-2 h-4 w-4" />
-            Recent Conversations
-          </h3>
+          {!isSidebarCollapsed && (
+            <h3 className="text-sm font-semibold text-muted-foreground mb-4 flex items-center">
+              <Sparkles className="mr-2 h-4 w-4" />
+              Recent Conversations
+            </h3>
+          )}
           {conversations.length > 0 ? (
             conversations.map((conv) => (
               <Card key={conv.id} hover className={`p-4 cursor-pointer transition-all duration-300 rounded-lg shadow-sm flex items-center justify-between ${currentSession?.id === conv.id ? 'border-2 border-primary' : ''}`}
                 onClick={() => handleSelectSession(conv.id)}>
-                <div className="flex items-center space-x-2 w-full">
-                  <div className="flex-1 min-w-0">
-                    {renamingConvId === conv.id ? (
-                      <input
-                        className="text-sm font-medium text-foreground truncate mb-1 bg-surface border-b border-primary focus:outline-none px-2 py-1 rounded"
-                        value={editedTitle}
-                        autoFocus
-                        onChange={e => setEditedTitle(e.target.value)}
-                        onBlur={() => handleSaveTitle(conv.id)}
-                        onKeyDown={e => {
-                          if (e.key === 'Enter') handleSaveTitle(conv.id);
-                          if (e.key === 'Escape') { setIsEditingTitle(false); setRenamingConvId(null); }
-                        }}
-                        style={{ width: '10rem' }}
-                      />
-                    ) : (
-                      <span className="text-sm font-medium text-foreground truncate mb-1">{conv.title}</span>
-                    )}
-                    <div className="text-xs text-muted-foreground">
-                      {conv.created_at ? new Date(conv.created_at).toLocaleString() : ''}
+                {isSidebarCollapsed ? (
+                  <div className="flex flex-col items-center space-y-1">
+                    <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
+                      <MessageSquare className="w-4 h-4 text-primary" />
+                    </div>
+                    <div className="text-xs text-center text-muted-foreground truncate w-full" title={conv.title}>
+                      {conv.title?.charAt(0) || 'C'}
                     </div>
                   </div>
-                  <button
-                    className="ml-1 text-primary hover:text-primary-dark focus:outline-none rounded p-1"
-                    onClick={e => {
-                      e.stopPropagation();
-                      setEditedTitle(conv.title || '');
-                      setIsEditingTitle(true);
-                      setRenamingConvId(conv.id);
-                    }}
-                    title="Rename Conversation"
-                  >
-                    <Pencil className="w-4 h-4" />
-                  </button>
-                  <button
-                    className="ml-1 text-red-500 hover:text-red-700 focus:outline-none rounded p-1"
-                    onClick={async e => {
-                      e.stopPropagation();
-                      await handleDeleteConversation(conv.id);
-                    }}
-                    title="Delete Conversation"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                </div>
+                ) : (
+                  <div className="flex items-center space-x-2 w-full">
+                    <div className="flex-1 min-w-0">
+                      {renamingConvId === conv.id ? (
+                        <input
+                          className="text-sm font-medium text-foreground truncate mb-1 bg-surface border-b border-primary focus:outline-none px-2 py-1 rounded"
+                          value={editedTitle}
+                          autoFocus
+                          onChange={e => setEditedTitle(e.target.value)}
+                          onBlur={() => handleSaveTitle(conv.id)}
+                          onKeyDown={e => {
+                            if (e.key === 'Enter') handleSaveTitle(conv.id);
+                            if (e.key === 'Escape') { setIsEditingTitle(false); setRenamingConvId(null); }
+                          }}
+                          style={{ width: '10rem' }}
+                        />
+                      ) : (
+                        <span className="text-sm font-medium text-foreground truncate mb-1">{conv.title}</span>
+                      )}
+                      <div className="text-xs text-muted-foreground">
+                        {conv.created_at ? new Date(conv.created_at).toLocaleString() : ''}
+                      </div>
+                    </div>
+                    <button
+                      className="ml-1 text-primary hover:text-primary-dark focus:outline-none rounded p-1"
+                      onClick={e => {
+                        e.stopPropagation();
+                        setEditedTitle(conv.title || '');
+                        setIsEditingTitle(true);
+                        setRenamingConvId(conv.id);
+                      }}
+                      title="Rename Conversation"
+                    >
+                      <Pencil className="w-4 h-4" />
+                    </button>
+                    <button
+                      className="ml-1 text-red-500 hover:text-red-700 focus:outline-none rounded p-1"
+                      onClick={async e => {
+                        e.stopPropagation();
+                        await handleDeleteConversation(conv.id);
+                      }}
+                      title="Delete Conversation"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                )}
               </Card>
             ))
           ) : (
@@ -1189,26 +1296,47 @@ const ChatInterface: React.FC = () => {
 
         {/* Document Context */}
         <div className="p-4 border-t border-border">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-sm font-semibold text-muted-foreground flex items-center">
-              <FileText className="mr-2 h-4 w-4" />
-              Knowledge Base
-            </h3>
-            <div className="flex items-center space-x-2">
-              <Button 
-                onClick={() => setShowFileTypeInfo(!showFileTypeInfo)} 
-                variant="ghost" 
-                size="sm" 
-                className="p-1"
-                title="Supported file types"
-              >
-                <Sparkles className="h-4 w-4" />
-              </Button>
-              <Button onClick={() => fileInputRef.current?.click()} variant="ghost" size="sm" className="p-2">
-                <Upload className="h-4 w-4" />
-              </Button>
+          {!isSidebarCollapsed && (
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-sm font-semibold text-muted-foreground flex items-center">
+                <FileText className="mr-2 h-4 w-4" />
+                Knowledge Base
+              </h3>
+              <div className="flex items-center space-x-2">
+                <Button 
+                  onClick={() => setShowFileTypeInfo(!showFileTypeInfo)} 
+                  variant="ghost" 
+                  size="sm" 
+                  className="p-1"
+                  title="Supported file types"
+                >
+                  <Sparkles className="h-4 w-4" />
+                </Button>
+                <Button onClick={() => fileInputRef.current?.click()} variant="ghost" size="sm" className="p-2">
+                  <Upload className="h-4 w-4" />
+                </Button>
+              </div>
             </div>
-          </div>
+          )}
+          
+          {/* Document Type Selection */}
+          {!isSidebarCollapsed && (
+            <div className="mb-4">
+              <label className="text-xs text-muted-foreground mb-2 block">Document Type:</label>
+              <select 
+                className="w-full text-xs p-2 border border-border rounded bg-surface text-foreground"
+                onChange={(e) => {
+                  const selectedType = e.target.value;
+                  // Store the selected document type for uploads
+                  localStorage.setItem('xor-rag-document-type', selectedType);
+                }}
+                defaultValue={localStorage.getItem('xor-rag-document-type') || 'default'}
+              >
+                <option value="default">Default - Regular chunks</option>
+                <option value="master_document">Master Document - Complete analysis</option>
+              </select>
+            </div>
+          )}
           
           {/* Supported File Types Info */}
           {showFileTypeInfo && (
@@ -1274,7 +1402,6 @@ const ChatInterface: React.FC = () => {
               </Card>
             )}
           </div>
-        </div>
 
         {/* Settings & Admin */}
         <div className="p-4 border-t border-border">
@@ -1322,10 +1449,26 @@ const ChatInterface: React.FC = () => {
             <div className="text-xs text-muted-foreground mt-2">{statusMessage}</div>
           )}
         </div>
+        </div>
+      </div>
+
+      {/* Resize Handle */}
+      <div
+        className="fixed top-0 left-0 w-1 h-full z-50 cursor-col-resize hover:bg-primary/20 transition-colors duration-200"
+        style={{ left: `${sidebarWidth - 2}px` }}
+        onMouseDown={handleResizeStart}
+        title="Drag to resize sidebar"
+      >
+        <div className="w-full h-full flex items-center justify-center">
+          <div className="w-0.5 h-8 bg-border hover:bg-primary transition-colors duration-200 rounded-full"></div>
+        </div>
       </div>
 
       {/* Main Chat Area */}
-      <div className="flex-1 flex flex-col ml-80 min-w-0">
+      <div 
+        className="flex-1 flex flex-col min-w-0 transition-all duration-200"
+        style={{ marginLeft: `${sidebarWidth}px` }}
+      >
         {/* Chat Header - stretch across full width, add padding and shadow */}
         <div className="bg-surface border-b border-border px-8 py-5 flex items-center justify-between sticky top-0 z-30 shadow-md w-full">
           <div className="flex items-center gap-3">
