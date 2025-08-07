@@ -120,29 +120,24 @@ class AdvancedSearch:
             
             # Check if we got results
             if not query_results or 'documents' not in query_results or not query_results['documents']:
-                return []
+                return [SearchResult(content='No answer found in the provided documents.', filename='', domain=None, file_type=None, chunk_index=0, score=0.0, highlights=[], metadata={})]
             
             # Extract results from ChromaDB response
             documents = query_results['documents'][0]  # First query text
             metadatas = query_results['metadatas'][0] if 'metadatas' in query_results else []
             distances = query_results['distances'][0] if 'distances' in query_results else []
             
-            # Convert to SearchResult objects
+            # Convert to SearchResult objects (ignore score)
             search_results = []
             for i, (doc, metadata, distance) in enumerate(zip(documents, metadatas, distances)):
-                # Convert distance to similarity score (ChromaDB returns distances, lower is better)
-                score = 1.0 - (distance / 2.0) if distance is not None else 0.0
-                
-                # Extract highlights
                 highlights = self._extract_highlights(clean_query, doc)
-                
                 search_result = SearchResult(
                     content=doc,
                     filename=metadata.get('filename', 'unknown'),
                     domain=metadata.get('domain'),
                     file_type=metadata.get('file_type'),
                     chunk_index=metadata.get('chunk_index', i),
-                    score=score,
+                    score=0.0,  # Score is now always 0.0
                     highlights=highlights,
                     metadata=metadata
                 )
@@ -152,8 +147,9 @@ class AdvancedSearch:
             if filters:
                 search_results = self._apply_filters(search_results, filters)
             
-            # Filter by minimum score
-            search_results = [r for r in search_results if r.score >= min_score]
+            # No score-based filtering or pre-checks
+            if not search_results:
+                return [SearchResult(content='No answer found in the provided documents.', filename='', domain=None, file_type=None, chunk_index=0, score=0.0, highlights=[], metadata={})]
             
             return search_results
             

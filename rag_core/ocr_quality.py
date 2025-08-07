@@ -15,7 +15,7 @@ from pathlib import Path
 import statistics
 from collections import defaultdict, Counter
 
-from .multi_ocr import OCRConfidence, ConsensusResult, OCRResult
+# from .multi_ocr import OCRConfidence, ConsensusResult, OCRResult
 
 logger = logging.getLogger(__name__)
 
@@ -64,11 +64,11 @@ class DocumentQualityReport:
     file_size: int
     document_type: str
     processing_time: float
-    confidence_level: OCRConfidence
+    confidence_level: str # Changed from OCRConfidence
     agreement_score: float
     quality_flags: List[str]
-    engine_results: List[OCRResult]
-    consensus_result: ConsensusResult
+    engine_results: List[Dict[str, Any]] # Changed from OCRResult
+    consensus_result: Dict[str, Any] # Changed from ConsensusResult
     metadata: Dict[str, Any]
 
 class OCRQualityAssessor:
@@ -81,8 +81,8 @@ class OCRQualityAssessor:
         self.document_reports: List[DocumentQualityReport] = []
         
     def assess_document_quality(self, filename: str, file_size: int, 
-                              engine_results: List[OCRResult], 
-                              consensus_result: ConsensusResult,
+                              engine_results: List[Dict[str, Any]], 
+                              consensus_result: Dict[str, Any],
                               document_type: str = "unknown") -> DocumentQualityReport:
         """
         Assess quality of OCR processing for a single document.
@@ -108,30 +108,30 @@ class OCRQualityAssessor:
             filename=filename,
             file_size=file_size,
             document_type=document_type,
-            processing_time=consensus_result.processing_time,
-            confidence_level=consensus_result.confidence,
-            agreement_score=consensus_result.agreement_score,
+            processing_time=consensus_result["processing_time"],
+            confidence_level=consensus_result["confidence"],
+            agreement_score=consensus_result["agreement_score"],
             quality_flags=quality_flags,
             engine_results=engine_results,
             consensus_result=consensus_result,
             metadata={
                 "num_engines_used": len(engine_results),
-                "engines_used": [r.engine_name for r in engine_results],
-                "best_engine": consensus_result.metadata.get("best_engine", "unknown"),
-                "best_confidence": consensus_result.metadata.get("best_confidence", 0.0),
-                "avg_similarity": consensus_result.metadata.get("avg_similarity", 0.0)
+                "engines_used": [r["engine_name"] for r in engine_results],
+                "best_engine": consensus_result.get("best_engine", "unknown"),
+                "best_confidence": consensus_result.get("best_confidence", 0.0),
+                "avg_similarity": consensus_result.get("avg_similarity", 0.0)
             }
         )
         
         self.document_reports.append(report)
         return report
     
-    def _analyze_engine_performance(self, engine_results: List[OCRResult]) -> Dict[str, Dict[str, Any]]:
+    def _analyze_engine_performance(self, engine_results: List[Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:
         """Analyze performance of individual OCR engines"""
         engine_stats = {}
         
         for result in engine_results:
-            engine_name = result.engine_name
+            engine_name = result["engine_name"]
             if engine_name not in engine_stats:
                 engine_stats[engine_name] = {
                     "total_runs": 0,
@@ -145,47 +145,47 @@ class OCRQualityAssessor:
             
             stats = engine_stats[engine_name]
             stats["total_runs"] += 1
-            stats["total_processing_time"] += result.processing_time
+            stats["total_processing_time"] += result["processing_time"]
             
-            if result.text.strip():
+            if result["text"].strip():
                 stats["successful_runs"] += 1
-                stats["total_text_length"] += len(result.text)
+                stats["total_text_length"] += len(result["text"])
                 stats["average_confidence"] = (
-                    (stats["average_confidence"] * (stats["successful_runs"] - 1) + result.confidence) / 
+                    (stats["average_confidence"] * (stats["successful_runs"] - 1) + result["confidence"]) / 
                     stats["successful_runs"]
                 )
             else:
                 stats["failed_runs"] += 1
-                if "error" in result.metadata:
-                    stats["errors"].append(result.metadata["error"])
+                if "error" in result["metadata"]:
+                    stats["errors"].append(result["metadata"]["error"])
         
         return engine_stats
     
-    def _identify_quality_flags(self, engine_results: List[OCRResult], 
-                               consensus_result: ConsensusResult) -> List[str]:
+    def _identify_quality_flags(self, engine_results: List[Dict[str, Any]], 
+                               consensus_result: Dict[str, Any]) -> List[str]:
         """Identify quality issues in OCR processing"""
         flags = []
         
         # Check for engine failures
-        failed_engines = [r for r in engine_results if not r.text.strip()]
+        failed_engines = [r for r in engine_results if not r["text"].strip()]
         if failed_engines:
             flags.append(f"engine_failures:{len(failed_engines)}")
         
         # Check for low confidence
-        if consensus_result.confidence == OCRConfidence.LOW:
+        if consensus_result["confidence"] == "LOW":
             flags.append("low_confidence")
-        elif consensus_result.confidence == OCRConfidence.REJECTED:
+        elif consensus_result["confidence"] == "REJECTED":
             flags.append("rejected_text")
         
         # Check for low agreement
-        if consensus_result.agreement_score < 0.5:
+        if consensus_result["agreement_score"] < 0.5:
             flags.append("low_agreement")
         
         # Check for quality flags from consensus
-        flags.extend(consensus_result.quality_flags)
+        flags.extend(consensus_result.get("quality_flags", []))
         
         # Check for processing time issues
-        if consensus_result.processing_time > 30.0:  # More than 30 seconds
+        if consensus_result["processing_time"] > 30.0:  # More than 30 seconds
             flags.append("slow_processing")
         
         return flags
@@ -215,7 +215,7 @@ class OCRQualityAssessor:
         
         # Basic counts
         total_documents = len(reports)
-        successful_documents = len([r for r in reports if r.confidence_level != OCRConfidence.REJECTED])
+        successful_documents = len([r for r in reports if r.confidence_level != "REJECTED"])
         failed_documents = total_documents - successful_documents
         
         # Page-level metrics (assuming 1 page per document for simplicity)
@@ -225,10 +225,10 @@ class OCRQualityAssessor:
         
         # Confidence distribution
         confidence_counts = Counter([r.confidence_level for r in reports])
-        high_confidence_pages = confidence_counts[OCRConfidence.HIGH]
-        medium_confidence_pages = confidence_counts[OCRConfidence.MEDIUM]
-        low_confidence_pages = confidence_counts[OCRConfidence.LOW]
-        rejected_pages = confidence_counts[OCRConfidence.REJECTED]
+        high_confidence_pages = confidence_counts["HIGH"]
+        medium_confidence_pages = confidence_counts["MEDIUM"]
+        low_confidence_pages = confidence_counts["LOW"]
+        rejected_pages = confidence_counts["REJECTED"]
         
         # Processing time metrics
         processing_times = [r.processing_time for r in reports]
@@ -243,11 +243,11 @@ class OCRQualityAssessor:
         # Calculate average confidence score
         confidence_scores = []
         for r in reports:
-            if r.confidence_level == OCRConfidence.HIGH:
+            if r.confidence_level == "HIGH":
                 confidence_scores.append(0.9)  # High confidence range
-            elif r.confidence_level == OCRConfidence.MEDIUM:
+            elif r.confidence_level == "MEDIUM":
                 confidence_scores.append(0.7)  # Medium confidence range
-            elif r.confidence_level == OCRConfidence.LOW:
+            elif r.confidence_level == "LOW":
                 confidence_scores.append(0.3)  # Low confidence range
             else:
                 confidence_scores.append(0.0)  # Rejected
@@ -277,16 +277,16 @@ class OCRQualityAssessor:
         
         for r in reports:
             for engine_result in r.engine_results:
-                stats = engine_usage_stats[engine_result.engine_name]
+                stats = engine_usage_stats[engine_result["engine_name"]]
                 stats["total_runs"] += 1
-                stats["total_processing_time"] += engine_result.processing_time
+                stats["total_processing_time"] += engine_result["processing_time"]
                 
-                if engine_result.text.strip():
+                if engine_result["text"].strip():
                     stats["successful_runs"] += 1
                     # Update average confidence
                     current_avg = stats["average_confidence"]
                     stats["average_confidence"] = (
-                        (current_avg * (stats["successful_runs"] - 1) + engine_result.confidence) / 
+                        (current_avg * (stats["successful_runs"] - 1) + engine_result["confidence"]) / 
                         stats["successful_runs"]
                     )
                 else:
@@ -298,8 +298,8 @@ class OCRQualityAssessor:
         
         for r in reports:
             for engine_result in r.engine_results:
-                if "error" in engine_result.metadata:
-                    error_msg = engine_result.metadata["error"]
+                if "error" in engine_result["metadata"]:
+                    error_msg = engine_result["metadata"]["error"]
                     error_distribution[error_msg] += 1
                     error_patterns.append(error_msg)
         
@@ -458,24 +458,24 @@ class OCRQualityAssessor:
                 "file_size": report.file_size,
                 "document_type": report.document_type,
                 "processing_time": report.processing_time,
-                "confidence_level": report.confidence_level.value,
+                "confidence_level": report.confidence_level,
                 "agreement_score": report.agreement_score,
                 "quality_flags": report.quality_flags,
                 "metadata": report.metadata,
                 "consensus_result": {
-                    "text_length": len(report.consensus_result.text),
-                    "confidence": report.consensus_result.confidence.value,
-                    "contributing_engines": report.consensus_result.contributing_engines,
-                    "agreement_score": report.consensus_result.agreement_score,
-                    "quality_flags": report.consensus_result.quality_flags
+                    "text_length": len(report.consensus_result["text"]),
+                    "confidence": report.consensus_result["confidence"],
+                    "contributing_engines": report.consensus_result.get("contributing_engines", []),
+                    "agreement_score": report.consensus_result["agreement_score"],
+                    "quality_flags": report.consensus_result.get("quality_flags", [])
                 },
                 "engine_results": [
                     {
-                        "engine_name": r.engine_name,
-                        "text_length": len(r.text),
-                        "confidence": r.confidence,
-                        "processing_time": r.processing_time,
-                        "metadata": r.metadata
+                        "engine_name": r["engine_name"],
+                        "text_length": len(r["text"]),
+                        "confidence": r["confidence"],
+                        "processing_time": r["processing_time"],
+                        "metadata": r["metadata"]
                     }
                     for r in report.engine_results
                 ]

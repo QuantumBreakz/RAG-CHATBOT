@@ -297,319 +297,319 @@ class QueryAnalyzer:
             metadata={"fallback": True}
         )
 
-class AgenticRAG:
-    """Main agentic RAG system that intelligently handles different query types"""
+# class AgenticRAG:
+#     """Main agentic RAG system that intelligently handles different query types"""
     
-    def __init__(self, config: Dict[str, Any] = None):
-        self.config = config or self._get_default_config()
+#     def __init__(self, config: Dict[str, Any] = None):
+#         self.config = config or self._get_default_config()
         
-        # Initialize components
-        self.context_manager = DocumentContextManager()
-        self.numerical_processor = NumericalDataProcessor()
-        self.query_analyzer = QueryAnalyzer()
-        self.vectorstore = VectorStore()
-        self.llm = LLMHandler()
-        self.search_engine = AdvancedSearch()
+#         # Initialize components
+#         self.context_manager = DocumentContextManager()
+#         self.numerical_processor = NumericalDataProcessor()
+#         self.query_analyzer = QueryAnalyzer()
+#         self.vectorstore = VectorStore()
+#         self.llm = LLMHandler()
+#         self.search_engine = AdvancedSearch()
         
-        # Performance tracking
-        self.query_history = []
-        self.performance_metrics = {}
+#         # Performance tracking
+#         self.query_history = []
+#         self.performance_metrics = {}
     
-    def _get_default_config(self) -> Dict[str, Any]:
-        """Get default configuration"""
-        return {
-            "enable_full_document_context": True,
-            "enable_numerical_analysis": True,
-            "enable_hybrid_search": True,
-            "max_context_length": 10000,
-            "confidence_threshold": 0.7,
-            "cache_results": True,
-            "parallel_processing": True
-        }
+#     def _get_default_config(self) -> Dict[str, Any]:
+#         """Get default configuration"""
+#         return {
+#             "enable_full_document_context": True,
+#             "enable_numerical_analysis": True,
+#             "enable_hybrid_search": True,
+#             "max_context_length": 10000,
+#             "confidence_threshold": 0.7,
+#             "cache_results": True,
+#             "parallel_processing": True
+#         }
     
-    async def process_query(self, query: str, user_context: Dict[str, Any] = None) -> AgenticResponse:
-        """Process query using agentic reasoning"""
-        start_time = datetime.now()
+#     async def process_query(self, query: str, user_context: Dict[str, Any] = None) -> AgenticResponse:
+#         """Process query using agentic reasoning"""
+#         start_time = datetime.now()
         
-        try:
-            # Step 1: Analyze query and determine strategy
-            query_context = self.query_analyzer.analyze_query(query, self._get_available_sources())
+#         try:
+#             # Step 1: Analyze query and determine strategy
+#             query_context = self.query_analyzer.analyze_query(query, self._get_available_sources())
             
-            # Step 2: Execute query based on analysis
-            if query_context.query_type == QueryType.NUMERICAL_ANALYSIS:
-                result = await self._handle_numerical_query(query, query_context)
-            elif query_context.query_type == QueryType.FULL_DOCUMENT:
-                result = await self._handle_full_document_query(query, query_context)
-            elif query_context.query_type == QueryType.STRUCTURED_QUERY:
-                result = await self._handle_structured_query(query, query_context)
-            elif query_context.query_type == QueryType.HYBRID:
-                result = await self._handle_hybrid_query(query, query_context)
-            else:
-                result = await self._handle_semantic_query(query, query_context)
+#             # Step 2: Execute query based on analysis
+#             if query_context.query_type == QueryType.NUMERICAL_ANALYSIS:
+#                 result = await self._handle_numerical_query(query, query_context)
+#             elif query_context.query_type == QueryType.FULL_DOCUMENT:
+#                 result = await self._handle_full_document_query(query, query_context)
+#             elif query_context.query_type == QueryType.STRUCTURED_QUERY:
+#                 result = await self._handle_structured_query(query, query_context)
+#             elif query_context.query_type == QueryType.HYBRID:
+#                 result = await self._handle_hybrid_query(query, query_context)
+#             else:
+#                 result = await self._handle_semantic_query(query, query_context)
             
-            # Step 3: Generate final response
-            processing_time = (datetime.now() - start_time).total_seconds()
+#             # Step 3: Generate final response
+#             processing_time = (datetime.now() - start_time).total_seconds()
             
-            response = AgenticResponse(
-                answer=result["answer"],
-                sources=result["sources"],
-                reasoning=query_context.reasoning,
-                query_type=query_context.query_type,
-                confidence=query_context.confidence,
-                processing_time=processing_time,
-                metadata={
-                    "query_context": asdict(query_context),
-                    "result_metadata": result.get("metadata", {})
-                }
-            )
+#             response = AgenticResponse(
+#                 answer=result["answer"],
+#                 sources=result["sources"],
+#                 reasoning=query_context.reasoning,
+#                 query_type=query_context.query_type,
+#                 confidence=query_context.confidence,
+#                 processing_time=processing_time,
+#                 metadata={
+#                     "query_context": asdict(query_context),
+#                     "result_metadata": result.get("metadata", {})
+#                 }
+#             )
             
-            # Step 4: Update performance tracking
-            self._update_performance_metrics(query_context, response)
+#             # Step 4: Update performance tracking
+#             self._update_performance_metrics(query_context, response)
             
-            return response
+#             return response
             
-        except Exception as e:
-            logger.error(f"Query processing failed: {e}")
-            return AgenticResponse(
-                answer=f"Sorry, I encountered an error processing your query: {str(e)}",
-                sources=[],
-                reasoning="Error occurred during processing",
-                query_type=QueryType.SEMANTIC_SEARCH,
-                confidence=0.0,
-                processing_time=(datetime.now() - start_time).total_seconds(),
-                metadata={"error": str(e)}
-            )
+#         except Exception as e:
+#             logger.error(f"Query processing failed: {e}")
+#             return AgenticResponse(
+#                 answer=f"Sorry, I encountered an error processing your query: {str(e)}",
+#                 sources=[],
+#                 reasoning="Error occurred during processing",
+#                 query_type=QueryType.SEMANTIC_SEARCH,
+#                 confidence=0.0,
+#                 processing_time=(datetime.now() - start_time).total_seconds(),
+#                 metadata={"error": str(e)}
+#             )
     
-    async def _handle_numerical_query(self, query: str, context: QueryContext) -> Dict[str, Any]:
-        """Handle numerical analysis queries"""
-        logger.info(f"Processing numerical query: {query}")
+#     async def _handle_numerical_query(self, query: str, context: QueryContext) -> Dict[str, Any]:
+#         """Handle numerical analysis queries"""
+#         logger.info(f"Processing numerical query: {query}")
         
-        # Get available spreadsheet data
-        spreadsheet_sources = [f for f in self.numerical_processor.data_cache.keys()]
+#         # Get available spreadsheet data
+#         spreadsheet_sources = [f for f in self.numerical_processor.data_cache.keys()]
         
-        if not spreadsheet_sources:
-            return {
-                "answer": "No numerical data available for analysis.",
-                "sources": [],
-                "metadata": {"error": "no_numerical_data"}
-            }
+#         if not spreadsheet_sources:
+#             return {
+#                 "answer": "No numerical data available for analysis.",
+#                 "sources": [],
+#                 "metadata": {"error": "no_numerical_data"}
+#             }
         
-        # Analyze numerical data
-        analysis_results = self.numerical_processor.analyze_numerical_query(query, spreadsheet_sources)
+#         # Analyze numerical data
+#         analysis_results = self.numerical_processor.analyze_numerical_query(query, spreadsheet_sources)
         
-        # Generate response using LLM
-        analysis_text = json.dumps(analysis_results, indent=2)
-        prompt = f"""
-        Based on this numerical analysis, answer the user's question:
+#         # Generate response using LLM
+#         analysis_text = json.dumps(analysis_results, indent=2)
+#         prompt = f"""
+#         Based on this numerical analysis, answer the user's question:
         
-        User Question: {query}
+#         User Question: {query}
         
-        Analysis Results:
-        {analysis_text}
+#         Analysis Results:
+#         {analysis_text}
         
-        Provide a clear, concise answer based on the numerical analysis.
-        """
+#         Provide a clear, concise answer based on the numerical analysis.
+#         """
         
-        answer = self.llm.generate_response(prompt)
+#         answer = self.llm.generate_response(prompt)
         
-        return {
-            "answer": answer,
-            "sources": [{"type": "numerical_analysis", "data": analysis_results}],
-            "metadata": {"analysis_results": analysis_results}
-        }
+#         return {
+#             "answer": answer,
+#             "sources": [{"type": "numerical_analysis", "data": analysis_results}],
+#             "metadata": {"analysis_results": analysis_results}
+#         }
     
-    async def _handle_full_document_query(self, query: str, context: QueryContext) -> Dict[str, Any]:
-        """Handle queries requiring full document context"""
-        logger.info(f"Processing full document query: {query}")
+#     async def _handle_full_document_query(self, query: str, context: QueryContext) -> Dict[str, Any]:
+#         """Handle queries requiring full document context"""
+#         logger.info(f"Processing full document query: {query}")
         
-        # Get available documents
-        available_docs = self._get_available_documents()
+#         # Get available documents
+#         available_docs = self._get_available_documents()
         
-        if not available_docs:
-            return {
-                "answer": "No documents available for full context analysis.",
-                "sources": [],
-                "metadata": {"error": "no_documents"}
-            }
+#         if not available_docs:
+#             return {
+#                 "answer": "No documents available for full context analysis.",
+#                 "sources": [],
+#                 "metadata": {"error": "no_documents"}
+#             }
         
-        # Get full document contexts
-        full_contexts = []
-        for doc in available_docs:
-            context = self.context_manager.get_full_document(doc)
-            if context:
-                full_contexts.append(context)
+#         # Get full document contexts
+#         full_contexts = []
+#         for doc in available_docs:
+#             context = self.context_manager.get_full_document(doc)
+#             if context:
+#                 full_contexts.append(context)
         
-        if not full_contexts:
-            return {
-                "answer": "No full document contexts available.",
-                "sources": [],
-                "metadata": {"error": "no_full_contexts"}
-            }
+#         if not full_contexts:
+#             return {
+#                 "answer": "No full document contexts available.",
+#                 "sources": [],
+#                 "metadata": {"error": "no_full_contexts"}
+#             }
         
-        # Generate response using full context
-        context_text = "\n\n".join([ctx["content"][:2000] for ctx in full_contexts])
-        prompt = f"""
-        Based on the full document context, answer the user's question:
+#         # Generate response using full context
+#         context_text = "\n\n".join([ctx["content"][:2000] for ctx in full_contexts])
+#         prompt = f"""
+#         Based on the full document context, answer the user's question:
         
-        User Question: {query}
+#         User Question: {query}
         
-        Document Context:
-        {context_text}
+#         Document Context:
+#         {context_text}
         
-        Provide a comprehensive answer using the full document context.
-        """
+#         Provide a comprehensive answer using the full document context.
+#         """
         
-        answer = self.llm.generate_response(prompt)
+#         answer = self.llm.generate_response(prompt)
         
-        return {
-            "answer": answer,
-            "sources": [{"type": "full_document", "documents": [ctx["filename"] for ctx in full_contexts]}],
-            "metadata": {"full_contexts": len(full_contexts)}
-        }
+#         return {
+#             "answer": answer,
+#             "sources": [{"type": "full_document", "documents": [ctx["filename"] for ctx in full_contexts]}],
+#             "metadata": {"full_contexts": len(full_contexts)}
+#         }
     
-    async def _handle_structured_query(self, query: str, context: QueryContext) -> Dict[str, Any]:
-        """Handle structured queries (SQL, etc.)"""
-        logger.info(f"Processing structured query: {query}")
+#     async def _handle_structured_query(self, query: str, context: QueryContext) -> Dict[str, Any]:
+#         """Handle structured queries (SQL, etc.)"""
+#         logger.info(f"Processing structured query: {query}")
         
-        # This would implement SQL query processing
-        # For now, fall back to semantic search
-        return await self._handle_semantic_query(query, context)
+#         # This would implement SQL query processing
+#         # For now, fall back to semantic search
+#         return await self._handle_semantic_query(query, context)
     
-    async def _handle_hybrid_query(self, query: str, context: QueryContext) -> Dict[str, Any]:
-        """Handle hybrid queries using multiple strategies"""
-        logger.info(f"Processing hybrid query: {query}")
+#     async def _handle_hybrid_query(self, query: str, context: QueryContext) -> Dict[str, Any]:
+#         """Handle hybrid queries using multiple strategies"""
+#         logger.info(f"Processing hybrid query: {query}")
         
-        # Execute multiple query strategies in parallel
-        tasks = [
-            self._handle_semantic_query(query, context),
-            self._handle_full_document_query(query, context)
-        ]
+#         # Execute multiple query strategies in parallel
+#         tasks = [
+#             self._handle_semantic_query(query, context),
+#             self._handle_full_document_query(query, context)
+#         ]
         
-        results = await asyncio.gather(*tasks, return_exceptions=True)
+#         results = await asyncio.gather(*tasks, return_exceptions=True)
         
-        # Combine results
-        combined_answer = self._combine_hybrid_results(results)
+#         # Combine results
+#         combined_answer = self._combine_hybrid_results(results)
         
-        return {
-            "answer": combined_answer,
-            "sources": [r["sources"] for r in results if isinstance(r, dict)],
-            "metadata": {"hybrid_results": len(results)}
-        }
+#         return {
+#             "answer": combined_answer,
+#             "sources": [r["sources"] for r in results if isinstance(r, dict)],
+#             "metadata": {"hybrid_results": len(results)}
+#         }
     
-    async def _handle_semantic_query(self, query: str, context: QueryContext) -> Dict[str, Any]:
-        """Handle traditional semantic search queries"""
-        logger.info(f"Processing semantic query: {query}")
+#     async def _handle_semantic_query(self, query: str, context: QueryContext) -> Dict[str, Any]:
+#         """Handle traditional semantic search queries"""
+#         logger.info(f"Processing semantic query: {query}")
         
-        # Use existing vector search
-        results = self.search_engine.search_documents(query, limit=5)
+#         # Use existing vector search
+#         results = self.search_engine.search_documents(query, limit=5)
         
-        if not results:
-            return {
-                "answer": "No relevant information found.",
-                "sources": [],
-                "metadata": {"error": "no_results"}
-            }
+#         if not results:
+#             return {
+#                 "answer": "No relevant information found.",
+#                 "sources": [],
+#                 "metadata": {"error": "no_results"}
+#             }
         
-        # Generate response
-        context_text = "\n\n".join([r.content for r in results])
-        prompt = f"""
-        Based on the retrieved information, answer the user's question:
+#         # Generate response
+#         context_text = "\n\n".join([r.content for r in results])
+#         prompt = f"""
+#         Based on the retrieved information, answer the user's question:
         
-        User Question: {query}
+#         User Question: {query}
         
-        Retrieved Information:
-        {context_text}
+#         Retrieved Information:
+#         {context_text}
         
-        Provide a clear, accurate answer based on the retrieved information.
-        """
+#         Provide a clear, accurate answer based on the retrieved information.
+#         """
         
-        answer = self.llm.generate_response(prompt)
+#         answer = self.llm.generate_response(prompt)
         
-        return {
-            "answer": answer,
-            "sources": [{"type": "semantic_search", "results": [{"content": r.content, "filename": r.filename, "score": r.score} for r in results]}],
-            "metadata": {"results_count": len(results)}
-        }
+#         return {
+#             "answer": answer,
+#             "sources": [{"type": "semantic_search", "results": [{"content": r.content, "filename": r.filename, "score": r.score} for r in results]}],
+#             "metadata": {"results_count": len(results)}
+#         }
     
-    def _combine_hybrid_results(self, results: List[Dict[str, Any]]) -> str:
-        """Combine results from multiple query strategies"""
-        valid_results = [r for r in results if isinstance(r, dict) and "answer" in r]
+#     def _combine_hybrid_results(self, results: List[Dict[str, Any]]) -> str:
+#         """Combine results from multiple query strategies"""
+#         valid_results = [r for r in results if isinstance(r, dict) and "answer" in r]
         
-        if not valid_results:
-            return "Unable to generate a comprehensive answer."
+#         if not valid_results:
+#             return "Unable to generate a comprehensive answer."
         
-        # Use LLM to combine results
-        combined_text = "\n\n".join([r["answer"] for r in valid_results])
-        prompt = f"""
-        Combine these different answers into a comprehensive response:
+#         # Use LLM to combine results
+#         combined_text = "\n\n".join([r["answer"] for r in valid_results])
+#         prompt = f"""
+#         Combine these different answers into a comprehensive response:
         
-        {combined_text}
+#         {combined_text}
         
-        Provide a unified, coherent answer that incorporates all relevant information.
-        """
+#         Provide a unified, coherent answer that incorporates all relevant information.
+#         """
         
-        return self.llm.generate_response(prompt)
+#         return self.llm.generate_response(prompt)
     
-    def _get_available_sources(self) -> List[str]:
-        """Get list of available data sources"""
-        sources = []
+#     def _get_available_sources(self) -> List[str]:
+#         """Get list of available data sources"""
+#         sources = []
         
-        # Add vector database sources
-        try:
-            collection = self.vectorstore.get_vector_collection()
-            if collection:
-                sources.append("vector_db")
-        except:
-            pass
+#         # Add vector database sources
+#         try:
+#             collection = self.vectorstore.get_vector_collection()
+#             if collection:
+#                 sources.append("vector_db")
+#         except:
+#             pass
         
-        # Add numerical data sources
-        if self.numerical_processor.data_cache:
-            sources.append("spreadsheet")
+#         # Add numerical data sources
+#         if self.numerical_processor.data_cache:
+#             sources.append("spreadsheet")
         
-        # Add full document sources
-        if self.context_manager.context_cache:
-            sources.append("full_document")
+#         # Add full document sources
+#         if self.context_manager.context_cache:
+#             sources.append("full_document")
         
-        return sources
+#         return sources
     
-    def _get_available_documents(self) -> List[str]:
-        """Get list of available documents"""
-        return list(self.context_manager.context_cache.keys())
+#     def _get_available_documents(self) -> List[str]:
+#         """Get list of available documents"""
+#         return list(self.context_manager.context_cache.keys())
     
-    def _update_performance_metrics(self, query_context: QueryContext, response: AgenticResponse):
-        """Update performance tracking metrics"""
-        self.query_history.append({
-            "timestamp": datetime.now().isoformat(),
-            "query": query_context.query,
-            "query_type": query_context.query_type.value,
-            "processing_time": response.processing_time,
-            "confidence": response.confidence
-        })
+#     def _update_performance_metrics(self, query_context: QueryContext, response: AgenticResponse):
+#         """Update performance tracking metrics"""
+#         self.query_history.append({
+#             "timestamp": datetime.now().isoformat(),
+#             "query": query_context.query,
+#             "query_type": query_context.query_type.value,
+#             "processing_time": response.processing_time,
+#             "confidence": response.confidence
+#         })
         
-        # Keep only recent history
-        if len(self.query_history) > 1000:
-            self.query_history = self.query_history[-1000:]
+#         # Keep only recent history
+#         if len(self.query_history) > 1000:
+#             self.query_history = self.query_history[-1000:]
     
-    def get_performance_metrics(self) -> Dict[str, Any]:
-        """Get performance metrics"""
-        if not self.query_history:
-            return {}
+#     def get_performance_metrics(self) -> Dict[str, Any]:
+#         """Get performance metrics"""
+#         if not self.query_history:
+#             return {}
         
-        processing_times = [q["processing_time"] for q in self.query_history]
-        confidences = [q["confidence"] for q in self.query_history]
+#         processing_times = [q["processing_time"] for q in self.query_history]
+#         confidences = [q["confidence"] for q in self.query_history]
         
-        return {
-            "total_queries": len(self.query_history),
-            "avg_processing_time": sum(processing_times) / len(processing_times),
-            "avg_confidence": sum(confidences) / len(confidences),
-            "query_type_distribution": self._get_query_type_distribution(),
-            "recent_queries": self.query_history[-10:]
-        }
+#         return {
+#             "total_queries": len(self.query_history),
+#             "avg_processing_time": sum(processing_times) / len(processing_times),
+#             "avg_confidence": sum(confidences) / len(confidences),
+#             "query_type_distribution": self._get_query_type_distribution(),
+#             "recent_queries": self.query_history[-10:]
+#         }
     
-    def _get_query_type_distribution(self) -> Dict[str, int]:
-        """Get distribution of query types"""
-        distribution = {}
-        for query in self.query_history:
-            query_type = query["query_type"]
-            distribution[query_type] = distribution.get(query_type, 0) + 1
-        return distribution 
+#     def _get_query_type_distribution(self) -> Dict[str, int]:
+#         """Get distribution of query types"""
+#         distribution = {}
+#         for query in self.query_history:
+#             query_type = query["query_type"]
+#             distribution[query_type] = distribution.get(query_type, 0) + 1
+#         return distribution 

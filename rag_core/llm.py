@@ -10,20 +10,57 @@ class LLMHandler:
         """Initialize LLM handler"""
         pass
     
-    def generate_response(self, prompt: str, context: str = "") -> str:
+    def generate_response(self, prompt: str, context: str = "", conversation_history=None) -> str:
         """
-        Generate a complete response from the LLM.
+        Generate a complete response from the LLM with strict context enforcement and conversation history.
         Returns the full response as a string.
+        """
+        # Log the context and conversation history for debugging
+        logger.info(f"LLM Context for query: {repr(context)[:1000]}")
+        logger.info(f"LLM Conversation History: {self._format_history(conversation_history)[:1000]}")
+        # Stricter prompt engineering
+        strict_prompt = f"""
+        Context:
+        {context}
+
+        Conversation History (last 5 turns):
+        {self._format_history(conversation_history)}
+
+        Question:
+        {prompt}
+
+        Instructions:
+        - Only answer using the information in the context above.
+        - For every fact you state, include the exact sentence from the context in quotes as a citation.
+        - If the answer is not present in the context, reply: 'I don't know.'
         """
         response_parts = []
         try:
-            for word in self.call_llm(prompt, context):
+            for word in self.call_llm(strict_prompt, context, conversation_history):
                 response_parts.append(word)
-            return "".join(response_parts)
         except Exception as e:
             logger.error(f"Failed to generate response: {e}")
             return f"Error generating response: {str(e)}"
-    
+        answer = ''.join(response_parts)
+        # Post-check: ensure answer is grounded in context (simple string match)
+        context_lower = context.lower()
+        answer_sentences = [s.strip() for s in answer.split('.') if s.strip()]
+        if not any(sentence.lower() in context_lower for sentence in answer_sentences if len(sentence) > 10):
+            return "Cannot answer based on the provided context."
+        return answer
+
+    def _format_history(self, conversation_history):
+        if not conversation_history:
+            return ""
+        # Only include the last 5 user+assistant pairs (10 messages)
+        history = conversation_history[-10:]
+        formatted = ""
+        for msg in history:
+            role = msg.get("role", "user")
+            content = msg.get("content", "")
+            formatted += f"{role.capitalize()}: {content}\n"
+        return formatted
+
     @staticmethod
     @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=4, max=10))
     def call_llm(prompt: str, context: str, conversation_history=None):
@@ -66,9 +103,7 @@ class LLMHandler:
                     })
             
             # Use only the system prompt from config.py to avoid conflicts
-            user_prompt = f"""Context: {context}
-
-Question: {prompt}"""
+            user_prompt = f"""Context: {context}\n\nConversation History (last 5 turns):\n{LLMHandler._format_history_static(conversation_history)}\n\nQuestion: {prompt}"""
             
             messages.append({
                 "role": "user",
@@ -108,3 +143,15 @@ Question: {prompt}"""
             print(msg)
             print(tb_str)
             yield f"[Error: LLM call failed: {msg}]" 
+
+    @staticmethod
+    def _format_history_static(conversation_history):
+        if not conversation_history:
+            return ""
+        history = conversation_history[-10:]
+        formatted = ""
+        for msg in history:
+            role = msg.get("role", "user")
+            content = msg.get("content", "")
+            formatted += f"{role.capitalize()}: {content}\n"
+        return formatted 

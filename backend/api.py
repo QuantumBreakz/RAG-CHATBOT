@@ -24,7 +24,7 @@ import psutil
 import time
 from rag_core.conversation_manager import conversation_manager, asdict
 from datetime import datetime, timedelta
-from rag_core.agentic_rag import AgenticRAG, QueryType, DataSourceType
+# from rag_core.agentic_rag import AgenticRAG, QueryType, DataSourceType
 from rag_core.config import logger
 import asyncio
 
@@ -182,7 +182,6 @@ async def upload_document(
             if document_type == "master_document":
                 doc.metadata['is_master'] = True
                 doc.metadata['master_document'] = file.filename
-        
         # Otherwise, create embeddings as usual
         success = VectorStore.add_to_vector_collection(docs, file.filename)
         if success:
@@ -1693,247 +1692,247 @@ async def optimize_ocr_performance(
         raise HTTPException(status_code=500, detail=f"OCR optimization failed: {str(e)}") 
 
 # Initialize agentic RAG system
-try:
-    agentic_rag = AgenticRAG()
-    logger.info("Agentic RAG system initialized successfully")
-except Exception as e:
-    logger.error(f"Failed to initialize agentic RAG system: {str(e)}")
-    agentic_rag = None
+# try:
+#     agentic_rag = AgenticRAG()
+#     logger.info("Agentic RAG system initialized successfully")
+# except Exception as e:
+#     logger.error(f"Failed to initialize agentic RAG system: {str(e)}")
+#     agentic_rag = None
 
-@app.post("/agentic/query")
-async def agentic_query(
-    question: str = Form(...),
-    user_context: str = Form("{}"),
-    query_type: str = Form(None)
-):
-    """Process query using agentic RAG system"""
-    try:
-        # Check if agentic_rag is properly initialized
-        if agentic_rag is None or not hasattr(agentic_rag, 'process_query'):
-            return {
-                "status": "error",
-                "message": "Agentic RAG system not properly initialized",
-                "answer": "The agentic RAG system is not available. Please use the regular RAG system.",
-                "sources": [],
-                "reasoning": "System not initialized",
-                "query_type": "semantic_search",
-                "confidence": 0.0,
-                "processing_time": 0.0,
-                "metadata": {}
-            }
+# @app.post("/agentic/query")
+# async def agentic_query(
+#     question: str = Form(...),
+#     user_context: str = Form("{}"),
+#     query_type: str = Form(None)
+# ):
+#     """Process query using agentic RAG system"""
+#     try:
+#         # Check if agentic_rag is properly initialized
+#         if agentic_rag is None or not hasattr(agentic_rag, 'process_query'):
+#             return {
+#                 "status": "error",
+#                 "message": "Agentic RAG system not properly initialized",
+#                 "answer": "The agentic RAG system is not available. Please use the regular RAG system.",
+#                 "sources": [],
+#                 "reasoning": "System not initialized",
+#                 "query_type": "semantic_search",
+#                 "confidence": 0.0,
+#                 "processing_time": 0.0,
+#                 "metadata": {}
+#             }
         
-        # Parse user context
-        try:
-            context = json.loads(user_context) if user_context else {}
-        except:
-            context = {}
+#         # Parse user context
+#         try:
+#             context = json.loads(user_context) if user_context else {}
+#         except:
+#             context = {}
         
-        # Process query with agentic RAG
-        response = await agentic_rag.process_query(question, context)
+#         # Process query with agentic RAG
+#         response = await agentic_rag.process_query(question, context)
         
-        return {
-            "status": "success",
-            "answer": response.answer,
-            "sources": response.sources,
-            "reasoning": response.reasoning,
-            "query_type": response.query_type.value,
-            "confidence": response.confidence,
-            "processing_time": response.processing_time,
-            "metadata": response.metadata
-        }
+#         return {
+#             "status": "success",
+#             "answer": response.answer,
+#             "sources": response.sources,
+#             "reasoning": response.reasoning,
+#             "query_type": response.query_type.value,
+#             "confidence": response.confidence,
+#             "processing_time": response.processing_time,
+#             "metadata": response.metadata
+#         }
         
-    except Exception as e:
-        logger.error(f"Agentic query failed: {str(e)}")
-        return {
-            "status": "error",
-            "message": f"Agentic query failed: {str(e)}",
-            "answer": f"Sorry, I encountered an error processing your query: {str(e)}",
-            "sources": [],
-            "reasoning": "Error occurred during processing",
-            "query_type": "semantic_search",
-            "confidence": 0.0,
-            "processing_time": 0.0,
-            "metadata": {"error": str(e)}
-        }
+#     except Exception as e:
+#         logger.error(f"Agentic query failed: {str(e)}")
+#         return {
+#             "status": "error",
+#             "message": f"Agentic query failed: {str(e)}",
+#             "answer": f"Sorry, I encountered an error processing your query: {str(e)}",
+#             "sources": [],
+#             "reasoning": "Error occurred during processing",
+#             "query_type": "semantic_search",
+#             "confidence": 0.0,
+#             "processing_time": 0.0,
+#             "metadata": {"error": str(e)}
+#         }
 
-@app.post("/agentic/query/stream")
-async def agentic_query_stream(
-    question: str = Form(...),
-    user_context: str = Form("{}"),
-    query_type: str = Form(None)
-):
-    """Stream agentic query response"""
-    try:
-        # Check if agentic_rag is properly initialized
-        if agentic_rag is None or not hasattr(agentic_rag, 'process_query'):
-            def error_stream():
-                yield f"data: {json.dumps({'type': 'error', 'content': 'Agentic RAG system not available'})}\n\n"
-                yield f"data: {json.dumps({'type': 'done'})}\n\n"
-            return StreamingResponse(error_stream(), media_type="text/plain")
+# @app.post("/agentic/query/stream")
+# async def agentic_query_stream(
+#     question: str = Form(...),
+#     user_context: str = Form("{}"),
+#     query_type: str = Form(None)
+# ):
+#     """Stream agentic query response"""
+#     try:
+#         # Check if agentic_rag is properly initialized
+#         if agentic_rag is None or not hasattr(agentic_rag, 'process_query'):
+#             def error_stream():
+#                 yield f"data: {json.dumps({'type': 'error', 'content': 'Agentic RAG system not available'})}\n\n"
+#                 yield f"data: {json.dumps({'type': 'done'})}\n\n"
+#             return StreamingResponse(error_stream(), media_type="text/plain")
         
-        # Parse user context
-        try:
-            context = json.loads(user_context) if user_context else {}
-        except:
-            context = {}
+#         # Parse user context
+#         try:
+#             context = json.loads(user_context) if user_context else {}
+#         except:
+#             context = {}
         
-        # Process query with agentic RAG
-        response = await agentic_rag.process_query(question, context)
+#         # Process query with agentic RAG
+#         response = await agentic_rag.process_query(question, context)
         
-        def stream_response():
-            # Stream the reasoning first
-            yield f"data: {json.dumps({'type': 'reasoning', 'content': response.reasoning})}\n\n"
+#         def stream_response():
+#             # Stream the reasoning first
+#             yield f"data: {json.dumps({'type': 'reasoning', 'content': response.reasoning})}\n\n"
             
-            # Stream the answer
-            words = response.answer.split()
-            for word in words:
-                yield f"data: {json.dumps({'type': 'word', 'content': word + ' '})}\n\n"
-                time.sleep(0.05)  # Small delay for streaming effect
+#             # Stream the answer
+#             words = response.answer.split()
+#             for word in words:
+#                 yield f"data: {json.dumps({'type': 'word', 'content': word + ' '})}\n\n"
+#                 time.sleep(0.05)  # Small delay for streaming effect
             
-            # Stream final metadata
-            yield f"data: {json.dumps({'type': 'metadata', 'content': response.metadata})}\n\n"
-            yield f"data: {json.dumps({'type': 'done'})}\n\n"
+#             # Stream final metadata
+#             yield f"data: {json.dumps({'type': 'metadata', 'content': response.metadata})}\n\n"
+#             yield f"data: {json.dumps({'type': 'done'})}\n\n"
         
-        return StreamingResponse(
-            stream_response(),
-            media_type="text/plain"
-        )
+#         return StreamingResponse(
+#             stream_response(),
+#             media_type="text/plain"
+#         )
         
-    except Exception as e:
-        return JSONResponse(
-            status_code=500,
-            content={"error": f"Agentic query streaming failed: {str(e)}"}
-        )
+#     except Exception as e:
+#         return JSONResponse(
+#             status_code=500,
+#             content={"error": f"Agentic query streaming failed: {str(e)}"}
+#         )
 
-@app.get("/agentic/performance")
-def get_agentic_performance():
-    """Get agentic RAG performance metrics"""
-    try:
-        metrics = agentic_rag.get_performance_metrics()
-        return {
-            "status": "success",
-            "metrics": metrics
-        }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to get performance metrics: {str(e)}")
+# @app.get("/agentic/performance")
+# def get_agentic_performance():
+#     """Get agentic RAG performance metrics"""
+#     try:
+#         metrics = agentic_rag.get_performance_metrics()
+#         return {
+#             "status": "success",
+#             "metrics": metrics
+#         }
+#     except Exception as e:
+#         raise HTTPException(status_code=500, detail=f"Failed to get performance metrics: {str(e)}")
 
-@app.post("/agentic/upload/spreadsheet")
-async def upload_spreadsheet_for_analysis(
-    file: UploadFile = File(...),
-    description: str = Form("")
-):
-    """Upload spreadsheet for numerical analysis"""
-    try:
-        # Save uploaded file
-        temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=f".{file.filename.split('.')[-1]}")
-        content = await file.read()
-        temp_file.write(content)
-        temp_file.close()
+# @app.post("/agentic/upload/spreadsheet")
+# async def upload_spreadsheet_for_analysis(
+#     file: UploadFile = File(...),
+#     description: str = Form("")
+# ):
+#     """Upload spreadsheet for numerical analysis"""
+#     try:
+#         # Save uploaded file
+#         temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=f".{file.filename.split('.')[-1]}")
+#         content = await file.read()
+#         temp_file.write(content)
+#         temp_file.close()
         
-        try:
-            # Process spreadsheet with numerical processor
-            df = agentic_rag.numerical_processor.process_spreadsheet(temp_file.name)
+#         try:
+#             # Process spreadsheet with numerical processor
+#             df = agentic_rag.numerical_processor.process_spreadsheet(temp_file.name)
             
-            # Store full document context if it's a text-based spreadsheet
-            if description:
-                # Extract text content for context
-                text_content = df.to_string()
-                agentic_rag.context_manager.store_full_document(
-                    file.filename, 
-                    text_content,
-                    {"type": "spreadsheet", "description": description}
-                )
+#             # Store full document context if it's a text-based spreadsheet
+#             if description:
+#                 # Extract text content for context
+#                 text_content = df.to_string()
+#                 agentic_rag.context_manager.store_full_document(
+#                     file.filename, 
+#                     text_content,
+#                     {"type": "spreadsheet", "description": description}
+#                 )
             
-            return {
-                "status": "success",
-                "message": f"Spreadsheet processed successfully",
-                "filename": file.filename,
-                "rows": len(df),
-                "columns": len(df.columns),
-                "column_names": df.columns.tolist(),
-                "data_types": df.dtypes.to_dict()
-            }
+#             return {
+#                 "status": "success",
+#                 "message": f"Spreadsheet processed successfully",
+#                 "filename": file.filename,
+#                 "rows": len(df),
+#                 "columns": len(df.columns),
+#                 "column_names": df.columns.tolist(),
+#                 "data_types": df.dtypes.to_dict()
+#             }
             
-        finally:
-            # Clean up temporary file
-            if os.path.exists(temp_file.name):
-                os.unlink(temp_file.name)
+#         finally:
+#             # Clean up temporary file
+#             if os.path.exists(temp_file.name):
+#                 os.unlink(temp_file.name)
                 
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Spreadsheet upload failed: {str(e)}")
+#     except Exception as e:
+#         raise HTTPException(status_code=500, detail=f"Spreadsheet upload failed: {str(e)}")
 
-@app.get("/agentic/sources")
-def get_available_sources():
-    """Get available data sources for agentic RAG"""
-    try:
-        # Check if agentic_rag is properly initialized
-        if agentic_rag is None or not hasattr(agentic_rag, '_get_available_sources'):
-            return {
-                "status": "error",
-                "message": "Agentic RAG system not properly initialized",
-                "sources": {
-                    "vector_db": [],
-                    "documents": [],
-                    "spreadsheets": []
-                }
-            }
+# @app.get("/agentic/sources")
+# def get_available_sources():
+#     """Get available data sources for agentic RAG"""
+#     try:
+#         # Check if agentic_rag is properly initialized
+#         if agentic_rag is None or not hasattr(agentic_rag, '_get_available_sources'):
+#             return {
+#                 "status": "error",
+#                 "message": "Agentic RAG system not properly initialized",
+#                 "sources": {
+#                     "vector_db": [],
+#                     "documents": [],
+#                     "spreadsheets": []
+#                 }
+#             }
         
-        sources = {
-            "vector_db": agentic_rag._get_available_sources(),
-            "documents": agentic_rag._get_available_documents(),
-            "spreadsheets": list(agentic_rag.numerical_processor.data_cache.keys())
-        }
+#         sources = {
+#             "vector_db": agentic_rag._get_available_sources(),
+#             "documents": agentic_rag._get_available_documents(),
+#             "spreadsheets": list(agentic_rag.numerical_processor.data_cache.keys())
+#         }
         
-        return {
-            "status": "success",
-            "sources": sources
-        }
-    except Exception as e:
-        logger.error(f"Error getting agentic sources: {str(e)}")
-        return {
-            "status": "error",
-            "message": f"Failed to get sources: {str(e)}",
-            "sources": {
-                "vector_db": [],
-                "documents": [],
-                "spreadsheets": []
-            }
-        }
+#         return {
+#             "status": "success",
+#             "sources": sources
+#         }
+#     except Exception as e:
+#         logger.error(f"Error getting agentic sources: {str(e)}")
+#         return {
+#             "status": "error",
+#             "message": f"Failed to get sources: {str(e)}",
+#             "sources": {
+#                 "vector_db": [],
+#                 "documents": [],
+#                 "spreadsheets": []
+#             }
+#         }
 
-@app.post("/agentic/analyze")
-def analyze_query_intent(
-    query: str = Form(...)
-):
-    """Analyze query intent without processing"""
-    try:
-        # Check if agentic_rag is properly initialized
-        if agentic_rag is None or not hasattr(agentic_rag, 'query_analyzer'):
-            return {
-                "status": "error",
-                "message": "Agentic RAG system not properly initialized",
-                "query": query,
-                "query_type": "semantic_search",
-                "data_sources": [],
-                "reasoning": "System not available",
-                "confidence": 0.0,
-                "metadata": {}
-            }
+# @app.post("/agentic/analyze")
+# def analyze_query_intent(
+#     query: str = Form(...)
+# ):
+#     """Analyze query intent without processing"""
+#     try:
+#         # Check if agentic_rag is properly initialized
+#         if agentic_rag is None or not hasattr(agentic_rag, 'query_analyzer'):
+#             return {
+#                 "status": "error",
+#                 "message": "Agentic RAG system not properly initialized",
+#                 "query": query,
+#                 "query_type": "semantic_search",
+#                 "data_sources": [],
+#                 "reasoning": "System not available",
+#                 "confidence": 0.0,
+#                 "metadata": {}
+#             }
         
-        # Use query analyzer to determine intent
-        query_context = agentic_rag.query_analyzer.analyze_query(
-            query, 
-            agentic_rag._get_available_sources()
-        )
+#         # Use query analyzer to determine intent
+#         query_context = agentic_rag.query_analyzer.analyze_query(
+#             query, 
+#             agentic_rag._get_available_sources()
+#         )
         
-        return {
-            "status": "success",
-            "query": query,
-            "query_type": query_context.query_type.value,
-            "data_sources": [ds.value for ds in query_context.data_sources],
-            "reasoning": query_context.reasoning,
-            "confidence": query_context.confidence,
-            "metadata": query_context.metadata
-        }
+#         return {
+#             "status": "success",
+#             "query": query,
+#             "query_type": query_context.query_type.value,
+#             "data_sources": [ds.value for ds in query_context.data_sources],
+#             "reasoning": query_context.reasoning,
+#             "confidence": query_context.confidence,
+#             "metadata": query_context.metadata
+#         }
         
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Query analysis failed: {str(e)}") 
+#     except Exception as e:
+#         raise HTTPException(status_code=500, detail=f"Query analysis failed: {str(e)}") 

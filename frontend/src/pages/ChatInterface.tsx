@@ -77,8 +77,6 @@ const ChatInterface: React.FC = () => {
   const [showContextPreview, setShowContextPreview] = useState(false);
   const [contextMetadata, setContextMetadata] = useState<any>(null);
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
-  const [agenticAIEnabled, setAgenticAIEnabled] = useState(true);
-  const [agenticSources, setAgenticSources] = useState<any>(null);
   const [sidebarWidth, setSidebarWidth] = useState(() => {
     const saved = localStorage.getItem('xor-rag-sidebar-width');
     return saved ? parseInt(saved) : 320;
@@ -111,9 +109,8 @@ const ChatInterface: React.FC = () => {
 
   const { loading, setLoading } = useGlobalLoading();
 
-  // Streaming state for assistant
-  const [streamingContent, setStreamingContent] = useState('');
-  const [streamingStatus, setStreamingStatus] = useState<'idle' | 'streaming'>('idle');
+  // Replace separate streamingStatus and streamingContent with a single streamingState object
+  const [streamingState, setStreamingState] = useState({ status: 'idle', content: '' });
 
   // Utility functions
   const showBanner = (message: string, type: 'success' | 'error') => {
@@ -186,103 +183,19 @@ const ChatInterface: React.FC = () => {
 
   const resetStreaming = () => {
     setOperationState(prev => ({ ...prev, sending: false }));
-  };
-
-  // Agentic AI functions
-  const fetchAgenticSources = async () => {
-    try {
-      const response = await apiCall('/agentic/sources');
-      if (response.status === 'success') {
-        setAgenticSources(response.sources);
-      } else {
-        console.warn('Agentic sources not available:', response.message);
-        setAgenticSources({
-          vector_db: [],
-          documents: [],
-          spreadsheets: []
-        });
-      }
-    } catch (error) {
-      console.error('Failed to fetch agentic sources:', error);
-      setAgenticSources({
-        vector_db: [],
-        documents: [],
-        spreadsheets: []
-      });
-    }
-  };
-
-  const handleAgenticQuery = async (question: string, userContext: any = {}) => {
-    try {
-      const formData = new FormData();
-      formData.append('question', question);
-      formData.append('user_context', JSON.stringify(userContext));
-
-      const response = await apiCall('/agentic/query', {
-        method: 'POST',
-        body: formData,
-      });
-
-      if (response.status === 'success') {
-        return {
-          answer: response.answer,
-          sources: response.sources,
-          reasoning: response.reasoning,
-          query_type: response.query_type,
-          confidence: response.confidence,
-          processing_time: response.processing_time,
-          metadata: response.metadata
-        };
-      } else {
-        // Return a fallback response instead of throwing
-        return {
-          answer: response.answer || "The agentic RAG system is not available. Using regular RAG instead.",
-          sources: response.sources || [],
-          reasoning: response.reasoning || "System not available",
-          query_type: response.query_type || "semantic_search",
-          confidence: response.confidence || 0.0,
-          processing_time: response.processing_time || 0.0,
-          metadata: response.metadata || {}
-        };
-      }
-    } catch (error) {
-      console.error('Agentic query error:', error);
-      // Return a fallback response instead of throwing
-      return {
-        answer: "The agentic RAG system is not available. Using regular RAG instead.",
-        sources: [],
-        reasoning: "System not available",
-        query_type: "semantic_search",
-        confidence: 0.0,
-        processing_time: 0.0,
-        metadata: {}
-      };
-    }
+    setStreamingState({ status: 'idle', content: '' });
   };
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!inputValue.trim() || operationState.sending || streamingStatus === 'streaming') return;
+    if (!inputValue.trim() || operationState.sending || streamingState.status === 'streaming') return;
 
     // Ensure a conversation is selected or created
     let sessionToUse = currentSession;
     if (!sessionToUse) {
-      if (sessions && sessions.length > 0) {
-        selectSession(sessions[0].id);
-        sessionToUse = sessions[0];
-      } else {
-        // Create a new conversation and use it
-        createSession();
-        // Wait for state to update (force sync)
-        // This is a hack, ideally use a callback or state update
-        sessionToUse = {
-          id: uuidv4(),
-          title: 'New Conversation',
-          messages: [],
-          createdAt: new Date(),
-          documents: []
-        };
-      }
+      await createSession();
+      // Wait for state to update
+      return; // User will need to re-send after session is created, or you can use useEffect to trigger send
     }
 
     const userMessage = inputValue.trim();
@@ -312,70 +225,19 @@ const ChatInterface: React.FC = () => {
     addMessage('', 'assistant');
 
     try {
-      setStreamingStatus('streaming');
-      setStreamingContent('');
+      setStreamingState({ status: 'streaming', content: '' });
       let streamed = '';
       let contextMetadata = null;
       let sources = [];
       // Use only the current session's messages for context, and for new conversations, context is empty
-      const conversationHistory = isNewConversation ? [] : (sessionToUse?.messages.filter(m => m.role !== 'assistant' || m.content) || []);
-      let response;
-
-      // Use agentic AI if enabled
-      if (agenticAIEnabled && !attachedFile) {
-        try {
-          const agenticResponse = await handleAgenticQuery(userMessage, {
-            conversation_history: conversationHistory,
-            domain_filter: selectedDomain
-          });
-          
-          // Update the streaming message with agentic response
-          updateStreamingMessage(agenticResponse.answer);
-          setStreamingStatus('idle');
-          setOperationState(s => ({ ...s, sending: false }));
-          
-          // Store agentic metadata for display
-          setContextMetadata({
-            query_type: agenticResponse.query_type,
-            confidence: agenticResponse.confidence,
-            processing_time: agenticResponse.processing_time,
-            reasoning: agenticResponse.reasoning,
-            sources: agenticResponse.sources
-          });
-          
-          // Add agentic response to conversation history
-          if (sessionToUse) {
-            const updatedMessages = [...sessionToUse.messages];
-            // Remove the empty assistant message and add the complete response
-            if (updatedMessages.length > 0 && updatedMessages[updatedMessages.length - 1].role === 'assistant' && !updatedMessages[updatedMessages.length - 1].content) {
-              updatedMessages.pop();
-            }
-            updatedMessages.push({
-              id: uuidv4(),
-              role: 'assistant',
-              content: agenticResponse.answer,
-              timestamp: new Date().toISOString(),
-              sources: agenticResponse.sources,
-              contextMetadata: {
-                query_type: agenticResponse.query_type,
-                confidence: agenticResponse.confidence,
-                processing_time: agenticResponse.processing_time,
-                reasoning: agenticResponse.reasoning
-              }
-            });
-            
-            setCurrentSessionFromBackend({
-              ...sessionToUse,
-              messages: updatedMessages
-            });
-          }
-          
-          return;
-        } catch (error) {
-          console.error('Agentic query failed, falling back to regular RAG:', error);
-          // Fall back to regular RAG if agentic fails
-        }
+      // Limit to last 10 turns (user+assistant pairs)
+      let conversationHistory = [];
+      if (!isNewConversation && sessionToUse?.messages) {
+        const filtered = sessionToUse.messages.filter(m => m.role !== 'assistant' || m.content);
+        // Get last 20 messages (10 turns)
+        conversationHistory = filtered.slice(-20);
       }
+      let response;
 
       if (attachedFile) {
         setFileProcessing(true);
@@ -397,7 +259,7 @@ const ChatInterface: React.FC = () => {
           const err = await response.json();
           setFileError(err.error || 'File processing failed.');
           setOperationState(s => ({ ...s, sending: false }));
-          setStreamingStatus('idle');
+          setStreamingState({ status: 'idle', content: '' });
           setAttachedFile(null);
           return;
         }
@@ -437,13 +299,13 @@ const ChatInterface: React.FC = () => {
                 const data = JSON.parse(line);
                 if (data.status === 'streaming' && data.answer !== undefined) {
                   streamed += data.answer;
-                  setStreamingContent(streamed);
+                  setStreamingState(s => ({ ...s, content: streamed }));
                   updateStreamingMessage(streamed); // Real-time update
                 }
                 if (data.status === 'success') {
                   if (data.answer !== undefined) {
                     streamed += data.answer;
-                    setStreamingContent(streamed);
+                    setStreamingState(s => ({ ...s, content: streamed }));
                     updateStreamingMessage(streamed); // Final update
                   }
                   // Capture context metadata and sources
@@ -474,13 +336,13 @@ const ChatInterface: React.FC = () => {
           const data = JSON.parse(buffer);
           if (data.status === 'streaming' && data.answer !== undefined) {
             streamed += data.answer;
-            setStreamingContent(streamed);
+            setStreamingState(s => ({ ...s, content: streamed }));
             updateStreamingMessage(streamed);
           }
           if (data.status === 'success') {
             if (data.answer !== undefined) {
               streamed += data.answer;
-              setStreamingContent(streamed);
+              setStreamingState(s => ({ ...s, content: streamed }));
               updateStreamingMessage(streamed);
             }
             // Capture context metadata and sources
@@ -498,7 +360,7 @@ const ChatInterface: React.FC = () => {
           // Ignore parse errors for incomplete lines
         }
       }
-      setStreamingStatus('idle');
+      setStreamingState({ status: 'idle', content: '' });
       // After streaming, update the session's messages by removing the placeholder and appending the real assistant message
       if (sessionToUse) {
         // Remove the last (empty) assistant message and append the real one
@@ -558,7 +420,7 @@ const ChatInterface: React.FC = () => {
       }
     } finally {
       setOperationState(s => ({ ...s, sending: false }));
-      setStreamingStatus('idle');
+      setStreamingState({ status: 'idle', content: '' });
       setFileProcessing(false);
     }
   };
@@ -726,7 +588,7 @@ const ChatInterface: React.FC = () => {
 
   useEffect(() => {
     scrollToBottom();
-  }, [currentSession?.messages, streamingContent, streamingStatus, scrollToBottom]);
+  }, [currentSession?.messages, streamingState.content, streamingState.status, scrollToBottom]);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -741,7 +603,7 @@ const ChatInterface: React.FC = () => {
       container.addEventListener('scroll', handleScroll);
       return () => container.removeEventListener('scroll', handleScroll);
     }
-  }, [currentSession?.messages, streamingContent]);
+  }, [currentSession?.messages, streamingState.content]);
 
   // Initialize data
   useEffect(() => {
@@ -847,7 +709,6 @@ const ChatInterface: React.FC = () => {
     fetchConversations();
     checkVectorstore();
     fetchSupportedFileTypes();
-    fetchAgenticSources();
   }, []);
 
   useEffect(() => {
@@ -912,7 +773,7 @@ const ChatInterface: React.FC = () => {
 
   // Render streaming assistant bubble - only show when actively streaming
   const renderStreamingAssistantBubble = () => {
-    if (streamingStatus !== 'streaming' || !streamingContent) return null;
+    if (streamingState.status !== 'streaming' || !streamingState.content) return null;
     return (
       <div className="flex justify-start">
         <div className="flex items-start space-x-3 max-w-2xl">
@@ -921,7 +782,7 @@ const ChatInterface: React.FC = () => {
           </div>
           <Card variant="elevated" className="p-4">
             <ReactMarkdown components={{p: ({node, ...props}) => <p className="text-sm leading-relaxed whitespace-pre-line" {...props} />}}>
-              {streamingContent}
+              {streamingState.content}
             </ReactMarkdown>
             <span className="ml-1 animate-pulse">|</span>
             <div className="text-xs mt-2 text-muted-foreground">
@@ -1415,28 +1276,6 @@ const ChatInterface: React.FC = () => {
 
         {/* Settings & Admin */}
         <div className="p-4 border-t border-border">
-          {/* Agentic AI Status */}
-          {agenticAIEnabled && (
-            <div className="mb-4 p-3 bg-gradient-to-r from-purple-50 to-blue-50 dark:from-purple-900/20 dark:to-blue-900/20 rounded-lg border border-purple-200 dark:border-purple-800">
-              <div className="flex items-center space-x-2 mb-2">
-                <Brain className="h-4 w-4 text-purple-600 dark:text-purple-400" />
-                <span className="text-sm font-medium text-purple-700 dark:text-purple-300">Agentic AI Active</span>
-              </div>
-              <div className="text-xs text-purple-600 dark:text-purple-400">
-                Intelligent query analysis and multi-source processing enabled
-              </div>
-              {agenticSources && (
-                <div className="mt-2 text-xs text-purple-600 dark:text-purple-400">
-                  <div>Available sources:</div>
-                  <div className="flex flex-wrap gap-1 mt-1">
-                    {agenticSources.vector_db && <span className="px-2 py-1 bg-purple-100 dark:bg-purple-800 rounded text-xs">Vector DB</span>}
-                    {agenticSources.documents && agenticSources.documents.length > 0 && <span className="px-2 py-1 bg-purple-100 dark:bg-purple-800 rounded text-xs">Documents</span>}
-                    {agenticSources.spreadsheets && agenticSources.spreadsheets.length > 0 && <span className="px-2 py-1 bg-purple-100 dark:bg-purple-800 rounded text-xs">Spreadsheets</span>}
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
           <div className="flex space-x-2 mb-2">
             <Button variant="outline" size="sm" className="flex-1" onClick={handleHealthCheck}>
               <Sparkles className="mr-2 h-4 w-4" />
@@ -1518,26 +1357,6 @@ const ChatInterface: React.FC = () => {
             )}
           </div>
           <div className="flex items-center space-x-4">
-            {/* Agentic AI Toggle */}
-            <div className="flex items-center space-x-2">
-              <button
-                onClick={() => setAgenticAIEnabled(!agenticAIEnabled)}
-                className={`flex items-center space-x-2 px-3 py-2 rounded-lg transition-all duration-200 ${
-                  agenticAIEnabled 
-                    ? 'bg-gradient-to-r from-purple-500 to-blue-500 text-white shadow-lg' 
-                    : 'bg-surface border border-border hover:bg-surface-elevated'
-                }`}
-                title={agenticAIEnabled ? 'Agentic AI Enabled' : 'Enable Agentic AI'}
-              >
-                <Brain className={`h-4 w-4 ${agenticAIEnabled ? 'text-white' : 'text-primary'}`} />
-                <span className="text-sm font-medium">
-                  {agenticAIEnabled ? 'Agentic AI' : 'AI'}
-                </span>
-                {agenticAIEnabled && (
-                  <div className="w-2 h-2 bg-white rounded-full animate-pulse"></div>
-                )}
-              </button>
-            </div>
             <DomainFilter 
               selectedDomain={selectedDomain}
               onDomainChange={setSelectedDomain}
@@ -1564,7 +1383,7 @@ const ChatInterface: React.FC = () => {
               </Card>
             </div>
           )}
-          {operationState.sending && streamingStatus !== 'streaming' && (
+          {operationState.sending && streamingState.status !== 'streaming' && (
             <div className="flex justify-start">
               <div className="flex items-start space-x-3 max-w-2xl">
                 <div className="flex-shrink-0 w-8 h-8 rounded-full bg-surface-elevated border border-border flex items-center justify-center">
@@ -1621,9 +1440,9 @@ const ChatInterface: React.FC = () => {
                 <textarea
                   value={inputValue}
                   onChange={(e) => setInputValue(e.target.value)}
-                  placeholder={agenticAIEnabled ? "Ask me anything with intelligent analysis..." : "Ask me anything about your documents..."}
+                  placeholder="Ask me anything about your documents..."
                   className="w-full p-4 bg-transparent text-foreground placeholder-muted-foreground focus:outline-none resize-none min-h-[60px] max-h-32 rounded-lg"
-                  disabled={operationState.sending || streamingStatus === 'streaming' || isRecording || isTranscribing}
+                  disabled={operationState.sending || streamingState.status === 'streaming' || isRecording || isTranscribing}
                   rows={1}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' && !e.shiftKey) {
@@ -1632,12 +1451,6 @@ const ChatInterface: React.FC = () => {
                     }
                   }}
                 />
-                {agenticAIEnabled && (
-                  <div className="absolute top-2 right-2 flex items-center space-x-1">
-                    <Brain className="h-3 w-3 text-purple-500" />
-                    <span className="text-xs text-purple-500 font-medium">Agentic</span>
-                  </div>
-                )}
               </Card>
               {/* Show attached file name if present */}
               {attachedFile && (
@@ -1665,32 +1478,24 @@ const ChatInterface: React.FC = () => {
               className="p-4 group rounded-full shadow-md hover:bg-primary-dark transition-colors duration-200"
               size="lg"
               onClick={() => (window as any).inlineFileInputRef && (window as any).inlineFileInputRef.click()}
-              disabled={operationState.sending || streamingStatus === 'streaming' || isRecording || isTranscribing}
+              disabled={operationState.sending || streamingState.status === 'streaming' || isRecording || isTranscribing}
             >
               <span role="img" aria-label="Attach">📎</span>
             </Button>
             <Button
               type="submit"
-              disabled={!inputValue.trim() || operationState.sending || streamingStatus === 'streaming' || isRecording || isTranscribing}
-              className={`p-4 group rounded-full shadow-md transition-colors duration-200 ${
-                agenticAIEnabled 
-                  ? 'bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white' 
-                  : 'hover:bg-primary-dark'
-              }`}
+              disabled={!inputValue.trim() || operationState.sending || streamingState.status === 'streaming' || isRecording || isTranscribing}
+              className={`p-4 group rounded-full shadow-md transition-colors duration-200`}
               size="lg"
             >
-              {agenticAIEnabled ? (
-                <Brain className="h-5 w-5 group-hover:scale-110 transition-transform duration-300" />
-              ) : (
-                <Send className="h-5 w-5 group-hover:translate-x-1 transition-transform duration-300" />
-              )}
+              <Send className="h-5 w-5 group-hover:translate-x-1 transition-transform duration-300" />
             </Button>
             <Button
               type="button"
               className="p-4 group rounded-full shadow-md hover:bg-primary-dark transition-colors duration-200 relative"
               size="lg"
               onClick={isRecording ? handleStopRecording : handleStartRecording}
-              disabled={operationState.sending || streamingStatus === 'streaming' || isTranscribing}
+              disabled={operationState.sending || streamingState.status === 'streaming' || isTranscribing}
               aria-label={isRecording ? 'Stop recording' : 'Start voice input'}
               title={isRecording ? 'Stop recording' : 'Record voice input'}
             >

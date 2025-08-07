@@ -92,8 +92,8 @@ class EnhancedDocument:
     processing_time: float
     error_log: List[str] = None
 
-DEFAULT_CHUNK_SIZE = 800
-DEFAULT_CHUNK_OVERLAP = 400
+DEFAULT_CHUNK_SIZE = 4000
+DEFAULT_CHUNK_OVERLAP = 200
 
 # Supported file types mapping
 SUPPORTED_EXTENSIONS = {
@@ -391,6 +391,10 @@ class DocumentProcessor:
                     'chunk_id': f"{filename}_{idx}",
                     'processing_timestamp': datetime.now().isoformat()
                 })
+                # Remove problematic metadata fields
+                for key in list(doc.metadata.keys()):
+                    if isinstance(doc.metadata[key], (list, dict)):
+                        del doc.metadata[key]
             
             # Create enhanced document record
             processing_time = time.time() - start_time
