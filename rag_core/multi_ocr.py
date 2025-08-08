@@ -82,6 +82,20 @@ class MultiOCREngine:
         self._cache_lock = threading.Lock()
         self._max_workers = min(4, len(self.engines))  # Limit concurrent engines
         
+        # Initialize layout analysis (optional)
+        self.layout_analyzer = None
+        self.layout_enhanced_ocr = None
+        if self.config.get("enable_layout_analysis", True):
+            try:
+                from .layout_analysis import LayoutAnalyzer, LayoutEnhancedOCR
+                self.layout_analyzer = LayoutAnalyzer(self.config.get("layout_analysis", {}))
+                self.layout_enhanced_ocr = LayoutEnhancedOCR(self, self.layout_analyzer)
+                logger.info("Layout analysis enabled")
+            except Exception as e:
+                logger.warning(f"Layout analysis not available: {e}")
+                self.layout_analyzer = None
+                self.layout_enhanced_ocr = None
+        
     def _get_default_config(self) -> Dict[str, Any]:
         """Get default configuration for multi-OCR pipeline with performance optimizations"""
         return {
@@ -712,6 +726,78 @@ class MultiOCREngine:
                 text = self._extract_text_tesseract(image)
             results.append(text)
         return results
+    
+    def process_pdf_with_layout(self, pdf_path: str, max_pages: int = None) -> list:
+        """Process PDF with layout-aware OCR"""
+        if not self.layout_enhanced_ocr:
+            logger.warning("Layout analysis not available, falling back to standard OCR")
+            return self.process_pdf(pdf_path, max_pages)
+        
+        results = []
+        
+        try:
+            # Convert PDF to images
+            from pdf2image import convert_from_path
+            images = convert_from_path(pdf_path, dpi=300)
+            
+            if max_pages:
+                images = images[:max_pages]
+            
+            # Process each page with layout analysis
+            for i, image in enumerate(images):
+                logger.info(f"Processing page {i+1}/{len(images)} with layout analysis")
+                
+                # Process with layout-enhanced OCR
+                layout_result = self.layout_enhanced_ocr.process_document_with_layout(image)
+                
+                # Convert layout result to OCRResult format
+                result = OCRResult(
+                    engine_name="layout_enhanced_ocr",
+                    text=self._extract_text_from_layout_result(layout_result),
+                    confidence=layout_result["confidence"],
+                    processing_time=layout_result["processing_time"],
+                    metadata={
+                        'page_number': i + 1,
+                        'total_pages': len(images),
+                        'processing': 'layout_enhanced',
+                        'layout_elements': len(layout_result["layout"].elements),
+                        'tables_detected': len(layout_result["layout"].tables),
+                        'form_fields_detected': len(layout_result["layout"].form_fields)
+                    }
+                )
+                
+                results.append(result)
+        
+        except Exception as e:
+            logger.error(f"Layout-enhanced PDF processing failed: {e}")
+            # Fall back to standard processing
+            return self.process_pdf(pdf_path, max_pages)
+        
+        return results
+    
+    def _extract_text_from_layout_result(self, layout_result: Dict[str, Any]) -> str:
+        """Extract text from layout analysis result"""
+        text_parts = []
+        
+        # Extract text from different layout elements
+        text_results = layout_result["text_results"]
+        
+        # Add text blocks
+        for block in text_results["text_blocks"]:
+            if block["text"].strip():
+                text_parts.append(block["text"])
+        
+        # Add table text
+        for table in text_results["tables"]:
+            if table["text"].strip():
+                text_parts.append(f"\n[TABLE]\n{table['text']}\n[/TABLE]\n")
+        
+        # Add form field text
+        for field in text_results["form_fields"]:
+            if field["text"].strip():
+                text_parts.append(f"\n[FORM_FIELD: {field['metadata'].get('field_type', 'unknown')}]\n{field['text']}\n[/FORM_FIELD]\n")
+        
+        return "\n\n".join(text_parts)
     
     def is_scanned_pdf(self, pdf_path: str, max_pages: int = 3) -> bool:
         """Robust scanned PDF detection with comprehensive analysis and fallback mechanisms"""

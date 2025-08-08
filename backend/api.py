@@ -1692,247 +1692,939 @@ async def optimize_ocr_performance(
         raise HTTPException(status_code=500, detail=f"OCR optimization failed: {str(e)}") 
 
 # Initialize agentic RAG system
-# try:
-#     agentic_rag = AgenticRAG()
-#     logger.info("Agentic RAG system initialized successfully")
-# except Exception as e:
-#     logger.error(f"Failed to initialize agentic RAG system: {str(e)}")
-#     agentic_rag = None
+try:
+    from rag_core.agentic_rag import AgenticRAG
+    agentic_rag = AgenticRAG()
+    logger.info("Agentic RAG system initialized successfully")
+except Exception as e:
+    logger.error(f"Failed to initialize agentic RAG system: {str(e)}")
+    agentic_rag = None
 
-# @app.post("/agentic/query")
-# async def agentic_query(
-#     question: str = Form(...),
-#     user_context: str = Form("{}"),
-#     query_type: str = Form(None)
-# ):
-#     """Process query using agentic RAG system"""
-#     try:
-#         # Check if agentic_rag is properly initialized
-#         if agentic_rag is None or not hasattr(agentic_rag, 'process_query'):
-#             return {
-#                 "status": "error",
-#                 "message": "Agentic RAG system not properly initialized",
-#                 "answer": "The agentic RAG system is not available. Please use the regular RAG system.",
-#                 "sources": [],
-#                 "reasoning": "System not initialized",
-#                 "query_type": "semantic_search",
-#                 "confidence": 0.0,
-#                 "processing_time": 0.0,
-#                 "metadata": {}
-#             }
+@app.post("/agentic/query")
+async def agentic_query(
+    question: str = Form(...),
+    user_context: str = Form("{}"),
+    query_type: str = Form(None)
+):
+    """Process query using agentic RAG system"""
+    try:
+        # Check if agentic_rag is properly initialized
+        if agentic_rag is None or not hasattr(agentic_rag, 'process_query'):
+            return {
+                "status": "error",
+                "message": "Agentic RAG system not properly initialized",
+                "answer": "The agentic RAG system is not available. Please use the regular RAG system.",
+                "sources": [],
+                "reasoning": "System not initialized",
+                "query_type": "semantic_search",
+                "confidence": 0.0,
+                "processing_time": 0.0,
+                "metadata": {}
+            }
         
-#         # Parse user context
-#         try:
-#             context = json.loads(user_context) if user_context else {}
-#         except:
-#             context = {}
+        # Parse user context
+        try:
+            context = json.loads(user_context) if user_context else {}
+        except:
+            context = {}
         
-#         # Process query with agentic RAG
-#         response = await agentic_rag.process_query(question, context)
+        # Process query with agentic RAG
+        response = await agentic_rag.process_query(question, context)
         
-#         return {
-#             "status": "success",
-#             "answer": response.answer,
-#             "sources": response.sources,
-#             "reasoning": response.reasoning,
-#             "query_type": response.query_type.value,
-#             "confidence": response.confidence,
-#             "processing_time": response.processing_time,
-#             "metadata": response.metadata
-#         }
+        return {
+            "status": "success",
+            "answer": response.answer,
+            "sources": response.sources,
+            "reasoning": response.reasoning,
+            "query_type": response.query_type.value,
+            "confidence": response.confidence,
+            "processing_time": response.processing_time,
+            "metadata": response.metadata,
+            "agent_chain": [role.value for role in response.agent_chain]
+        }
         
-#     except Exception as e:
-#         logger.error(f"Agentic query failed: {str(e)}")
-#         return {
-#             "status": "error",
-#             "message": f"Agentic query failed: {str(e)}",
-#             "answer": f"Sorry, I encountered an error processing your query: {str(e)}",
-#             "sources": [],
-#             "reasoning": "Error occurred during processing",
-#             "query_type": "semantic_search",
-#             "confidence": 0.0,
-#             "processing_time": 0.0,
-#             "metadata": {"error": str(e)}
-#         }
+    except Exception as e:
+        logger.error(f"Agentic query failed: {str(e)}")
+        return {
+            "status": "error",
+            "message": f"Agentic query failed: {str(e)}",
+            "answer": f"Sorry, I encountered an error processing your query: {str(e)}",
+            "sources": [],
+            "reasoning": "Error occurred during processing",
+            "query_type": "semantic_search",
+            "confidence": 0.0,
+            "processing_time": 0.0,
+            "metadata": {"error": str(e)}
+        }
 
-# @app.post("/agentic/query/stream")
-# async def agentic_query_stream(
-#     question: str = Form(...),
-#     user_context: str = Form("{}"),
-#     query_type: str = Form(None)
-# ):
-#     """Stream agentic query response"""
-#     try:
-#         # Check if agentic_rag is properly initialized
-#         if agentic_rag is None or not hasattr(agentic_rag, 'process_query'):
-#             def error_stream():
-#                 yield f"data: {json.dumps({'type': 'error', 'content': 'Agentic RAG system not available'})}\n\n"
-#                 yield f"data: {json.dumps({'type': 'done'})}\n\n"
-#             return StreamingResponse(error_stream(), media_type="text/plain")
+@app.post("/agentic/query/stream")
+async def agentic_query_stream(
+    question: str = Form(...),
+    user_context: str = Form("{}"),
+    query_type: str = Form(None)
+):
+    """Stream agentic query response"""
+    try:
+        # Check if agentic_rag is properly initialized
+        if agentic_rag is None or not hasattr(agentic_rag, 'process_query'):
+            def error_stream():
+                yield f"data: {json.dumps({'type': 'error', 'content': 'Agentic RAG system not available'})}\n\n"
+                yield f"data: {json.dumps({'type': 'done'})}\n\n"
+            return StreamingResponse(error_stream(), media_type="text/plain")
         
-#         # Parse user context
-#         try:
-#             context = json.loads(user_context) if user_context else {}
-#         except:
-#             context = {}
+        # Parse user context
+        try:
+            context = json.loads(user_context) if user_context else {}
+        except:
+            context = {}
         
-#         # Process query with agentic RAG
-#         response = await agentic_rag.process_query(question, context)
+        # Process query with agentic RAG
+        response = await agentic_rag.process_query(question, context)
         
-#         def stream_response():
-#             # Stream the reasoning first
-#             yield f"data: {json.dumps({'type': 'reasoning', 'content': response.reasoning})}\n\n"
+        def stream_response():
+            # Stream the reasoning first
+            yield f"data: {json.dumps({'type': 'reasoning', 'content': response.reasoning})}\n\n"
             
-#             # Stream the answer
-#             words = response.answer.split()
-#             for word in words:
-#                 yield f"data: {json.dumps({'type': 'word', 'content': word + ' '})}\n\n"
-#                 time.sleep(0.05)  # Small delay for streaming effect
+            # Stream the answer
+            words = response.answer.split()
+            for word in words:
+                yield f"data: {json.dumps({'type': 'word', 'content': word + ' '})}\n\n"
+                time.sleep(0.05)  # Small delay for streaming effect
             
-#             # Stream final metadata
-#             yield f"data: {json.dumps({'type': 'metadata', 'content': response.metadata})}\n\n"
-#             yield f"data: {json.dumps({'type': 'done'})}\n\n"
+            # Stream final metadata
+            yield f"data: {json.dumps({'type': 'metadata', 'content': response.metadata})}\n\n"
+            yield f"data: {json.dumps({'type': 'done'})}\n\n"
         
-#         return StreamingResponse(
-#             stream_response(),
-#             media_type="text/plain"
-#         )
+        return StreamingResponse(
+            stream_response(),
+            media_type="text/plain"
+        )
         
-#     except Exception as e:
-#         return JSONResponse(
-#             status_code=500,
-#             content={"error": f"Agentic query streaming failed: {str(e)}"}
-#         )
+    except Exception as e:
+        return JSONResponse(
+            status_code=500,
+            content={"error": f"Agentic query streaming failed: {str(e)}"}
+        )
 
-# @app.get("/agentic/performance")
-# def get_agentic_performance():
-#     """Get agentic RAG performance metrics"""
-#     try:
-#         metrics = agentic_rag.get_performance_metrics()
-#         return {
-#             "status": "success",
-#             "metrics": metrics
-#         }
-#     except Exception as e:
-#         raise HTTPException(status_code=500, detail=f"Failed to get performance metrics: {str(e)}")
-
-# @app.post("/agentic/upload/spreadsheet")
-# async def upload_spreadsheet_for_analysis(
-#     file: UploadFile = File(...),
-#     description: str = Form("")
-# ):
-#     """Upload spreadsheet for numerical analysis"""
-#     try:
-#         # Save uploaded file
-#         temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=f".{file.filename.split('.')[-1]}")
-#         content = await file.read()
-#         temp_file.write(content)
-#         temp_file.close()
+@app.get("/agentic/performance")
+def get_agentic_performance():
+    """Get agentic RAG performance metrics"""
+    try:
+        if agentic_rag is None:
+            return {
+                "status": "error",
+                "message": "Agentic RAG system not initialized",
+                "metrics": {}
+            }
         
-#         try:
-#             # Process spreadsheet with numerical processor
-#             df = agentic_rag.numerical_processor.process_spreadsheet(temp_file.name)
+        metrics = agentic_rag.get_performance_metrics()
+        return {
+            "status": "success",
+            "metrics": metrics
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get performance metrics: {str(e)}")
+
+@app.post("/agentic/analyze")
+def analyze_query_intent(
+    query: str = Form(...)
+):
+    """Analyze query intent without processing"""
+    try:
+        # Check if agentic_rag is properly initialized
+        if agentic_rag is None or not hasattr(agentic_rag, 'query_analyzer'):
+            return {
+                "status": "error",
+                "message": "Agentic RAG system not properly initialized",
+                "query": query,
+                "query_type": "semantic_search",
+                "data_sources": [],
+                "reasoning": "System not available",
+                "confidence": 0.0,
+                "metadata": {}
+            }
+        
+        # Create a simple context for analysis
+        from rag_core.agentic_rag import QueryContext, QueryType, DataSourceType
+        
+        context = QueryContext(
+            query=query,
+            query_type=QueryType.SEMANTIC_SEARCH,
+            data_sources=[DataSourceType.VECTOR_DB],
+            reasoning="",
+            confidence=0.0,
+            metadata={}
+        )
+        
+        # Use query analyzer to determine intent
+        import asyncio
+        analyzed_context = asyncio.run(agentic_rag.query_analyzer.process(context))
+        
+        return {
+            "status": "success",
+            "query": query,
+            "query_type": analyzed_context.query_type.value,
+            "data_sources": [ds.value for ds in analyzed_context.data_sources],
+            "reasoning": analyzed_context.reasoning,
+            "confidence": analyzed_context.confidence,
+            "metadata": analyzed_context.metadata
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Query analysis failed: {str(e)}")
+
+@app.get("/agentic/health")
+def agentic_health_check():
+    """Health check for agentic RAG system"""
+    try:
+        if agentic_rag is None:
+            return {
+                "status": "error",
+                "message": "Agentic RAG system not initialized",
+                "healthy": False
+            }
+        
+        # Basic health check
+        metrics = agentic_rag.get_performance_metrics()
+        
+        health_data = {
+            "healthy": True,
+            "total_queries": metrics.get('total_queries', 0),
+            "average_processing_time": metrics.get('average_processing_time', 0.0),
+            "success_rate": metrics.get('success_rate', 0.0),
+            "query_type_distribution": metrics.get('query_type_distribution', {}),
+            "recommendations": []
+        }
+        
+        # Add recommendations based on metrics
+        if metrics.get('average_processing_time', 0) > 5.0:
+            health_data["recommendations"].append("High processing time detected")
+        
+        if metrics.get('success_rate', 0) < 0.8:
+            health_data["recommendations"].append("Low success rate detected")
+        
+        return health_data
+        
+    except Exception as e:
+        return {
+            "healthy": False,
+            "error": str(e),
+            "recommendations": ["Check agentic RAG system configuration"]
+        }
+
+# Layout Analysis Endpoints
+@app.post("/layout/analyze")
+async def analyze_document_layout(
+    file: UploadFile = File(...),
+    include_text_extraction: bool = Form(True)
+):
+    """Analyze document layout and optionally extract text"""
+    try:
+        # Save uploaded file temporarily
+        with tempfile.NamedTemporaryFile(delete=False, suffix=f".{file.filename.split('.')[-1]}") as temp_file:
+            content = await file.read()
+            temp_file.write(content)
+            temp_file_path = temp_file.name
+        
+        try:
+            # Initialize layout analyzer
+            from rag_core.layout_analysis import LayoutAnalyzer
+            layout_analyzer = LayoutAnalyzer()
             
-#             # Store full document context if it's a text-based spreadsheet
-#             if description:
-#                 # Extract text content for context
-#                 text_content = df.to_string()
-#                 agentic_rag.context_manager.store_full_document(
-#                     file.filename, 
-#                     text_content,
-#                     {"type": "spreadsheet", "description": description}
-#                 )
+            # Convert to PIL Image
+            if temp_file_path.lower().endswith('.pdf'):
+                from pdf2image import convert_from_path
+                images = convert_from_path(temp_file_path, dpi=300)
+                if not images:
+                    raise HTTPException(status_code=400, detail="Could not convert PDF to images")
+                image = images[0]  # Analyze first page
+            else:
+                image = Image.open(temp_file_path)
             
-#             return {
-#                 "status": "success",
-#                 "message": f"Spreadsheet processed successfully",
-#                 "filename": file.filename,
-#                 "rows": len(df),
-#                 "columns": len(df.columns),
-#                 "column_names": df.columns.tolist(),
-#                 "data_types": df.dtypes.to_dict()
-#             }
+            # Analyze layout
+            layout = layout_analyzer.analyze_layout(image)
             
-#         finally:
-#             # Clean up temporary file
-#             if os.path.exists(temp_file.name):
-#                 os.unlink(temp_file.name)
+            result = {
+                "layout_analysis": {
+                    "page_width": layout.page_width,
+                    "page_height": layout.page_height,
+                    "total_elements": len(layout.elements),
+                    "tables_detected": len(layout.tables),
+                    "form_fields_detected": len(layout.form_fields),
+                    "text_blocks_detected": len(layout.text_blocks),
+                    "images_detected": len(layout.images),
+                    "confidence": layout.confidence,
+                    "processing_time": layout.processing_time
+                },
+                "elements": []
+            }
+            
+            # Add element details
+            for element in layout.elements:
+                element_info = {
+                    "type": element.element_type.value,
+                    "position": {
+                        "x": element.bounding_box.x,
+                        "y": element.bounding_box.y,
+                        "width": element.bounding_box.width,
+                        "height": element.bounding_box.height
+                    },
+                    "confidence": element.confidence,
+                    "metadata": element.metadata
+                }
+                result["elements"].append(element_info)
+            
+            # Add text extraction if requested
+            if include_text_extraction:
+                from rag_core.layout_analysis import LayoutEnhancedOCR
+                from rag_core.multi_ocr import MultiOCREngine
                 
-#     except Exception as e:
-#         raise HTTPException(status_code=500, detail=f"Spreadsheet upload failed: {str(e)}")
+                multi_ocr = MultiOCREngine()
+                layout_enhanced_ocr = LayoutEnhancedOCR(multi_ocr, layout_analyzer)
+                
+                text_result = layout_enhanced_ocr.process_document_with_layout(image)
+                result["text_extraction"] = text_result["text_results"]
+            
+            return result
+            
+        finally:
+            # Clean up temporary file
+            os.unlink(temp_file_path)
+            
+    except Exception as e:
+        logger.error(f"Layout analysis failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Layout analysis failed: {str(e)}")
 
-# @app.get("/agentic/sources")
-# def get_available_sources():
-#     """Get available data sources for agentic RAG"""
-#     try:
-#         # Check if agentic_rag is properly initialized
-#         if agentic_rag is None or not hasattr(agentic_rag, '_get_available_sources'):
-#             return {
-#                 "status": "error",
-#                 "message": "Agentic RAG system not properly initialized",
-#                 "sources": {
-#                     "vector_db": [],
-#                     "documents": [],
-#                     "spreadsheets": []
-#                 }
-#             }
+@app.post("/layout/process")
+async def process_document_with_layout(
+    file: UploadFile = File(...),
+    max_pages: int = Form(None)
+):
+    """Process document with layout-aware OCR"""
+    try:
+        # Save uploaded file temporarily
+        with tempfile.NamedTemporaryFile(delete=False, suffix=f".{file.filename.split('.')[-1]}") as temp_file:
+            content = await file.read()
+            temp_file.write(content)
+            temp_file_path = temp_file.name
         
-#         sources = {
-#             "vector_db": agentic_rag._get_available_sources(),
-#             "documents": agentic_rag._get_available_documents(),
-#             "spreadsheets": list(agentic_rag.numerical_processor.data_cache.keys())
-#         }
-        
-#         return {
-#             "status": "success",
-#             "sources": sources
-#         }
-#     except Exception as e:
-#         logger.error(f"Error getting agentic sources: {str(e)}")
-#         return {
-#             "status": "error",
-#             "message": f"Failed to get sources: {str(e)}",
-#             "sources": {
-#                 "vector_db": [],
-#                 "documents": [],
-#                 "spreadsheets": []
-#             }
-#         }
+        try:
+            # Initialize multi-OCR with layout analysis
+            from rag_core.multi_ocr import MultiOCREngine
+            multi_ocr = MultiOCREngine({"enable_layout_analysis": True})
+            
+            # Process with layout analysis
+            results = multi_ocr.process_pdf_with_layout(temp_file_path, max_pages)
+            
+            # Format results
+            formatted_results = []
+            for i, result in enumerate(results):
+                formatted_result = {
+                    "page": i + 1,
+                    "text": result.text,
+                    "confidence": result.confidence,
+                    "processing_time": result.processing_time,
+                    "metadata": result.metadata
+                }
+                formatted_results.append(formatted_result)
+            
+            return {
+                "total_pages": len(formatted_results),
+                "results": formatted_results,
+                "layout_enhanced": True
+            }
+            
+        finally:
+            # Clean up temporary file
+            os.unlink(temp_file_path)
+            
+    except Exception as e:
+        logger.error(f"Layout-enhanced processing failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Layout-enhanced processing failed: {str(e)}")
 
-# @app.post("/agentic/analyze")
-# def analyze_query_intent(
-#     query: str = Form(...)
-# ):
-#     """Analyze query intent without processing"""
-#     try:
-#         # Check if agentic_rag is properly initialized
-#         if agentic_rag is None or not hasattr(agentic_rag, 'query_analyzer'):
-#             return {
-#                 "status": "error",
-#                 "message": "Agentic RAG system not properly initialized",
-#                 "query": query,
-#                 "query_type": "semantic_search",
-#                 "data_sources": [],
-#                 "reasoning": "System not available",
-#                 "confidence": 0.0,
-#                 "metadata": {}
-#             }
+@app.get("/layout/config")
+def get_layout_config():
+    """Get layout analysis configuration"""
+    try:
+        from rag_core.layout_analysis import LayoutAnalyzer
+        analyzer = LayoutAnalyzer()
         
-#         # Use query analyzer to determine intent
-#         query_context = agentic_rag.query_analyzer.analyze_query(
-#             query, 
-#             agentic_rag._get_available_sources()
-#         )
+        return {
+            "config": analyzer.config,
+            "capabilities": {
+                "table_detection": analyzer.config["table_detection"]["enabled"],
+                "form_detection": analyzer.config["form_detection"]["enabled"],
+                "text_block_detection": analyzer.config["text_block_detection"]["enabled"],
+                "image_detection": analyzer.config["image_detection"]["enabled"]
+            }
+        }
+    except Exception as e:
+        logger.error(f"Failed to get layout config: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to get layout config: {str(e)}")
+
+@app.post("/layout/config")
+async def update_layout_config(config: dict):
+    """Update layout analysis configuration"""
+    try:
+        # This would typically save to a config file
+        # For now, just return success
+        return {
+            "status": "success",
+            "message": "Layout configuration updated",
+            "timestamp": time.time()
+        }
+    except Exception as e:
+        logger.error(f"Failed to update layout config: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to update layout config: {str(e)}")
+
+# Web Search Endpoints
+@app.post("/web/search")
+async def web_search(
+    query: str = Form(...),
+    search_type: str = Form("basic"),
+    max_results: int = Form(10),
+    include_answer: bool = Form(True)
+):
+    """Perform web search using Tavily API"""
+    try:
+        from rag_core.web_search import WebSearchEngine, WebSearchQuery, SearchType
         
-#         return {
-#             "status": "success",
-#             "query": query,
-#             "query_type": query_context.query_type.value,
-#             "data_sources": [ds.value for ds in query_context.data_sources],
-#             "reasoning": query_context.reasoning,
-#             "confidence": query_context.confidence,
-#             "metadata": query_context.metadata
-#         }
+        # Initialize web search engine
+        web_engine = WebSearchEngine()
         
-#     except Exception as e:
-#         raise HTTPException(status_code=500, detail=f"Query analysis failed: {str(e)}") 
+        if not web_engine.enabled:
+            return {
+                "status": "error",
+                "message": "Web search is not available. Please configure Tavily API key.",
+                "results": [],
+                "total_results": 0
+            }
+        
+        # Create search query
+        search_query = WebSearchQuery(
+            query=query,
+            search_type=SearchType(search_type),
+            max_results=max_results,
+            include_answer=include_answer
+        )
+        
+        # Perform search
+        response = web_engine.search(search_query)
+        
+        # Format results
+        formatted_results = []
+        for result in response.results:
+            formatted_result = {
+                "title": result.title,
+                "url": result.url,
+                "content": result.content,
+                "source": result.source,
+                "published_date": result.published_date,
+                "author": result.author,
+                "domain": result.domain,
+                "relevance_score": result.relevance_score,
+                "search_type": result.search_type.value,
+                "content_type": result.content_type.value
+            }
+            formatted_results.append(formatted_result)
+        
+        return {
+            "status": "success",
+            "query": query,
+            "search_type": search_type,
+            "results": formatted_results,
+            "answer": response.answer,
+            "related_questions": response.related_questions,
+            "total_results": response.total_results,
+            "search_time": response.search_time
+        }
+        
+    except Exception as e:
+        logger.error(f"Web search failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Web search failed: {str(e)}")
+
+@app.post("/web/search/hybrid")
+async def hybrid_search(
+    query: str = Form(...),
+    include_web_search: bool = Form(True),
+    limit: int = Form(10),
+    min_score: float = Form(0.1)
+):
+    """Perform hybrid search combining local and web results"""
+    try:
+        from rag_core.search import AdvancedSearch
+        
+        # Initialize advanced search with web integration
+        config = {"enable_web_search": include_web_search}
+        advanced_search = AdvancedSearch(config)
+        
+        # Perform hybrid search
+        results = advanced_search.hybrid_search(
+            query=query,
+            limit=limit,
+            min_score=min_score,
+            include_web_search=include_web_search
+        )
+        
+        return {
+            "status": "success",
+            "query": query,
+            "local_results": results["local_results"],
+            "web_results": results["web_results"],
+            "integrated_content": results["integrated_content"],
+            "total_results": results["total_results"],
+            "search_time": results["search_time"]
+        }
+        
+    except Exception as e:
+        logger.error(f"Hybrid search failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Hybrid search failed: {str(e)}")
+
+@app.post("/web/search/news")
+async def search_news(
+    query: str = Form(...),
+    max_results: int = Form(5)
+):
+    """Search for recent news articles"""
+    try:
+        from rag_core.search import AdvancedSearch
+        
+        # Initialize advanced search
+        config = {"enable_web_search": True}
+        advanced_search = AdvancedSearch(config)
+        
+        # Search for news
+        results = advanced_search.search_news(query, max_results)
+        
+        return {
+            "status": "success",
+            "query": query,
+            "results": results,
+            "total_results": len(results)
+        }
+        
+    except Exception as e:
+        logger.error(f"News search failed: {e}")
+        raise HTTPException(status_code=500, detail=f"News search failed: {str(e)}")
+
+@app.post("/web/search/academic")
+async def search_academic(
+    query: str = Form(...),
+    max_results: int = Form(5)
+):
+    """Search for academic papers and research"""
+    try:
+        from rag_core.search import AdvancedSearch
+        
+        # Initialize advanced search
+        config = {"enable_web_search": True}
+        advanced_search = AdvancedSearch(config)
+        
+        # Search for academic papers
+        results = advanced_search.search_academic(query, max_results)
+        
+        return {
+            "status": "success",
+            "query": query,
+            "results": results,
+            "total_results": len(results)
+        }
+        
+    except Exception as e:
+        logger.error(f"Academic search failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Academic search failed: {str(e)}")
+
+@app.get("/web/search/config")
+def get_web_search_config():
+    """Get web search configuration"""
+    try:
+        from rag_core.web_search import WebSearchEngine
+        
+        web_engine = WebSearchEngine()
+        
+        return {
+            "enabled": web_engine.enabled,
+            "cache_stats": web_engine.get_cache_stats(),
+            "config": {
+                "cache_ttl": web_engine.cache_ttl,
+                "max_retries": web_engine.config.get("max_retries", 3),
+                "timeout": web_engine.config.get("timeout", 30)
+            }
+        }
+    except Exception as e:
+        logger.error(f"Failed to get web search config: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to get web search config: {str(e)}")
+
+@app.post("/web/search/clear-cache")
+def clear_web_search_cache():
+    """Clear web search cache"""
+    try:
+        from rag_core.web_search import WebSearchEngine
+        
+        web_engine = WebSearchEngine()
+        web_engine.clear_cache()
+        
+        return {
+            "status": "success",
+            "message": "Web search cache cleared",
+            "timestamp": time.time()
+        }
+    except Exception as e:
+        logger.error(f"Failed to clear web search cache: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to clear web search cache: {str(e)}")
+
+# Enhanced Anti-Hallucination Endpoints
+@app.post("/anti-hallucination/validate")
+async def validate_response(
+    query: str = Form(...),
+    response: str = Form(...),
+    sources: str = Form("[]")  # JSON string of sources
+):
+    """Validate response for hallucination detection"""
+    try:
+        import json
+        from rag_core.anti_hallucination import AntiHallucinationValidator
+        
+        # Parse sources
+        sources_list = json.loads(sources)
+        
+        # Initialize validator
+        validator = AntiHallucinationValidator()
+        
+        # Validate response
+        validation_result = validator.validate_response(query, response, sources_list)
+        
+        return {
+            "status": "success",
+            "is_valid": validation_result.is_valid,
+            "confidence_level": validation_result.confidence_level.value,
+            "quality_score": validation_result.quality_score,
+            "hallucination_detections": [
+                {
+                    "type": detection.hallucination_type.value if detection.hallucination_type else None,
+                    "confidence": detection.confidence,
+                    "evidence": detection.evidence,
+                    "suggestions": detection.suggestions,
+                    "severity": detection.severity
+                }
+                for detection in validation_result.hallucination_detections
+            ],
+            "corrections": validation_result.corrections,
+            "metadata": validation_result.metadata
+        }
+        
+    except Exception as e:
+        logger.error(f"Response validation failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Response validation failed: {str(e)}")
+
+@app.post("/anti-hallucination/validate-chunks")
+async def validate_chunks(
+    query: str = Form(...),
+    chunks: str = Form("[]")  # JSON string of chunks
+):
+    """Validate retrieved chunks for quality and relevance"""
+    try:
+        import json
+        from rag_core.anti_hallucination import AntiHallucinationValidator
+        
+        # Parse chunks
+        chunks_list = json.loads(chunks)
+        
+        # Initialize validator
+        validator = AntiHallucinationValidator()
+        
+        # Validate chunks
+        validated_chunks = validator.validate_chunks(query, chunks_list)
+        
+        return {
+            "status": "success",
+            "original_count": len(chunks_list),
+            "validated_count": len(validated_chunks),
+            "validated_chunks": validated_chunks
+        }
+        
+    except Exception as e:
+        logger.error(f"Chunk validation failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Chunk validation failed: {str(e)}")
+
+@app.get("/anti-hallucination/config")
+def get_anti_hallucination_config():
+    """Get anti-hallucination configuration"""
+    try:
+        from rag_core.anti_hallucination import AntiHallucinationValidator
+        
+        validator = AntiHallucinationValidator()
+        
+        return {
+            "config": validator.config,
+            "capabilities": {
+                "fact_checking": validator.fact_checking_enabled,
+                "contradiction_detection": validator.contradiction_detection_enabled,
+                "temporal_validation": validator.temporal_validation_enabled,
+                "numerical_validation": validator.numerical_validation_enabled
+            }
+        }
+    except Exception as e:
+        logger.error(f"Failed to get anti-hallucination config: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to get anti-hallucination config: {str(e)}")
+
+@app.post("/anti-hallucination/config")
+async def update_anti_hallucination_config(config: dict):
+    """Update anti-hallucination configuration"""
+    try:
+        # This would typically save to a config file
+        # For now, just return success
+        return {
+            "status": "success",
+            "message": "Anti-hallucination configuration updated",
+            "timestamp": time.time()
+        }
+    except Exception as e:
+        logger.error(f"Failed to update anti-hallucination config: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to update anti-hallucination config: {str(e)}")
+
+@app.post("/anti-hallucination/analyze")
+async def analyze_hallucination_patterns(
+    responses: str = Form("[]")  # JSON string of response analysis data
+):
+    """Analyze hallucination patterns across multiple responses"""
+    try:
+        import json
+        from rag_core.anti_hallucination import AntiHallucinationValidator
+        
+        # Parse responses
+        responses_list = json.loads(responses)
+        
+        # Initialize validator
+        validator = AntiHallucinationValidator()
+        
+        # Analyze patterns
+        analysis_results = []
+        total_detections = 0
+        detection_types = defaultdict(int)
+        
+        for response_data in responses_list:
+            query = response_data.get("query", "")
+            response = response_data.get("response", "")
+            sources = response_data.get("sources", [])
+            
+            validation_result = validator.validate_response(query, response, sources)
+            
+            analysis_results.append({
+                "query": query,
+                "is_valid": validation_result.is_valid,
+                "quality_score": validation_result.quality_score,
+                "detection_count": len(validation_result.hallucination_detections)
+            })
+            
+            total_detections += len(validation_result.hallucination_detections)
+            
+            for detection in validation_result.hallucination_detections:
+                if detection.hallucination_type:
+                    detection_types[detection.hallucination_type.value] += 1
+        
+        return {
+            "status": "success",
+            "total_responses": len(analysis_results),
+            "total_detections": total_detections,
+            "detection_types": dict(detection_types),
+            "analysis_results": analysis_results
+        }
+        
+    except Exception as e:
+        logger.error(f"Hallucination analysis failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Hallucination analysis failed: {str(e)}")
+
+# Enhanced Conversation Management Endpoints
+@app.get("/conversation/analytics/{conversation_id}")
+def get_conversation_analytics(conversation_id: str):
+    """Get comprehensive analytics for a conversation"""
+    try:
+        from rag_core.conversation_manager import conversation_manager
+        
+        analytics = conversation_manager.get_conversation_analytics(conversation_id)
+        
+        return {
+            "status": "success",
+            "conversation_id": conversation_id,
+            "analytics": {
+                "total_messages": analytics.total_messages,
+                "user_messages": analytics.user_messages,
+                "assistant_messages": analytics.assistant_messages,
+                "average_message_length": analytics.average_message_length,
+                "topic_distribution": analytics.topic_distribution,
+                "response_time_stats": analytics.response_time_stats,
+                "user_engagement_metrics": analytics.user_engagement_metrics,
+                "conversation_quality_score": analytics.conversation_quality_score,
+                "completion_rate": analytics.completion_rate,
+                "user_satisfaction_score": analytics.user_satisfaction_score
+            }
+        }
+    except Exception as e:
+        logger.error(f"Failed to get conversation analytics: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to get conversation analytics: {str(e)}")
+
+@app.get("/conversation/insights/{conversation_id}")
+def get_conversation_insights(conversation_id: str):
+    """Get intelligent insights for a conversation"""
+    try:
+        from rag_core.conversation_manager import conversation_manager
+        
+        insights = conversation_manager.analyze_conversation_insights(conversation_id)
+        
+        return {
+            "status": "success",
+            "conversation_id": conversation_id,
+            "insights": {
+                "key_topics": insights.key_topics,
+                "sentiment_score": insights.sentiment_score,
+                "user_intent": insights.user_intent,
+                "conversation_flow": insights.conversation_flow,
+                "knowledge_gaps": insights.knowledge_gaps,
+                "action_items": insights.action_items,
+                "follow_up_questions": insights.follow_up_questions,
+                "context_switches": insights.context_switches,
+                "average_response_time": insights.average_response_time,
+                "user_satisfaction_indicators": insights.user_satisfaction_indicators
+            }
+        }
+    except Exception as e:
+        logger.error(f"Failed to get conversation insights: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to get conversation insights: {str(e)}")
+
+@app.get("/conversation/context/{conversation_id}")
+def get_conversation_context(conversation_id: str):
+    """Get conversation context"""
+    try:
+        from rag_core.conversation_manager import conversation_manager
+        
+        context = conversation_manager.manage_conversation_context(conversation_id)
+        
+        return {
+            "status": "success",
+            "conversation_id": conversation_id,
+            "context": {
+                "current_topic": context.current_topic,
+                "context_stack": context.context_stack,
+                "memory_bank": context.memory_bank,
+                "context_window": context.context_window,
+                "context_importance": context.context_importance,
+                "context_retention_policy": context.context_retention_policy
+            }
+        }
+    except Exception as e:
+        logger.error(f"Failed to get conversation context: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to get conversation context: {str(e)}")
+
+@app.post("/conversation/context/{conversation_id}")
+async def update_conversation_context(
+    conversation_id: str,
+    new_topic: str = Form(None),
+    context_data: str = Form("{}")  # JSON string
+):
+    """Update conversation context"""
+    try:
+        import json
+        from rag_core.conversation_manager import conversation_manager
+        
+        # Parse context data
+        context_dict = json.loads(context_data) if context_data else {}
+        
+        conversation_manager.update_conversation_context(
+            conversation_id, 
+            new_topic=new_topic, 
+            context_data=context_dict
+        )
+        
+        return {
+            "status": "success",
+            "message": "Conversation context updated",
+            "conversation_id": conversation_id
+        }
+    except Exception as e:
+        logger.error(f"Failed to update conversation context: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to update conversation context: {str(e)}")
+
+@app.get("/conversation/recommendations/{conversation_id}")
+def get_conversation_recommendations(conversation_id: str):
+    """Get intelligent recommendations for a conversation"""
+    try:
+        from rag_core.conversation_manager import conversation_manager
+        
+        recommendations = conversation_manager.get_conversation_recommendations(conversation_id)
+        
+        return {
+            "status": "success",
+            "conversation_id": conversation_id,
+            "recommendations": recommendations
+        }
+    except Exception as e:
+        logger.error(f"Failed to get conversation recommendations: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to get conversation recommendations: {str(e)}")
+
+@app.post("/conversation/analyze-batch")
+async def analyze_conversations_batch(
+    conversation_ids: str = Form("[]")  # JSON string of conversation IDs
+):
+    """Analyze multiple conversations for patterns and insights"""
+    try:
+        import json
+        from rag_core.conversation_manager import conversation_manager
+        
+        # Parse conversation IDs
+        conv_ids = json.loads(conversation_ids)
+        
+        batch_results = {
+            "total_conversations": len(conv_ids),
+            "analytics_summary": {},
+            "insights_summary": {},
+            "recommendations_summary": {}
+        }
+        
+        all_analytics = []
+        all_insights = []
+        all_recommendations = []
+        
+        for conv_id in conv_ids:
+            # Get analytics
+            analytics = conversation_manager.get_conversation_analytics(conv_id)
+            all_analytics.append(analytics)
+            
+            # Get insights
+            insights = conversation_manager.analyze_conversation_insights(conv_id)
+            all_insights.append(insights)
+            
+            # Get recommendations
+            recommendations = conversation_manager.get_conversation_recommendations(conv_id)
+            all_recommendations.append(recommendations)
+        
+        # Calculate summary statistics
+        if all_analytics:
+            avg_quality = sum(a.conversation_quality_score for a in all_analytics) / len(all_analytics)
+            avg_satisfaction = sum(a.user_satisfaction_score for a in all_analytics) / len(all_analytics)
+            
+            batch_results["analytics_summary"] = {
+                "average_quality_score": avg_quality,
+                "average_satisfaction_score": avg_satisfaction,
+                "total_messages": sum(a.total_messages for a in all_analytics)
+            }
+        
+        if all_insights:
+            avg_sentiment = sum(i.sentiment_score for i in all_insights) / len(all_insights)
+            common_topics = Counter()
+            for insights in all_insights:
+                common_topics.update(insights.key_topics)
+            
+            batch_results["insights_summary"] = {
+                "average_sentiment": avg_sentiment,
+                "most_common_topics": [topic for topic, count in common_topics.most_common(5)]
+            }
+        
+        return {
+            "status": "success",
+            "batch_analysis": batch_results
+        }
+        
+    except Exception as e:
+        logger.error(f"Failed to analyze conversations batch: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to analyze conversations batch: {str(e)}") 

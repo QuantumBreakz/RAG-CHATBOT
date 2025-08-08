@@ -12,6 +12,7 @@ from enum import Enum
 
 from .vectorstore import VectorStore
 from .document import DocumentProcessor
+from .web_search import WebSearchEngine, WebSearchIntegration, WebSearchQuery, SearchType
 
 
 class SearchOperator(Enum):
@@ -45,9 +46,22 @@ class SearchResult:
 class AdvancedSearch:
     """Advanced search functionality with filtering and query parsing"""
     
-    def __init__(self):
+    def __init__(self, config: Dict[str, Any] = None):
         self.vectorstore = VectorStore()
         self.logger = logging.getLogger(__name__)
+        
+        # Initialize web search integration
+        self.web_search_engine = None
+        self.web_search_integration = None
+        if config and config.get("enable_web_search", True):
+            try:
+                self.web_search_engine = WebSearchEngine(config.get("web_search", {}))
+                self.web_search_integration = WebSearchIntegration(self.web_search_engine)
+                self.logger.info("Web search integration enabled")
+            except Exception as e:
+                self.logger.warning(f"Web search integration not available: {e}")
+                self.web_search_engine = None
+                self.web_search_integration = None
     
     def parse_query(self, query: str) -> Tuple[str, List[SearchFilter]]:
         """
@@ -292,6 +306,92 @@ class AdvancedSearch:
             
         except Exception as e:
             self.logger.error(f"Search suggestions error: {str(e)}")
+            return []
+    
+    def hybrid_search(self, query: str, filters: List[SearchFilter] = None, 
+                     limit: int = 10, min_score: float = 0.1,
+                     include_web_search: bool = True) -> Dict[str, Any]:
+        """Perform hybrid search combining local and web results"""
+        import time
+        
+        results = {
+            "local_results": [],
+            "web_results": [],
+            "integrated_content": "",
+            "search_time": 0.0,
+            "total_results": 0
+        }
+        
+        start_time = time.time()
+        
+        # Perform local search
+        local_results = self.search_documents(query, filters, limit, min_score)
+        results["local_results"] = local_results
+        
+        # Perform web search if enabled
+        if include_web_search and self.web_search_integration:
+            try:
+                web_integration = self.web_search_integration.search_and_integrate(
+                    query, {"local_results": local_results}
+                )
+                results["web_results"] = web_integration["web_search_results"]
+                results["integrated_content"] = web_integration["integrated_content"]
+                results["web_answer"] = web_integration["web_answer"]
+                results["web_search_time"] = web_integration["search_time"]
+            except Exception as e:
+                self.logger.error(f"Web search failed: {e}")
+                results["web_error"] = str(e)
+        
+        results["search_time"] = time.time() - start_time
+        results["total_results"] = len(local_results) + len(results.get("web_results", []))
+        
+        return results
+    
+    def search_news(self, query: str, max_results: int = 5) -> List[Dict[str, Any]]:
+        """Search for recent news articles"""
+        if not self.web_search_integration:
+            return []
+        
+        try:
+            news_results = self.web_search_integration.search_news(query, max_results)
+            return [
+                {
+                    "title": result.title,
+                    "url": result.url,
+                    "content": result.content,
+                    "source": result.source,
+                    "published_date": result.published_date,
+                    "domain": result.domain,
+                    "relevance_score": result.relevance_score
+                }
+                for result in news_results
+            ]
+        except Exception as e:
+            self.logger.error(f"News search failed: {e}")
+            return []
+    
+    def search_academic(self, query: str, max_results: int = 5) -> List[Dict[str, Any]]:
+        """Search for academic papers and research"""
+        if not self.web_search_integration:
+            return []
+        
+        try:
+            academic_results = self.web_search_integration.search_academic(query, max_results)
+            return [
+                {
+                    "title": result.title,
+                    "url": result.url,
+                    "content": result.content,
+                    "source": result.source,
+                    "published_date": result.published_date,
+                    "author": result.author,
+                    "domain": result.domain,
+                    "relevance_score": result.relevance_score
+                }
+                for result in academic_results
+            ]
+        except Exception as e:
+            self.logger.error(f"Academic search failed: {e}")
             return []
 
 
