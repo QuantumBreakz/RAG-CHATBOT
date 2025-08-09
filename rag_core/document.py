@@ -20,6 +20,8 @@ import xml.etree.ElementTree as ET
 from rag_core.utils import DocumentClassifier, sanitize_text, extract_page_numbers
 # --- Add OCR import ---
 from rag_core.ocr import extract_text_from_pdf, is_scanned_pdf
+# --- Add Template-Based Chunking import ---
+from rag_core.chunking_templates import template_chunker, ChunkingResult
 import time
 
 # Enhanced Document Processing Classes
@@ -295,7 +297,7 @@ class DocumentProcessor:
     
     @staticmethod
     def process_document(file_content: bytes, filename: str, chunk_size: int = DEFAULT_CHUNK_SIZE, 
-                        chunk_overlap: int = DEFAULT_CHUNK_OVERLAP) -> List[Document]:
+                        chunk_overlap: int = DEFAULT_CHUNK_OVERLAP, use_template_chunking: bool = True) -> List[Document]:
         """
         Enhanced document processing with versioning, annotations, and relationships support.
         Returns processed document chunks with enhanced metadata.
@@ -362,10 +364,37 @@ class DocumentProcessor:
             if not documents:
                 raise ValueError("No content extracted from document")
             
-            # CHUNK THE DOCUMENTS - THIS WAS MISSING!
-            logger.info(f"Chunking {len(documents)} documents for {filename}")
-            chunked_documents = DocumentProcessor._semantic_chunking(documents, chunk_size, chunk_overlap)
-            logger.info(f"Created {len(chunked_documents)} chunks from {len(documents)} documents")
+            # Use template-based chunking if enabled
+            if use_template_chunking:
+                logger.info(f"Using template-based chunking for {filename}")
+                # Combine all text for template-based chunking
+                combined_text = "\n\n".join([doc.page_content for doc in documents])
+                
+                # Use template-based chunking
+                chunking_result = template_chunker.chunk_with_template(
+                    text=combined_text,
+                    filename=filename
+                )
+                
+                # Update documents with template-based chunks
+                chunked_documents = chunking_result.chunks
+                
+                # Add chunking metadata
+                for i, doc in enumerate(chunked_documents):
+                    doc.metadata.update({
+                        "template_chunking_used": True,
+                        "template_used": chunking_result.template_used,
+                        "strategy_used": chunking_result.strategy_used.value,
+                        "quality_score": chunking_result.quality_score,
+                        "explainable_decisions": chunking_result.explainable_decisions
+                    })
+                
+                logger.info(f"Template chunking created {len(chunked_documents)} chunks with quality score {chunking_result.quality_score:.2f}")
+            else:
+                # Use traditional chunking
+                logger.info(f"Using traditional chunking for {filename}")
+                chunked_documents = DocumentProcessor._semantic_chunking(documents, chunk_size, chunk_overlap)
+                logger.info(f"Created {len(chunked_documents)} chunks from {len(documents)} documents")
             
             # Combine all text content for domain classification
             all_text = " ".join([doc.page_content for doc in chunked_documents])

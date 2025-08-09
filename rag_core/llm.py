@@ -1,5 +1,8 @@
 from rag_core.config import OLLAMA_LLM_MODEL, OLLAMA_BASE_URL, logger, SYSTEM_PROMPT
 from tenacity import retry, stop_after_attempt, wait_exponential
+from typing import List, Dict, Any
+# --- Add Cross-Language Support import ---
+from rag_core.language_processor import language_processor, LanguageCode
 
 MAX_HISTORY_MESSAGES = 10  # Number of previous messages to include (excluding system and current user prompt)
 
@@ -10,15 +13,34 @@ class LLMHandler:
         """Initialize LLM handler"""
         pass
     
-    def generate_response(self, prompt: str, context: str = "", conversation_history=None) -> str:
+    def generate_response(self, prompt: str, context: str = "", conversation_history=None, 
+                        target_language: LanguageCode = None) -> str:
         """
         Generate a complete response from the LLM with strict context enforcement and conversation history.
         Returns the full response as a string.
         """
+        # Process multi-language query if target language is specified
+        original_prompt = prompt
+        if target_language and target_language != LanguageCode.ENGLISH:
+            # Detect and translate the query
+            multi_lang_query = language_processor.process_multi_language_query(
+                prompt, [target_language]
+            )
+            
+            if target_language in multi_lang_query.translated_queries:
+                prompt = multi_lang_query.translated_queries[target_language]
+                logger.info(f"Translated query from {multi_lang_query.detected_language.value} "
+                          f"to {target_language.value}: {original_prompt} -> {prompt}")
+        
         # Log the context and conversation history for debugging
         logger.info(f"LLM Context for query: {repr(context)[:1000]}")
         logger.info(f"LLM Conversation History: {self._format_history(conversation_history)[:1000]}")
-        # Stricter prompt engineering
+        
+        # Stricter prompt engineering with language-specific instructions
+        language_instruction = ""
+        if target_language and target_language != LanguageCode.ENGLISH:
+            language_instruction = f"\n- Respond in {target_language.value} language."
+        
         strict_prompt = f"""
         Context:
         {context}
@@ -32,7 +54,7 @@ class LLMHandler:
         Instructions:
         - Only answer using the information in the context above.
         - For every fact you state, include the exact sentence from the context in quotes as a citation.
-        - If the answer is not present in the context, reply: 'I don't know.'
+        - If the answer is not present in the context, reply: 'I don't know.'{language_instruction}
         """
         response_parts = []
         try:
@@ -48,6 +70,44 @@ class LLMHandler:
         if not any(sentence.lower() in context_lower for sentence in answer_sentences if len(sentence) > 10):
             return "Cannot answer based on the provided context."
         return answer
+    
+    def process_multi_language_query(self, query: str, target_languages: List[LanguageCode] = None) -> Dict[str, Any]:
+        """
+        Process a query in multiple languages and return responses for each language.
+        """
+        if not target_languages:
+            target_languages = [LanguageCode.ENGLISH]
+        
+        # Process the multi-language query
+        multi_lang_query = language_processor.process_multi_language_query(query, target_languages)
+        
+        # Generate responses for each target language
+        responses = {}
+        for target_lang in target_languages:
+            if target_lang in multi_lang_query.translated_queries:
+                translated_query = multi_lang_query.translated_queries[target_lang]
+                
+                # Generate response for this language
+                response = self.generate_response(
+                    prompt=translated_query,
+                    target_language=target_lang
+                )
+                
+                responses[target_lang.value] = {
+                    "query": translated_query,
+                    "response": response,
+                    "language": target_lang.value,
+                    "confidence": multi_lang_query.confidence
+                }
+        
+        return {
+            "original_query": query,
+            "detected_language": multi_lang_query.detected_language.value,
+            "detection_confidence": multi_lang_query.confidence,
+            "processing_time": multi_lang_query.processing_time,
+            "responses": responses,
+            "metadata": multi_lang_query.metadata
+        }
 
     def _format_history(self, conversation_history):
         if not conversation_history:

@@ -2627,4 +2627,345 @@ async def analyze_conversations_batch(
         
     except Exception as e:
         logger.error(f"Failed to analyze conversations batch: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to analyze conversations batch: {str(e)}") 
+        raise HTTPException(status_code=500, detail=f"Failed to analyze conversations batch: {str(e)}")
+
+# Template-Based Chunking Endpoints
+@app.get("/chunking/templates")
+def get_chunking_templates():
+    """Get available chunking templates"""
+    try:
+        from rag_core.chunking_templates import template_chunker
+        
+        templates = template_chunker.get_available_templates()
+        
+        return {
+            "status": "success",
+            "templates": templates
+        }
+    except Exception as e:
+        logger.error(f"Failed to get chunking templates: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to get chunking templates: {str(e)}")
+
+@app.post("/chunking/chunk-with-template")
+async def chunk_with_template(
+    text: str = Form(...),
+    filename: str = Form(""),
+    template_name: str = Form(None)
+):
+    """Chunk text using a specific template"""
+    try:
+        from rag_core.chunking_templates import template_chunker
+        
+        chunking_result = template_chunker.chunk_with_template(
+            text=text,
+            filename=filename,
+            template_name=template_name
+        )
+        
+        return {
+            "status": "success",
+            "template_used": chunking_result.template_used,
+            "strategy_used": chunking_result.strategy_used.value,
+            "quality_score": chunking_result.quality_score,
+            "chunk_count": chunking_result.chunk_count,
+            "average_chunk_size": chunking_result.average_chunk_size,
+            "metadata": chunking_result.metadata,
+            "explainable_decisions": chunking_result.explainable_decisions,
+            "chunks": [
+                {
+                    "content": chunk.page_content,
+                    "metadata": chunk.metadata
+                }
+                for chunk in chunking_result.chunks
+            ]
+        }
+    except Exception as e:
+        logger.error(f"Failed to chunk with template: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to chunk with template: {str(e)}")
+
+@app.post("/chunking/detect-document-type")
+async def detect_document_type(
+    text: str = Form(...),
+    filename: str = Form("")
+):
+    """Detect document type for chunking"""
+    try:
+        from rag_core.chunking_templates import template_chunker
+        
+        doc_type = template_chunker.detect_document_type(text, filename)
+        template = template_chunker.get_template_for_document(text, filename)
+        
+        return {
+            "status": "success",
+            "detected_type": doc_type.value,
+            "recommended_template": template.name,
+            "template_description": template.description,
+            "template_quality_metrics": template.quality_metrics
+        }
+    except Exception as e:
+        logger.error(f"Failed to detect document type: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to detect document type: {str(e)}")
+
+@app.post("/chunking/create-custom-template")
+async def create_custom_template(
+    name: str = Form(...),
+    document_type: str = Form(...),
+    strategy: str = Form(...),
+    chunk_size: int = Form(...),
+    chunk_overlap: int = Form(...),
+    custom_rules: str = Form("{}"),  # JSON string
+    description: str = Form("")
+):
+    """Create a custom chunking template"""
+    try:
+        import json
+        from rag_core.chunking_templates import template_chunker, DocumentType, ChunkingStrategy
+        
+        # Parse custom rules
+        rules_dict = json.loads(custom_rules) if custom_rules else {}
+        
+        # Create template
+        template = template_chunker.create_custom_template(
+            name=name,
+            document_type=DocumentType(document_type),
+            strategy=ChunkingStrategy(strategy),
+            chunk_size=chunk_size,
+            chunk_overlap=chunk_overlap,
+            custom_rules=rules_dict,
+            description=description
+        )
+        
+        return {
+            "status": "success",
+            "template_created": {
+                "name": template.name,
+                "document_type": template.document_type.value,
+                "strategy": template.strategy.value,
+                "chunk_size": template.chunk_size,
+                "chunk_overlap": template.chunk_overlap,
+                "description": template.description
+            }
+        }
+    except Exception as e:
+        logger.error(f"Failed to create custom template: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to create custom template: {str(e)}")
+
+@app.post("/chunking/analyze-chunking-quality")
+async def analyze_chunking_quality(
+    chunks: str = Form("[]"),  # JSON string of chunks
+    template_used: str = Form(""),
+    original_text: str = Form("")
+):
+    """Analyze chunking quality and provide recommendations"""
+    try:
+        import json
+        from rag_core.chunking_templates import template_chunker
+        
+        # Parse chunks
+        chunks_data = json.loads(chunks)
+        
+        # Calculate quality metrics
+        total_chunks = len(chunks_data)
+        chunk_sizes = [len(chunk.get("content", "")) for chunk in chunks_data]
+        avg_size = sum(chunk_sizes) / total_chunks if total_chunks > 0 else 0
+        
+        # Quality analysis
+        quality_analysis = {
+            "total_chunks": total_chunks,
+            "average_chunk_size": avg_size,
+            "size_consistency": 1.0 - (max(chunk_sizes) - min(chunk_sizes)) / max(chunk_sizes) if chunk_sizes else 0,
+            "content_coverage": len(original_text) / (avg_size * total_chunks) if total_chunks > 0 else 0,
+            "recommendations": []
+        }
+        
+        # Generate recommendations
+        if avg_size < 500:
+            quality_analysis["recommendations"].append("Consider increasing chunk size for better context")
+        elif avg_size > 3000:
+            quality_analysis["recommendations"].append("Consider decreasing chunk size for better precision")
+        
+        if total_chunks < 3:
+            quality_analysis["recommendations"].append("Very few chunks - consider adjusting chunking parameters")
+        elif total_chunks > 50:
+            quality_analysis["recommendations"].append("Many small chunks - consider increasing chunk size")
+        
+        return {
+            "status": "success",
+            "template_used": template_used,
+            "quality_analysis": quality_analysis
+        }
+    except Exception as e:
+        logger.error(f"Failed to analyze chunking quality: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to analyze chunking quality: {str(e)}")
+
+# Cross-Language Query Support Endpoints
+@app.get("/language/supported")
+def get_supported_languages():
+    """Get list of supported languages"""
+    try:
+        from rag_core.language_processor import language_processor
+        
+        languages = language_processor.get_supported_languages()
+        
+        return {
+            "status": "success",
+            "languages": languages
+        }
+    except Exception as e:
+        logger.error(f"Failed to get supported languages: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to get supported languages: {str(e)}")
+
+@app.post("/language/detect")
+async def detect_language(
+    text: str = Form(...)
+):
+    """Detect the language of input text"""
+    try:
+        from rag_core.language_processor import language_processor
+        
+        detection_result = language_processor.detect_language(text)
+        
+        return {
+            "status": "success",
+            "detected_language": detection_result.detected_language.value,
+            "language_name": detection_result.language_name,
+            "confidence": detection_result.confidence,
+            "script": detection_result.script,
+            "metadata": detection_result.metadata
+        }
+    except Exception as e:
+        logger.error(f"Failed to detect language: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to detect language: {str(e)}")
+
+@app.post("/language/translate")
+async def translate_text(
+    text: str = Form(...),
+    target_language: str = Form(...),
+    source_language: str = Form(None)
+):
+    """Translate text to target language"""
+    try:
+        from rag_core.language_processor import language_processor, LanguageCode
+        
+        target_lang = LanguageCode(target_language)
+        source_lang = LanguageCode(source_language) if source_language else None
+        
+        translation_result = language_processor.translate_text(
+            text=text,
+            target_language=target_lang,
+            source_language=source_lang
+        )
+        
+        return {
+            "status": "success",
+            "original_text": translation_result.original_text,
+            "translated_text": translation_result.translated_text,
+            "source_language": translation_result.source_language.value,
+            "target_language": translation_result.target_language.value,
+            "confidence": translation_result.confidence,
+            "provider": translation_result.provider.value,
+            "metadata": translation_result.metadata
+        }
+    except Exception as e:
+        logger.error(f"Failed to translate text: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to translate text: {str(e)}")
+
+@app.post("/language/query")
+async def process_multi_language_query(
+    query: str = Form(...),
+    target_languages: str = Form("[]")  # JSON string of language codes
+):
+    """Process a query in multiple languages"""
+    try:
+        import json
+        from rag_core.language_processor import language_processor, LanguageCode
+        from rag_core.llm import LLMHandler
+        
+        # Parse target languages
+        target_lang_codes = json.loads(target_languages)
+        target_langs = [LanguageCode(code) for code in target_lang_codes]
+        
+        # Process multi-language query
+        llm_handler = LLMHandler()
+        result = llm_handler.process_multi_language_query(query, target_langs)
+        
+        return {
+            "status": "success",
+            "result": result
+        }
+    except Exception as e:
+        logger.error(f"Failed to process multi-language query: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to process multi-language query: {str(e)}")
+
+@app.post("/language/query-with-context")
+async def process_multi_language_query_with_context(
+    query: str = Form(...),
+    context: str = Form(""),
+    target_languages: str = Form("[]"),  # JSON string of language codes
+    conversation_history: str = Form("[]")  # JSON string of conversation history
+):
+    """Process a query in multiple languages with context"""
+    try:
+        import json
+        from rag_core.language_processor import language_processor, LanguageCode
+        from rag_core.llm import LLMHandler
+        
+        # Parse target languages and conversation history
+        target_lang_codes = json.loads(target_languages)
+        target_langs = [LanguageCode(code) for code in target_lang_codes]
+        history = json.loads(conversation_history) if conversation_history else []
+        
+        # Process multi-language query with context
+        llm_handler = LLMHandler()
+        result = llm_handler.process_multi_language_query(query, target_langs)
+        
+        # Add context-aware responses
+        for lang_code, response_data in result["responses"].items():
+            target_lang = LanguageCode(lang_code)
+            response = llm_handler.generate_response(
+                prompt=response_data["query"],
+                context=context,
+                conversation_history=history,
+                target_language=target_lang
+            )
+            response_data["context_response"] = response
+        
+        return {
+            "status": "success",
+            "result": result
+        }
+    except Exception as e:
+        logger.error(f"Failed to process multi-language query with context: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to process multi-language query with context: {str(e)}")
+
+@app.get("/language/cache/stats")
+def get_translation_cache_stats():
+    """Get translation cache statistics"""
+    try:
+        from rag_core.language_processor import language_processor
+        
+        stats = language_processor.get_cache_stats()
+        
+        return {
+            "status": "success",
+            "cache_stats": stats
+        }
+    except Exception as e:
+        logger.error(f"Failed to get cache stats: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to get cache stats: {str(e)}")
+
+@app.post("/language/cache/clear")
+def clear_translation_cache():
+    """Clear translation cache"""
+    try:
+        from rag_core.language_processor import language_processor
+        
+        language_processor.clear_translation_cache()
+        
+        return {
+            "status": "success",
+            "message": "Translation cache cleared successfully"
+        }
+    except Exception as e:
+        logger.error(f"Failed to clear cache: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to clear cache: {str(e)}") 
