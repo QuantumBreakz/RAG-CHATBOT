@@ -105,17 +105,43 @@ const ContextPreview: React.FC<ContextPreviewProps> = ({
                 <strong>Sources used:</strong>
               </div>
               <div className="space-y-1">
-                {sources.map((source, index) => (
-                  <div key={index} className="text-xs flex items-center space-x-2">
-                    <span className="text-blue-600 font-mono">
-                      {source.source?.attribution || `Source ${index + 1}`}
-                    </span>
-                    <span className="text-muted-foreground">-</span>
-                    <span className="truncate">
-                      {source.content?.substring(0, 100)}...
-                    </span>
-                  </div>
-                ))}
+                {sources.map((source, index) => {
+                  
+                  // Handle different source structures
+                  let sourceContent = '';
+                  let sourceAttribution = `Source ${index + 1}`;
+                  
+                  if (Array.isArray(source)) {
+                    // Backend returns: [content, metadata, attribution]
+                    sourceContent = source[0] || '';
+                    const metadata = source[1] || {};
+                    const attribution = source[2] || {};
+                    
+                    // Get attribution from the third element
+                    sourceAttribution = attribution.attribution || attribution.title || metadata.filename || `Source ${index + 1}`;
+                  } else if (typeof source === 'object' && source !== null) {
+                    // If source is an object
+                    sourceContent = source.content || source.text || '';
+                    sourceAttribution = source.source?.attribution || source.attribution || source.title || `Source ${index + 1}`;
+                  } else if (typeof source === 'string') {
+                    // If source is a string
+                    sourceContent = source;
+                  }
+                  
+                  return (
+                    <div key={index} className="text-xs flex items-center space-x-2">
+                      <span className="text-blue-600 font-mono">
+                        {sourceAttribution}
+                      </span>
+                      <span className="text-muted-foreground">-</span>
+                      <span className="truncate">
+                        {typeof sourceContent === 'string' && sourceContent.length > 0 
+                          ? sourceContent.substring(0, 100) + '...' 
+                          : 'Content not available'}
+                      </span>
+                    </div>
+                  );
+                })}
               </div>
               
               {contextMetadata.error && (

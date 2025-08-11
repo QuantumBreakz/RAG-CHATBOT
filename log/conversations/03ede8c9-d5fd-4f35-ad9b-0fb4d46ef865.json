@@ -1,0 +1,24 @@
+{
+  "id": "03ede8c9-d5fd-4f35-ad9b-0fb4d46ef865",
+  "title": "test",
+  "messages": [
+    {
+      "id": "9d61fdc2-9d43-48ee-9bca-1468d98f9fc1",
+      "content": "what happened between mersault and the arab",
+      "role": "user",
+      "timestamp": "2025-08-11T12:36:55.119Z",
+      "isStreaming": false
+    },
+    {
+      "id": "e12405ab-181e-427f-b456-565e8480f15c",
+      "content": " Based on the provided information, Mersault, Masson, and Raymond went for a walk on the beach. While they were walking, two Arabs in blue overalls approached them from a distance. According to the context, it's implied that there might be some sort of encounter or interaction between these groups, but the details of what happened are not explicitly stated in the provided documents.",
+      "role": "assistant",
+      "timestamp": "2025-08-11T12:36:55.171Z",
+      "isStreaming": false
+    }
+  ],
+  "createdAt": "2025-08-11T12:36:43.496Z",
+  "documents": [],
+  "created_at": "2025-08-11T12:36:43.496Z",
+  "uploads": []
+}

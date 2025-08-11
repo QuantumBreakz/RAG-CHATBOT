@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
+import React, { createContext, useContext, useState, useCallback, useEffect, ReactNode, useRef } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 
 export interface Message {
@@ -7,6 +7,8 @@ export interface Message {
   role: 'user' | 'assistant';
   timestamp: Date;
   isStreaming?: boolean;
+  sources?: any[];
+  contextMetadata?: any;
 }
 
 export interface ChatSession {
@@ -15,15 +17,19 @@ export interface ChatSession {
   messages: Message[];
   createdAt: Date;
   documents: string[];
+  sources?: any[];
 }
 
 interface ChatContextType {
   sessions: ChatSession[];
   currentSession: ChatSession | null;
+  setSessions: (sessions: ChatSession[]) => void;
   createSession: () => void;
   selectSession: (sessionId: string) => void;
-  addMessage: (content: string, role: 'user' | 'assistant') => void;
-  updateStreamingMessage: (content: string) => void;
+  addMessage: (content: string, role: 'user' | 'assistant', extras?: { sources?: any[]; contextMetadata?: any }) => void;
+  beginStreamingMessage: () => void;
+  appendStreamingContent: (delta: string) => void;
+  finalizeStreamingMessage: (content: string, extras?: { sources?: any[]; contextMetadata?: any }) => void;
   clearHistory: () => void;
   uploadedDocuments: string[];
   addDocument: (document: string) => void;
@@ -62,52 +68,107 @@ export const ChatProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [currentSession, setCurrentSession] = useState<ChatSession | null>(null);
   const [uploadedDocuments, setUploadedDocuments] = useState<string[]>([]);
+  
+  // Use ref to always get the current session value
+  const currentSessionRef = useRef<ChatSession | null>(null);
+  
+  // Update ref whenever currentSession changes
+  useEffect(() => {
+    currentSessionRef.current = currentSession;
+    console.log('Ref updated to match currentSession:', currentSession?.id);
+  }, [currentSession]);
 
   // Load state from localStorage
   const loadState = useCallback(() => {
     try {
+      console.log('Loading state from localStorage...');
       const saved = localStorage.getItem(STORAGE_KEY);
-      if (!saved) return;
+      console.log('Raw saved data:', saved);
+      
+      if (!saved) {
+        console.log('No saved data found in localStorage');
+        return;
+      }
 
       const parsed = JSON.parse(saved);
+      console.log('Parsed data:', parsed);
+      console.log('Sessions count:', parsed.sessions?.length || 0);
+      console.log('Current session exists:', !!parsed.currentSession);
+      
       const restoredSessions = (parsed.sessions || []).map(deserializeSession);
+      console.log('Restored sessions:', restoredSessions.map((s: ChatSession) => ({
+        id: s.id,
+        title: s.title,
+        messageCount: s.messages.length,
+        firstMessage: s.messages[0]?.content?.substring(0, 50)
+      })));
       
       setSessions(restoredSessions);
       
       if (parsed.currentSession) {
-        setCurrentSession(deserializeSession(parsed.currentSession));
+        const currentSession = deserializeSession(parsed.currentSession);
+        console.log('Setting current session:', {
+          id: currentSession.id,
+          title: currentSession.title,
+          messageCount: currentSession.messages.length,
+          messages: currentSession.messages.map(m => ({ role: m.role, content: m.content.substring(0, 30) }))
+        });
+        setCurrentSession(currentSession);
       } else if (restoredSessions.length > 0) {
+        console.log('No current session in saved data, setting first session as current');
         setCurrentSession(restoredSessions[0]);
       }
     } catch (error) {
-      console.warn('Failed to load chat state:', error);
+      console.error('Failed to load chat state:', error);
     }
   }, []);
 
   // Save state to localStorage
   const saveState = useCallback(() => {
     try {
+      // Use ref to get the latest currentSession to avoid stale closures
+      const currentSessionToSave = currentSessionRef.current;
       const state = {
         sessions: sessions.map(serializeSession),
-        currentSession: currentSession ? serializeSession(currentSession) : null
+        currentSession: currentSessionToSave ? serializeSession(currentSessionToSave) : null
       };
       localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      console.log('Saved state to localStorage:', {
+        sessionsCount: sessions.length,
+        currentSessionId: currentSessionToSave?.id,
+        currentSessionMessages: currentSessionToSave?.messages?.length || 0
+      });
     } catch (error) {
       if (error instanceof DOMException && error.name === 'QuotaExceededError') {
         alert('Local chat history is too large to save. Please delete old conversations.');
       }
       console.error('Failed to save chat state:', error);
     }
-  }, [sessions, currentSession]);
+  }, [sessions]); // Remove currentSession from dependencies to avoid stale closures
 
   // Update current session and sync with sessions array
   const updateCurrentSession = useCallback((updater: (session: ChatSession) => ChatSession) => {
-    if (!currentSession) return;
+    const session = currentSessionRef.current;
+    if (!session) {
+      console.warn('updateCurrentSession called but no currentSession exists');
+      return;
+    }
     
-    const updated = updater(currentSession);
+    console.log('updateCurrentSession called for session:', session.id);
+    console.log('Current messages count before update:', session.messages.length);
+    const updated = updater(session);
+    console.log('Session updated, new message count:', updated.messages.length);
+    console.log('Last message content:', updated.messages[updated.messages.length - 1]?.content);
+    
+    // Update both current session and sessions array
     setCurrentSession(updated);
-    setSessions(prev => prev.map(s => s.id === currentSession.id ? updated : s));
-  }, [currentSession]);
+    setSessions(prev => {
+      const newSessions = prev.map(s => s.id === session.id ? updated : s);
+      console.log('Sessions array updated, total sessions:', newSessions.length);
+      return newSessions;
+    });
+    console.log('Session state updated');
+  }, []);
 
   // Load on mount and storage events
   useEffect(() => {
@@ -122,6 +183,7 @@ export const ChatProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, [saveState]);
 
   const createSession = useCallback(() => {
+    console.log('createSession called');
     const newSession: ChatSession = {
       id: uuidv4(),
       title: 'New Conversation',
@@ -129,22 +191,59 @@ export const ChatProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       createdAt: new Date(),
       documents: [...uploadedDocuments]
     };
-    setSessions(prev => [newSession, ...prev]);
+    console.log('Created new session:', newSession.id);
+    
+    // Update both the state and the ref immediately
+    setSessions(prev => {
+      console.log('Updating sessions array, previous count:', prev.length);
+      const newSessions = [newSession, ...prev];
+      console.log('New sessions count:', newSessions.length);
+      return newSessions;
+    });
     setCurrentSession(newSession);
-  }, [uploadedDocuments]);
+    // Update the ref immediately
+    currentSessionRef.current = newSession;
+    console.log('Set current session to:', newSession.id);
+    console.log('Updated ref to:', currentSessionRef.current?.id);
+    
+    // Trigger immediate save after creating session
+    setTimeout(() => saveState(), 0);
+  }, [uploadedDocuments, saveState]);
 
   const selectSession = useCallback((sessionId: string) => {
     const session = sessions.find(s => s.id === sessionId);
     if (session) setCurrentSession(session);
   }, [sessions]);
 
-  const addMessage = useCallback((content: string, role: 'user' | 'assistant') => {
-    if (!currentSession) return;
+  const addMessage = useCallback((content: string, role: 'user' | 'assistant', extras?: { sources?: any[]; contextMetadata?: any }) => {
+    const session = currentSessionRef.current;
+    if (!session) {
+      console.warn('addMessage called but no currentSession exists, will retry in 50ms');
+      // Retry after a short delay in case the session is still being created
+      setTimeout(() => {
+        const retrySession = currentSessionRef.current;
+        if (retrySession) {
+          console.log('Retrying addMessage with session:', retrySession.id);
+          addMessage(content, role, extras);
+        } else {
+          console.error('Failed to add message - no session available after retry');
+        }
+      }, 50);
+      return;
+    }
+
+    console.log('addMessage called with role:', role, 'content length:', content.length);
+    console.log('Current session messages count:', session.messages.length);
+    console.log('Current session ID:', session.id);
 
     // Skip if trying to add assistant message when last message is already streaming
+    // BUT allow if we're explicitly creating a streaming message
     if (role === 'assistant') {
-      const lastMsg = currentSession.messages[currentSession.messages.length - 1];
-      if (lastMsg?.role === 'assistant' && lastMsg.isStreaming) return;
+      const lastMsg = session.messages[session.messages.length - 1];
+      if (lastMsg?.role === 'assistant' && lastMsg.isStreaming && content.length > 0) {
+        console.log('Skipping addMessage - last message is already streaming and has content');
+        return;
+      }
     }
 
     const newMessage: Message = {
@@ -152,36 +251,102 @@ export const ChatProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       content,
       role,
       timestamp: new Date(),
-      isStreaming: role === 'assistant'
+      isStreaming: role === 'assistant',
+      sources: extras?.sources || [],
+      contextMetadata: extras?.contextMetadata || null
     };
 
-    updateCurrentSession(session => ({
-      ...session,
-      messages: [...session.messages, newMessage],
-      title: session.messages.length === 0 && role === 'user' 
-        ? content.substring(0, 50) 
-        : session.title
-    }));
-  }, [currentSession, updateCurrentSession]);
+    console.log('Creating new message:', newMessage.id, 'role:', newMessage.role, 'isStreaming:', newMessage.isStreaming);
 
-  const updateStreamingMessage = useCallback((content: string) => {
-    if (!currentSession) return;
+    updateCurrentSession(session => {
+      console.log('Updating session with new message, current count:', session.messages.length);
+      const updated = {
+        ...session,
+        messages: [...session.messages, newMessage],
+        title: session.messages.length === 0 && role === 'user' 
+          ? content.substring(0, 50) 
+          : session.title
+      };
+      console.log('Updated session messages count:', updated.messages.length);
+      console.log('Last message in updated session:', updated.messages[updated.messages.length - 1]);
+      
+      // Trigger immediate save after updating
+      setTimeout(() => saveState(), 0);
+      
+      return updated;
+    });
+  }, [updateCurrentSession, saveState]);
 
-    const messages = [...currentSession.messages];
-    const lastStreamingIndex = messages.findLastIndex(
-      msg => msg.role === 'assistant' && msg.isStreaming
-    );
-    
-    if (lastStreamingIndex === -1) return;
-
-    messages[lastStreamingIndex] = {
-      ...messages[lastStreamingIndex],
-      content,
-      isStreaming: false
+  const beginStreamingMessage = useCallback(() => {
+    const session = currentSessionRef.current;
+    if (!session) {
+      console.warn('beginStreamingMessage called but no currentSession exists');
+      return;
+    }
+    console.log('beginStreamingMessage called for session:', session.id);
+    console.log('Current messages count before creating streaming message:', session.messages.length);
+    const newMessage: Message = {
+      id: uuidv4(),
+      content: '',
+      role: 'assistant',
+      timestamp: new Date(),
+      isStreaming: true,
     };
+    console.log('Creating streaming message with ID:', newMessage.id);
+    updateCurrentSession(session => {
+      console.log('Adding streaming message to session, current count:', session.messages.length);
+      const updated = { ...session, messages: [...session.messages, newMessage] };
+      console.log('Session updated with streaming message, new count:', updated.messages.length);
+      return updated;
+    });
+  }, [updateCurrentSession]);
 
+  const appendStreamingContent = useCallback((delta: string) => {
+    const session = currentSessionRef.current;
+    if (!session || !delta) return;
+    const messages = [...session.messages];
+    // Find the last streaming assistant message
+    let idx = -1;
+    for (let i = messages.length - 1; i >= 0; i--) {
+      if (messages[i].role === 'assistant' && messages[i].isStreaming) {
+        idx = i;
+        break;
+      }
+    }
+    if (idx === -1) return;
+    messages[idx] = { ...messages[idx], content: (messages[idx].content || '') + delta };
     updateCurrentSession(session => ({ ...session, messages }));
-  }, [currentSession, updateCurrentSession]);
+  }, [updateCurrentSession]);
+
+  const finalizeStreamingMessage = useCallback((content: string, extras?: { sources?: any[]; contextMetadata?: any }) => {
+    const session = currentSessionRef.current;
+    if (!session) return;
+    const messages = [...session.messages];
+    // Find the last streaming assistant message
+    let idx = -1;
+    for (let i = messages.length - 1; i >= 0; i--) {
+      if (messages[i].role === 'assistant' && messages[i].isStreaming) {
+        idx = i;
+        break;
+      }
+    }
+    if (idx === -1) return;
+    
+    // Preserve existing content if no new content is provided
+    const finalContent = content || messages[idx].content || '';
+    
+    messages[idx] = { 
+      ...messages[idx], 
+      content: finalContent, 
+      isStreaming: false,
+      sources: extras?.sources ?? messages[idx].sources,
+      contextMetadata: extras?.contextMetadata ?? messages[idx].contextMetadata,
+    };
+    updateCurrentSession(session => ({ ...session, messages }));
+    
+    // Trigger immediate save after finalizing
+    setTimeout(() => saveState(), 0);
+  }, [updateCurrentSession, saveState]);
 
   const clearHistory = useCallback(() => {
     setSessions([]);
@@ -202,7 +367,9 @@ export const ChatProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       content: msg.content,
       role: msg.role,
       timestamp: parseDate(msg.timestamp),
-      isStreaming: false
+      isStreaming: false,
+      sources: msg.sources || [],
+      contextMetadata: msg.contextMetadata || null
     }));
 
     const newSession: ChatSession = {
@@ -244,11 +411,14 @@ export const ChatProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     <ChatContext.Provider value={{
       sessions,
       currentSession,
+      setSessions,
       createSession,
       createSessionFromPrevious,
       selectSession,
       addMessage,
-      updateStreamingMessage,
+      beginStreamingMessage,
+      appendStreamingContent,
+      finalizeStreamingMessage,
       clearHistory,
       uploadedDocuments,
       addDocument,

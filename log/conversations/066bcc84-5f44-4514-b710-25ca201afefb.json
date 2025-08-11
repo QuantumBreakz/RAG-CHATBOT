@@ -1,0 +1,307 @@
+{
+  "id": "066bcc84-5f44-4514-b710-25ca201afefb",
+  "title": "what is lewis concept of acids and bases",
+  "messages": [
+    {
+      "id": "ad1e5cb6-613e-4d20-8888-46c4210f81a3",
+      "content": "what is lewis concept of acids and bases",
+      "role": "user",
+      "timestamp": "2025-08-11T13:15:13.144Z",
+      "isStreaming": false
+    },
+    {
+      "id": "a4ea487f-51ea-47f2-a6ba-9e038c6e88e5",
+      "content": " According to the Lewis concept, a base is a substance which can donate a pair of electrons. In this context, an acid would be a species that accepts a pair of electrons. This is different from the Arrhenius concept where an acid gives H+ and a base receives H+. Lewis bases generally contain one or more lone pairs of electrons and can also accept a proton (Bronsted base). However, all Lewis bases are not Arrhenius bases as they do not necessarily give H+. Instead, they donate electron pairs to form an adduct with the acceptor species. This is based on the provided information from the document titled \"10 Chemistry Full Book Punjab EM\".",
+      "role": "assistant",
+      "timestamp": "2025-08-11T13:15:13.198Z",
+      "isStreaming": false,
+      "sources": [
+        {
+          "title": "10 Chemistry Full Book Punjab EM.pdf",
+          "page": null,
+          "section": null,
+          "domain": "chemistry",
+          "attribution": "From 10 Chemistry Full Book Punjab EM.pdf",
+          "content": "SECTION_START5.\n State \n\nand explain the neutralization reaction according to \nLewis concept.\n\n\nSECTION_START6.\n Define and give the characteristics of a Lewis acid.\n\n\n\nSECTION_START7.\n Why BF3 behaves as a Lewis acid? \n\n\n\nSECTION_START8.\n Water \n\nis an amphoteric specie according to Bronsted- Lowry \nconcept. What is its nature according to Lewis concept?\n10.1.4 General Properties of Acids\nPhysical Properties\n Physical properties of acids have been described in the beginning of the chapter.\nChemical Properties\n(i) \n Reaction with Metals\n Acids \nreact explosively with metals like sodium, \npotassium and calcium. However, dilute acids (HCl, H2SO4) \nreact moderately with reactive metals like: Mg, Zn, Fe and Al to form their respective salts with the evolution of hydrogen gas.\n(ii)  Reaction with Carbonates and Bicarbonates\n Acids \nreact with carbonates and bicarbonates to form corresponding salts with the \nevolution of carbon dioxide gas.\n(aq)3\n10\n\n\nSECTION_START10. Acid, Bases and Salts 10. Acid, Bases and Salts eLearn.Punjab(iii)  Reaction with Bases\n\n Acids \nreact with bases (oxides and hydroxides of metal and ammonium hydroxide) \nto form salts and water. This process is called neutralization.\n(iv)  Reaction with Sulphites and Bisulphites\n Acids react with sulphites and bisulphites to form salts with the liberation of \nsulphur dioxide gas.\n(v)  Reaction with Sulphides\n Acids \nreact with metal sulphides to liberate hydrogen \nsulphide gas.\nFollowing acids are called mineral acids.\nHydrochloric acid (HCI)Sulphuric acid (H\n2SO4 )\nNitric acid (HNO3)\nUses of Acids1.\n Sulphuric acid\n is used to manufacture fertilizers, ammonium sulphate, calcium \nsuperphosphate, explosives, paints, dyes, drugs. It is also used as an electrolyte in lead storage batteries.\n\n\nSECTION_START2.\n Nitric acid\n\n is used in manufacturing of fertilizer (ammonium nitrate), explosives, paints, \ndrugs and etching designs on copper plates.\n\n\nSECTION_START3.\n Hydrochloric  \n\nacid is used for cleaning metals, tanning and in printing industries.\n4 \n Benzoic acid\n is used for food preservation.\n5 \n Acetic acid\n is used for flavouring food and food preservation. It is also used to cure \nthe sting of wasps.\n11\n\n\nSECTION_START10. Acid, Bases and Salts eLearn.Punjab\n\nNaturally Occurring Acids \nAcid Source \ni Citric acid Citrus fruits i.e., lemon, oranges \nii Lactic acid sour milk \niii Formic acid Stings of bees and ants\niv Butyric acid Rancid butter\nv Tartaric acid Tamarind, grapes, apples \nvi Malic acid Apples \nvii Uric acid Urine \nviii Stearic acid Fats \n10.1.5 General Properties of Bases\nPhysical Properties\n The \nphysical properties of bases have been described in the beginning of the chapter.\nChemical Properties\n(i) Reaction with Acids\n \n Bases react with acid to form salt and water. It is a neutralization reaction.\n(ii) Reaction with Ammonium Salts\n Alkalis react with ammonium salts to liberate ammonia gas:\nAnimation 10.3: Acidbase reaction\nSource & Credit: lem.ch\n12",
+          "filename": "10 Chemistry Full Book Punjab EM.pdf",
+          "document_type": "master_document",
+          "is_master": true,
+          "confidence": 1
+        },
+        {
+          "title": "10 Chemistry Full Book Punjab EM.pdf",
+          "page": null,
+          "section": null,
+          "domain": "chemistry",
+          "attribution": "From 10 Chemistry Full Book Punjab EM.pdf",
+          "content": "SECTION_START10. Acid, Bases and Salts eLearn.Punjab10.1.3 Lewis Concept of Acids and Bases\n\n The Arrhenius and Bronsted-Lowry concepts of acids and bases are limited to substances \nwhich contain protons. G.N. Lewis (1923) proposed a more general and broader concept of acids and bases. According to this concept:\n An \nacid is a substance (molecule or ion) which can accept a pair of electrons, while a base is a \nsubstance (molecule or ion) which can donate a pair of electrons.\n For \nexample, a reaction between ammonia and boron trifluoride takes place by forming a \ncoordinate covalent bond between ammonia and boron trifluoride by donating an electron pair of ammonia and accepting that electron pair by boron trifluoride.\nThe cations (proton itself or metal ions) act as Lewis acids. For example, a reaction between H and NH\n3 , where H acts as an acid and ammonia as a base.\nThe product of any Lewis acid-base reaction is a single specie, called an adduct. So, a neutralization reaction according to Lewis concept is donation and acceptance of an electron pair to form a coordinate covalent bond in an adduct.\n Acids \nare electron pair acceptors  while bases are electron pair donors. Thus, it is evident \nthat any substance which has an unshared pair of electrons can act as a Lewis base while a \nsubstance which has an empty orbital that can accommodate a pair of electrons acts as Lewis \nacid. Examples of Lewis acids and bases are given below:\nLewis acids. According to Lewis concept, the following species can act as Lewis acids:\n(i) \n Molecules in which the central atom has incomplete octet . For example, in BF3 , AICI3 , \nFeCl3 , the central atoms have only six electrons around them, therefore, these can accept an \nelectron pair.++\n8\n\n\nSECTION_START10. Acid, Bases and Salts 10. Acid, Bases and Salts eLearn.Punjab(ii)  Simple cations can act as Lewis acids . All cations act as Lewis acids since they are",
+          "filename": "10 Chemistry Full Book Punjab EM.pdf",
+          "document_type": "master_document",
+          "is_master": true,
+          "confidence": 1
+        },
+        {
+          "title": "10 Chemistry Full Book Punjab EM.pdf",
+          "page": null,
+          "section": null,
+          "domain": "chemistry",
+          "attribution": "From 10 Chemistry Full Book Punjab EM.pdf",
+          "content": "SECTION_START10. Acid, Bases and Salts 10. Acid, Bases and Salts eLearn.Punjab(ii)  Simple cations can act as Lewis acids . All cations act as Lewis acids since they are \n\ndeficient in electrons. However, cations such as Na+, K+, Ca2+ ions, etc., have a very little \ntendency to accept electrons. \n While the cations like H+, Ag+ ions, etc., have a greater \nelectron accepting tendency therefore, act as Lewis acids.\nLewis bases. According to Lewis concept, the following species can act as Lewis bases:(i) \n Neutral species having at least one lone pair of electrons. For example, ammonia, \namines, alcohols etc. act as Lewis bases because they contain a lone pair of electrons:\n(ii)  Negatively charged species or anions. For example, \nchloride, cyanide, hydroxide ions, etc., act as Lewis bases:\n Summary of the Concepts.\nConcept Acid Base Product\nArrhenius\nBronsted-Lowry\nLewisgive H+\ndonate H+\nelectron pair \nacceptor gives OH  \naccepts H+\nelectron pair \ndonorsalt + H2O\nconjugate acid base \npair\nadduct\n It may be noted that all Bronsted bases are also Lewis \nbases but all Bronsted acids are not Lewis acids. According to \nBronsted concept, a base is a substance which can accept a proton, while according to Lewis concept, a base is a substance which can donate a pair of electrons. Lewis bases generally contain one or more lone pair of electrons and therefore, they can also accept a proton (Bronsted base). Thus, all Lewis bases are also Bronsted bases. On the other hand, Bronsted acids are those which can give a proton. For example, HCI, H\n2 SO4 are not capable of accepting a pair of electrons. \nHence, all Bronsted acids are not Lewis acids.\n9\n\n\nSECTION_START10. Acid, Bases and Salts eLearn.Punjab\n\n\n\nSECTION_START1. What is the difference between Arrhenius base and \n\nBronsted-Lowry base?\n\n\nSECTION_START2.\n What \n\ndo you mean by neutralization reaction according to \nArrhenius acid-base concept?\n\n\nSECTION_START3.\n Prove that water is an amphoteric specie.\n\n\n\nSECTION_START4.\n How \n\ncan you justify that NH3 is Bronsted-Lowry base but \nnot Arrhenius base?\n\n\nSECTION_START5.\n State \n\nand explain the neutralization reaction according to \nLewis concept.\n\n\nSECTION_START6.\n Define and give the characteristics of a Lewis acid.\n\n\n\nSECTION_START7.\n Why BF3 behaves as a Lewis acid? \n\n\n\nSECTION_START8.\n Water",
+          "filename": "10 Chemistry Full Book Punjab EM.pdf",
+          "document_type": "master_document",
+          "is_master": true,
+          "confidence": 1
+        }
+      ],
+      "contextMetadata": {
+        "total_chunks": 3,
+        "used_chunks": 3,
+        "history_messages": 0,
+        "has_summary": false,
+        "context_length": 7369,
+        "truncated": true
+      }
+    },
+    {
+      "id": "e017627d-b6e5-455c-89dc-1a391e93c5a2",
+      "content": "what is ELECTROSTATIC POTENTIAL?",
+      "role": "user",
+      "timestamp": "2025-08-11T13:16:54.002Z",
+      "isStreaming": false
+    },
+    {
+      "id": "a0cbdbc0-5e08-4e6a-bf4a-46f245958c74",
+      "content": " Electrostatic potential is a measure of the electric potential energy per unit charge that an object possesses due to its position relative to other charged objects. It's essentially the amount of work required to bring a positive test charge from infinity, where there is no electric field, to a specific point in the electric field of the object. According to the provided information from the document titled \"10 Physics Full Book Punjab EM\", this concept is discussed under the unit \"Electrostatics\".",
+      "role": "assistant",
+      "timestamp": "2025-08-11T13:16:54.055Z",
+      "isStreaming": false,
+      "sources": [
+        {
+          "title": "10 Physics Full Book Punjab EM.pdf",
+          "page": null,
+          "section": null,
+          "domain": "science",
+          "attribution": "From 10 Physics Full Book Punjab EM.pdf",
+          "content": "image be   upright or inverted?             Ans. [(a) 19 cm, (b) \n30.64 cm,  (c) upright]\n12.8.  An object 4 cm high is placed at a distance of 12 cm from a convex lens of focal length \n 8 cm. Calculate the position and size of the image. Also state the nature of the image. \nAns. (24 cm, 8 cm, image is real, inverted and magnified)\n12.9.  An object 10 cm high is placed at a distance of 20 cm from a concave lens of focal \n  length 15 cm. Calculate the position and size of the image. Also, state the \nnature of   the image.           Ans. (-8.57 cm, 4.28 cm, image is virtual, erect \nand diminished)\n12.10.  A convex lens of focal length 6 cm is to be used to form a virtual image three times \n  the size of the object. Where must the lens be placed?          Ans. \n(4 cm)\n12.11.o A ray of light from air is incident on a liquid surface at an angle of incidence 35 .  \n  Calculate the angle of refraction if the refractive index of the liquid is 1.25. Also \n  calculate the critical angle between the liquid air inter-face.        Ans. \no o(27.31 , 53.13 )\n12.12.  The power of a convex lens is 5 D. At what distance the object should be placed from \n  the lens so that its real and 2 times larger image is formed.        Ans. \n(30 cm)\n67 Not For Sale \u2013 PESRP\n\u2022\n\u2022 describe the use of electrostatic charging (e.g. spraying of paint and dust extraction).Science, Technology and Society Connections \nlist the use of capacitors in various electrical appliances.The students will be able to:Unit 13Unit 13Unit 13\n\u2022 describe simple experiments to show the production and detection of electric \ncharge. \n\u2022 describe experiments to show electrostatic charging by induction.  \n\u2022 state that there are positive and negative charges. \n\u2022 describe the construction and working principle of electroscope. \n\u2022 state and explain Coulomb\u2019s law. \n\u2022 solve problems on electrostatic charges by using Coulomb\u2019s law. \n\u2022 define  electric field  and electric field  intensity. \n\u2022 sketch the electric field  lines for an isolated +ve and \u2013ve point charges. \n\u2022 describe the concept of electrostatic potential. \n\u2022 define the unit \u201cvolt\u201d.  \n\u2022 describe potential difference as energy transfer per unit charge. \n\u2022 describe one situation in which static electricity is dangerous and the precautions \ntaken to ensure that static electricity is discharged safely. \n\u2022 describe that the capacitor is charge storing device. \n\u2022 define capacitance and its unit. \n\u2022 derive the formula for the effective capacitance of a number of capacitors \nconnected in series and in parallel. \n\u2022 apply the formula for the effective capacitance of a number of capacitors \nconnected in series and in parallel to solve related problems. ELECTROSTATICS ELECTROSTATICS ELECTROSTATICS \nAfter  this  students will be able to: studying unit,\n In this chapter, we will describe different properties of static \ncharges, such as electric force, electric field and electric \npotential etc. We will also discuss some uses and safety",
+          "filename": "10 Physics Full Book Punjab EM.pdf",
+          "document_type": "master_document",
+          "is_master": true,
+          "confidence": 0.9669315397739411
+        },
+        {
+          "title": "10 Physics Full Book Punjab EM.pdf",
+          "page": null,
+          "section": null,
+          "domain": "science",
+          "attribution": "From 10 Physics Full Book Punjab EM.pdf",
+          "content": "negative charge will appear on the leaves (Fig.13.7-b). The \nleaves of electroscope repel each other and diverge because \neach leave gets similar charge. The divergence of leaves will \ndepend on the amount of charge.   \nCharging the Electroscope by Electrostatic Induction\nElectroscope can be charged by the process of \nelectrostatic induction. In order to produce positive \ncharge on the electroscope, bring a negatively charged \nbody near the disk of the electroscope (Fig.13.8-a). \nPositive charge will appear on the disk of the electroscope \nwhile negative charges will shift to the leaves. Now \nconnect the disk of electroscope to the earthed \naluminium foil by a conducting wire (Fig. 13.8-b). Charge \nof the leaves will flow to the Earth through the wire. Now \nif we first break the Earth connection and then remove the \nrod, the electroscope will be left with positive \ncharge . (Fig.13.8-c)\nSimilarly, electroscope can be charged negatively with the \nhelp of a positively charged rod. Can you explain this with \nthe help of a diagram?\nElectroscope can also be charged by the process of \nconduction. Touch a negatively charged rod with the disk of a \nneutral electroscope. Negative charge from the rod will \ntransfer to the electroscope and will cause its leaves to \ndiverge. \nDetecting the Type of Charge\nFor the detection of type of charge on a body, electroscope is \nfirst charged either positively or negatively. Suppose the \nelectroscope is positively charged as explained before \n(Fig.13.9-a). Now in order to detect the type of charge on a \nbody, bring the charged body near the disk of the positively \ncharged electroscope. If the divergence of the leaves \nincreases, the body carries positive charge (Fig. 13.9-b). On \nthe other hand if the divergence decreases, the body has \nnegative charge (Fig.13.9-c). \nIdentifying Conductors and Insulators\nElectroscope can also be used to distinguish between \ninsulators and conductors. Touch the disk of a charged \nelectroscope with material under test. If the leaves \ncollapse from their diverged position, the body would be \na good conductor. If there is no change in the divergence \nof the leaves, it will show that the body under test is an \ninsulator.",
+          "filename": "10 Physics Full Book Punjab EM.pdf",
+          "document_type": "master_document",
+          "is_master": true,
+          "confidence": 0.9536670923233033
+        },
+        {
+          "title": "10 Physics Full Book Punjab EM.pdf",
+          "page": null,
+          "section": null,
+          "domain": "science",
+          "attribution": "From 10 Physics Full Book Punjab EM.pdf",
+          "content": "After  this  students will be able to: studying unit,\n In this chapter, we will describe different properties of static \ncharges, such as electric force, electric field and electric \npotential etc. We will also discuss some uses and safety \nmeasures of static electricity. The study of charges at rest is \ncalled electrostatics or static electricity.\n13.1\u00a0 PRODUCTION OF ELECTRIC CHARGES\nIf we run a plastic comb through our hair and then bring it \nnear small pieces of paper, the comb attracts them (Fig.13.1). \nSimilarly, amber when rubbed with silk, attracts the small \npieces of paper. This property of attraction or repulsion \nbetween substances is due to the electric charges they \nacquire during rubbing. \nWe can produce electric charge by rubbing a neutral body \nwith another neutral body. The following activities show that \nwe can produce two types of electric charges through the \nprocess of rubbing.\nActivity 13.1. Take a plastic rod. Rub it with fur and suspend it \nhorizontally by a silk thread (Fig. 13.2 ). Now take another \nplastic rod and rub it with fur and bring near to the suspended \nrod. We will observe that both the rods will repel each other. \nIt means during the rubbing both the rods were charged.  \nActivity 13.2. Now take a glass rod and rub it with silk and \nsuspend it horizontally. When we bring the plastic rod rubbed \nwith fur near to the suspended glass rod, we observe that \nboth the rods attract each other (Fig. 13.3). \nIn the first activity, both rods are of plastic and both of them \nhave been rubbed with fur. Therefore, we assume that charge \non both rods would be of the same kind. \nIn the second activity, rods are unlike and their attraction \nimplies that charges on two rods are not of the same kind but \nof opposite nature. \n69ELECTROSTATICS\nFig.13.1: Comb rubbed with \nhair attracts small pieces of \npaper \nFig.13.2:  Two plastic rods \nrubbed with fur repel each \nother\nFig.13.3: Plastic rod rubbed \nwith fur and glass rod rubbed \nwith silk attract each other\nNot For Sale \u2013 PESRPSilk threadPlastic rod\nPlastic rodF\nFF\nF Plastic rodSilk threadSupport\nSupport\nGlass rod\nThese opposite charges are conventionally called positive \ncharge and negative charge. During the process of rubbing \nnegative charge is transferred from one object to another \nobject.\nFrom these activities, we conclude that:",
+          "filename": "10 Physics Full Book Punjab EM.pdf",
+          "document_type": "master_document",
+          "is_master": true,
+          "confidence": 0.9493045091629029
+        }
+      ],
+      "contextMetadata": {
+        "total_chunks": 3,
+        "used_chunks": 3,
+        "history_messages": 1,
+        "has_summary": false,
+        "context_length": 7740,
+        "truncated": true
+      }
+    },
+    {
+      "id": "1f742da6-2a0e-4508-91e0-209f847da5b9",
+      "content": "how many types of land use classes are there?",
+      "role": "user",
+      "timestamp": "2025-08-11T13:18:22.790Z",
+      "isStreaming": false
+    },
+    {
+      "id": "dd824af8-f2c1-4375-a28f-eed5ce7a1c52",
+      "content": " According to the provided documents, there are eight types of land use classes. These include residential, industrial, institutional, mixed use, open space & recreational, peri-urban, special development zone, agricultural, and notified area. This information can be found in the document titled \"Land Use Rules 2020\".",
+      "role": "assistant",
+      "timestamp": "2025-08-11T13:18:22.844Z",
+      "isStreaming": false,
+      "sources": [
+        {
+          "title": "Land use rules 2020.pdf",
+          "page": null,
+          "section": null,
+          "domain": "government",
+          "attribution": "From Land use rules 2020.pdf",
+          "content": "SECTION_START3. Land use\n\nclasses:\n(a)\n(b)\n(c)\n. (d)\n(e)\n(f)\n(g)\n(h)\n(t)\n0)(pp) \"resldentlal apartment\" . ls a classlflcatlon\nof houslng where multlple separate dwelllng unlts for\nresldentlal purpose are contalned wlthln one bulldlng or\nseveral bulldlngs wlthln one complex.\n\"rlght of way\" means the wldth of road or street between\ntwo opposlte propertles and may lnclude rlght of way of\nrallways, lrrlgatlon or any other publlc lnfrastructure\nproJect;i'ru[es\" means the Lahore Development Authorlty Land\nUse Rules 202Oi\n\"set back area\" means an area'to be surrendercd for road\nwldenlng as per approved scteme or plan under the\nrelevant master plan of Dlstrlct Lahore or provlded under\nany other rule;(tt) \n;3lijlll'xflo'xloti?'3,1 #Hl'ffi,,Ji\"' the commrttee\n(uu) \"tree\" means a woody perennlal plant, typlcally havlng a\nslngle stem or trunk growlng to a conslderable helght and\nbearlng lateral branches at some dlstance from the\nground (mlnlmum helght of 6 feet);(vv) \"urban farm\" means a locatlon where farmlng or\ngardenlng occuni wlthln a clty or urban settlng; and\n(ww) \"valuatlon table\" means the valuatlon table notlfled\nunder the Stamp Act 1899 (II of 1899).\n(2) The word used but not deflned ln the rules shall have the\nsame meanlng as asslgned to lt ln the Act.\nri\n\\,,{,\n(2) The land use ln each land use class shall be as under:CHAPTER II. LAND USE CLASSIFCATION\nclasses.- (1) There shall 'be followlng land use\nresldentlal;\nlndustrlali\nlnstltutlonal;\nmlxed use;\nopen space & recreatlonal;\nperl-urban;\nspeclal development zonel\nagrlcultural; and\nnotlfled area.\nPermltted use: The landuse whlch ls allowed ln\neach land use class under the rules.permlrslble use: The landuse, though not permltted,(a)\n(b)\nTHE PUNJAB GAZETTE (EXTRA ORDINARY) AUGUST 06, 2020 331\nmay be allowed by the plannlng and deslgn\nsubJect to the payment of the fee,(c) Prohlblted use: The land .use, whtchpermltted nor permlsslble,'(3) The Authorlty shall ensure that the land use provlslons underthe.permltted, permlsslble and prohlblted use are strlctly followed In each\nland use class.\n(4) The Ptanntng and Deslgn commtttee may grant permtsslon forpermlsslble use llsted under each land use class sublect to the speclalrules, regulatlons, restrlctlons, payment of fee where appllcable under therules and the relevant pollry. Theplannlng and Desljri commlttee may\ndemand no obJectlon cerflflcate where lt deems flt.\n(5) The Authorlty shall not allow a person to use a property ln any\nland use class for a purpose whlch ls nelther permltted nor permlsstble.\n(6) No person shal! be authorlzed to use land or construct a\nbulldlng except ln accordance wlth the land use approved for that parucular\nland,\n\n\nSECTION_START4. Land use of resldenilal area:",
+          "filename": "Land use rules 2020.pdf",
+          "document_type": "master_document",
+          "is_master": true,
+          "confidence": 0.9655359566211701
+        },
+        {
+          "title": "Land use rules 2020.pdf",
+          "page": null,
+          "section": null,
+          "domain": "government",
+          "attribution": "From Land use rules 2020.pdf",
+          "content": "SECTION_START15. Notified area.- (1) The Authority shall ensure strict compliance\n\nof the relevant provislons of laws regardlng historically significant,\nenvironmentally sensitive, public sector instltutional, other restricted or.\nan intercity service areas.\n(2) The permitted, permisslble and prohlbited uses and\nrestrictions, if any, of the notifled area shall have effect notwithstanding\nthe permitted and permissible uses of other land use classes under\nChapter II and provisions of temporary commercialization under Chapter\nVII.\n(3) The Authorlty shall speclfy permitted and permlssible land\nuses in the following types of the notified area subject to provisions of\nnotifications issued for such notified area:\n(a) historically significant area;(b) environmentally sensitive area;(c) public sector institutional area;(d) intercity service area; and(e) other restricted area.\n\n\nSECTION_START16. Clearance of Ambiguity,-(1) In case of any ambiguity in the",
+          "filename": "Land use rules 2020.pdf",
+          "document_type": "master_document",
+          "is_master": true,
+          "confidence": 0.921053695678711
+        },
+        {
+          "title": "Land use rules 2020.pdf",
+          "page": null,
+          "section": null,
+          "domain": "government",
+          "attribution": "From Land use rules 2020.pdf",
+          "content": "SECTION_START16. Clearance of Ambiguity,-(1) In case of any ambiguity in the\n\nclassification of land use, the matter shall be referred to the Chief\nMinister, Punjab which shall decide the matter.\n(z) The chief Minister, Punjab may permit a land use in any area which\nis not provided in any of the classifications but such land use shall be near\nto the land use permitted or,permissible in the area.\nCHAPTER III\nPROCEDURE FOR LAND USE CLASSIFICATION\nL7. Land use classification map.- The Authority shall:G\\\nTHE PUNJAB .AZETTE (E)ffRA ORDTNAR') AUGUST 06, 2020 341\n(a) prepare a tand use crassrfication map of the buirt up area scheme gl part thereof in accordance with the land use ctassrfica,on unoJr ,.,r\" t-or rd;[; usrng ' \n,. . s-atellite lmagery; and(D) digitize the sateilite. imagery and use rt as a base map for the required field suriey: - '\n18' Preparatt::-:l--\"p.- (1),The Authority shart prepare the rand use classification map for an appror\"i scfrem\"';r;, \"\"'\n(a) colle.cting_the approved scheme plansl(b) dividing the scirem\" ur\"u-inio-rurlous ctasses of rand(c) [:?i1.l_,.Ei.it, whrch has been converred rromresidential land use under any law;(d) marking- the ptot wrrrin- ii., 'been \nconverted fromiesidentiar rand use.without approvar of tn\"-.orpetentauthority and decraring it as non-conforminj usei''and (e) marking the prot which has been temporariry convertedto commerciar use with the approvar of tne competentauthority.\n(2) The Authority shat! prepare the rand use ctassification map for an established built-up area by dividing an established built-up area,falling outside an approved scheme:\n(a)\n(b)\n(c)\n(d)\n(e)into urban blocks;\nmarking the plot which has been converted fromresidential land use under any law;marking the plot which has been converted fromresidential land use -without approvar of ffre -competent\nauthorlty and declaring it as non-conforming ,ru; -\nmarking the plot whrch has been temporarity convertedto commercial usg. with the approval of competentauthori-ty and declaring it as non-conforming use; anOclas.sifylng an urban block on th; basis ofpredominant land use.\\-\n-J\n-J\nI\n\\--\n^o\nt. \\i'.Al'.J\n., (3) The Director (Metropolltan planning) and Director TownPlanning (commerciarization) shail prup\"r\", rign-J\"o stamp the rand useclassification map or urban area.\n(4) The Ch.ief Metropolitan Planner and Chief Town planner slrallcheck and countersign the land use ctassification ;il.\nCHAPTER IV\nI-AN D USE RE-CI.ASSIFICATION\n\n\nSECTION_START19. Land use re-ctasslflcation.- (1) The Authority, after thenotification of land use classiflcation. mip, m?y prepare a land usereclassification scheme for an area whicn sddlt Ue taffeO''pio:e.iii\"u,. \\\n\n--\\.r,\n342THE PUNJAB GAZETTE (EXTRA ORDINARY) AUGUST 06, 2020\n\n\nSECTION_START20. Selection of project area.. (1) The Authority shall select the",
+          "filename": "Land use rules 2020.pdf",
+          "document_type": "master_document",
+          "is_master": true,
+          "confidence": 0.8879353284835816
+        }
+      ],
+      "contextMetadata": {
+        "total_chunks": 3,
+        "used_chunks": 3,
+        "history_messages": 1,
+        "has_summary": false,
+        "context_length": 6705,
+        "truncated": true
+      }
+    },
+    {
+      "id": "d535f7f4-3c12-47d4-811e-96c31e1f8ae1",
+      "content": "what is for permissible use?",
+      "role": "user",
+      "timestamp": "2025-08-11T13:19:36.102Z",
+      "isStreaming": false
+    },
+    {
+      "id": "f78d5ab7-01dc-4c6b-8163-ff54933d4d58",
+      "content": " Based on the provided context, it seems that there isn't specific information about what \"for permissible use\" refers to in the given documents. The documents provide details about different types of land use classes (historically significant area, environmentally sensitive area, public sector institutional area, intercity service area, other restricted area, residential, industrial, mixed use, open space & recreational, peri-urban, special development zone, agricultural, and notified area), but there's no mention of a general term like \"for permissible use\". I don't have information about that in the provided documents.",
+      "role": "assistant",
+      "timestamp": "2025-08-11T13:19:36.158Z",
+      "isStreaming": false,
+      "sources": [
+        {
+          "title": "Land use rules 2020.pdf",
+          "page": null,
+          "section": null,
+          "domain": "government",
+          "attribution": "From Land use rules 2020.pdf",
+          "content": "SECTION_START15. Notified area.- (1) The Authority shall ensure strict compliance\n\nof the relevant provislons of laws regardlng historically significant,\nenvironmentally sensitive, public sector instltutional, other restricted or.\nan intercity service areas.\n(2) The permitted, permisslble and prohlbited uses and\nrestrictions, if any, of the notifled area shall have effect notwithstanding\nthe permitted and permissible uses of other land use classes under\nChapter II and provisions of temporary commercialization under Chapter\nVII.\n(3) The Authorlty shall speclfy permitted and permlssible land\nuses in the following types of the notified area subject to provisions of\nnotifications issued for such notified area:\n(a) historically significant area;(b) environmentally sensitive area;(c) public sector institutional area;(d) intercity service area; and(e) other restricted area.\n\n\nSECTION_START16. Clearance of Ambiguity,-(1) In case of any ambiguity in the",
+          "filename": "Land use rules 2020.pdf",
+          "document_type": "master_document",
+          "is_master": true,
+          "confidence": 0.9413630843162537
+        },
+        {
+          "title": "Land use rules 2020.pdf",
+          "page": null,
+          "section": null,
+          "domain": "government",
+          "attribution": "From Land use rules 2020.pdf",
+          "content": "SECTION_START9. Land use of open space and recreational zone:\n\n(a ) permltted uses:\n(l) blrd sanctuary;(il) botanlcal garden;(iii1 park, memorial, monument or play ground;(iv) forest;(v) orchard;\n{rt) plcnlc hut;(vii) plant nursery;(viii) place of worshlp t(ix) Joy land or play land;(x) farm;(xi) recreaHonal club or resortl(xii) shooUng. range;(xiii) swimmtng pool;(xiv) library; and(xv) zoologlcal garden.\n\n\nSECTION_START10. Land use ln peri-urban area.- (1) The Authortty shatt specify randuse of various parcels of land falllng ln a'plfl-urban area.\n\n. q) ]h9 qermttted, permisstble and prohlbtted use of the samecategorles shall strlctly apply to the speclfled tand use under provlslons ofthe Lahore Deveropment Ruihorrty Maiter pran nures zol4,(3) The perl-urban area shall be consldered resldenflal unul theland use is speclfled.\n(4) The converslon, lf allowed, shalt be subJect to payment ofconverslon fee under the rules.\n\\_ ,,\nTHE PUNJAB GAZETTE (EXTRA ORDINARY) AUGUST 06, 2020 337\n\n\nSECTION_START11. Special developmentzone.-(1) The Authority shall specify land",
+          "filename": "Land use rules 2020.pdf",
+          "document_type": "master_document",
+          "is_master": true,
+          "confidence": 0.864402461051941
+        },
+        {
+          "title": "Land use rules 2020.pdf",
+          "page": null,
+          "section": null,
+          "domain": "government",
+          "attribution": "From Land use rules 2020.pdf",
+          "content": "(17) Notwithstanding anything contained rn sub-rure (1) of this rure, the fee for converslon of tand use for eduiattonal or heatthcare\nR\nTHE PUNJAB GAZETTE (EXTRA ORDINARY) AUGUS T 06, 2O2O 351\ninstitutions shall be as under:\n(a) Loo/o of the commercial vatue of the totat area of .\n9ry1ership as provided ln the valuaUon tabte; or(b) 10o/o of the average sale price of commercial land in theviclnity during the precedlng twetv.e months, if valuationtable is not available.\n31: Action against illegal conversions.-The Authority may takeaction against illegal conversion of land use as per taw for the time Oeingin force..\n32' Betterment fee.-The Authority may levy betterment fee in an areaunder the Act.",
+          "filename": "Land use rules 2020.pdf",
+          "document_type": "master_document",
+          "is_master": true,
+          "confidence": 0.8503670871257782
+        }
+      ],
+      "contextMetadata": {
+        "total_chunks": 3,
+        "used_chunks": 3,
+        "history_messages": 1,
+        "has_summary": false,
+        "context_length": 2912
+      }
+    },
+    {
+      "id": "b6811077-d7f3-453a-931e-7fddc8930ef5",
+      "content": "what are Land use of commercial area?",
+      "role": "user",
+      "timestamp": "2025-08-11T13:20:22.053Z",
+      "isStreaming": false
+    },
+    {
+      "id": "f01403cd-8281-4204-abe0-59a5134e641f",
+      "content": " According to the provided documents in \"Land Use Rules 2020\", commercial areas can include storey and multi-purpose buildings. Additionally, cinemas sites may be allowed to convert into other uses under certain conditions if they are located in commercial areas. This includes paying a conversion fee if the cinema site is located in an established built-up area or a peri-urban area classified as commercial. The commercialization of land acquired for roads can also occur in commercial areas, subject to specific conditions.",
+      "role": "assistant",
+      "timestamp": "2025-08-11T13:20:22.106Z",
+      "isStreaming": false,
+      "sources": [
+        {
+          "title": "Land use rules 2020.pdf",
+          "page": null,
+          "section": null,
+          "domain": "government",
+          "attribution": "From Land use rules 2020.pdf",
+          "content": "SECTION_START9. Land use of open space and recreational zone:\n\n(a ) permltted uses:\n(l) blrd sanctuary;(il) botanlcal garden;(iii1 park, memorial, monument or play ground;(iv) forest;(v) orchard;\n{rt) plcnlc hut;(vii) plant nursery;(viii) place of worshlp t(ix) Joy land or play land;(x) farm;(xi) recreaHonal club or resortl(xii) shooUng. range;(xiii) swimmtng pool;(xiv) library; and(xv) zoologlcal garden.\n\n\nSECTION_START10. Land use ln peri-urban area.- (1) The Authortty shatt specify randuse of various parcels of land falllng ln a'plfl-urban area.\n\n. q) ]h9 qermttted, permisstble and prohlbtted use of the samecategorles shall strlctly apply to the speclfled tand use under provlslons ofthe Lahore Deveropment Ruihorrty Maiter pran nures zol4,(3) The perl-urban area shall be consldered resldenflal unul theland use is speclfled.\n(4) The converslon, lf allowed, shalt be subJect to payment ofconverslon fee under the rules.\n\\_ ,,\nTHE PUNJAB GAZETTE (EXTRA ORDINARY) AUGUST 06, 2020 337\n\n\nSECTION_START11. Special developmentzone.-(1) The Authority shall specify land",
+          "filename": "Land use rules 2020.pdf",
+          "document_type": "master_document",
+          "is_master": true,
+          "confidence": 1
+        },
+        {
+          "title": "Land use rules 2020.pdf",
+          "page": null,
+          "section": null,
+          "domain": "government",
+          "attribution": "From Land use rules 2020.pdf",
+          "content": "SECTION_START15. Notified area.- (1) The Authority shall ensure strict compliance\n\nof the relevant provislons of laws regardlng historically significant,\nenvironmentally sensitive, public sector instltutional, other restricted or.\nan intercity service areas.\n(2) The permitted, permisslble and prohlbited uses and\nrestrictions, if any, of the notifled area shall have effect notwithstanding\nthe permitted and permissible uses of other land use classes under\nChapter II and provisions of temporary commercialization under Chapter\nVII.\n(3) The Authorlty shall speclfy permitted and permlssible land\nuses in the following types of the notified area subject to provisions of\nnotifications issued for such notified area:\n(a) historically significant area;(b) environmentally sensitive area;(c) public sector institutional area;(d) intercity service area; and(e) other restricted area.\n\n\nSECTION_START16. Clearance of Ambiguity,-(1) In case of any ambiguity in the",
+          "filename": "Land use rules 2020.pdf",
+          "document_type": "master_document",
+          "is_master": true,
+          "confidence": 0.9798035800457001
+        },
+        {
+          "title": "Land use rules 2020.pdf",
+          "page": null,
+          "section": null,
+          "domain": "government",
+          "attribution": "From Land use rules 2020.pdf",
+          "content": "storey and multi-purpose; and(i) commercialization charges for area development projectfalling in commercial zone shall be payable if not\nalready paid.\n(6) Area development project regulations shall be separatelypresented to Authority.\n(7) The Authority may allow conversion of a cinema site in anapproved scheme or on land allotted on reserued price subject to thefollowing conditions:\n(a) conversion fee shall be charged at the rate of 10o/oof the commercial value of the total area of\n( b ) :*Jff;l:'',\": \n\"?;j\"\"',ifff 1f,\"*:.Tilii':? i\"':i' ?n3n.1,,.0seating capacity of the existing cinema shall beprovided in the new building.\n(8) The Authority'may atlow conversion of a cinema site on privateland other than the site on rand specified in sub-rule (7), subject'to\n&\\\nTIIE PUNJAB cAzxTTE (EXTRA ORDINARY) AUGUST 06, 2020 3s5\nfollowing conditions:\n(a)\n(c)\n(d)\n(e)\n(g)if the cinema rs tocated in an area whrch is not acommercial area then it shall not bE ailowed to beconverted to any other use;(b) if the cinema is located in an estabtished built-up areawhich is classified as commercial, on payment of theconversion fee; and(c) If the cinema site is located in a peri-urban area,which is classified as commercial, on payment of theconversion fee.\n(9) The Authority may allow conversion of tand if required in lieuof the land surrendered for road network subject to the foilowingconditions:\n(a)in case of land acquisition through conversion of randin lieu of land surrendered foi road network, theAuthority shalr approve the poticy before initiating thework;\nthe commercialization of the rand shail be notified, if:(i) the land is acquired for roads; and(ii) the Authority, os a mode of compensation,offers commercialization of land in lieu of landsurrendered for the roads;the Director Town planning shall approve thedemarcation sketch or pran of rJnd so commerciaiizecr;the .owner of land who surrendered the rand for theroad network shall alone be entiUed to get the propertycommercialized. The surrender deed shall be executedby the Director Estate Management (pHS) and LandAcquisition collector of the Authoriby before'issuance ofentitlement letter by Director commercialization of theAuthority;\nthe owner, who surrendered the land for roarj free ofcost, is entitled to get maximum of equal landcommercialized without payment of ccrnrnercializationfee. The Authority may change this ratio for \"ni, fou6as deemed fit;\nthe owner of land, if he possesses land in addition tothe land so commerciarized in rieu of the surrenderedland, may commerciatize his further land maximum25o/o for all surrendered roads whether ord or new,subject to payment of conversion fee;in case where no rand is reft after surrendering the tandwith owners or land so left is' less than -ttie landsurrendered for road, the commercialization rights shallbe given against such land to the ov,rners. Thecommercialization rights of the ownens are transferr\n/;u(b)\n(f)",
+          "filename": "Land use rules 2020.pdf",
+          "document_type": "master_document",
+          "is_master": true,
+          "confidence": 0.9259231567382813
+        }
+      ],
+      "contextMetadata": {
+        "total_chunks": 3,
+        "used_chunks": 3,
+        "history_messages": 2,
+        "has_summary": false,
+        "context_length": 5200,
+        "truncated": true
+      }
+    }
+  ],
+  "created_at": "2025-08-11T13:07:39.493Z",
+  "uploads": []
+}

@@ -477,3 +477,11 @@ MIT License
 4. Access the app via your frontend URL.
 
 See `frontend/README.md` and `backend/Dockerfile` for more details. 
+
+### Model Configuration
+Available models through Ollama:
+- `mistral:latest` (7B) - **Default**
+- `llama2` (7B)
+- `llama2:13b` (13B)
+- `codellama` (Code specialized)
+- `neural-chat` (7B) 

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Search, Filter, X, ChevronDown, FileText, Sparkles } from 'lucide-react';
 import Button from './ui/Button';
 import Card from './ui/Card';
+import RerankControls, { RerankingStrategy } from './RerankControls';
 
 interface SearchResult {
   content: string;
@@ -15,7 +16,7 @@ interface SearchResult {
 }
 
 interface AdvancedSearchProps {
-  onSearch: (query: string, filters: any[]) => void;
+  onSearch: (query: string, filters: any[], options?: { strategy: RerankingStrategy; topK: number }) => void;
   onResultSelect?: (result: SearchResult) => void;
   className?: string;
   placeholder?: string;
@@ -39,6 +40,7 @@ const AdvancedSearch: React.FC<AdvancedSearchProps> = ({
     file_type?: string;
     date_range?: string;
   }>({});
+  const [rerank, setRerank] = useState<{ strategy: RerankingStrategy; topK: number }>({ strategy: 'hybrid', topK: 10 });
 
   const searchTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -89,16 +91,18 @@ const AdvancedSearch: React.FC<AdvancedSearchProps> = ({
         body: new URLSearchParams({
           query: query,
           filters: JSON.stringify(filters),
-          limit: '10',
+          limit: String(Math.max(rerank.topK, 10)),
           min_score: '0.1',
-          search_type: 'documents'
+          search_type: 'documents',
+          rerank_strategy: rerank.strategy,
+          top_k: String(rerank.topK)
         })
       });
 
       const data = await response.json();
       if (data.results) {
         setSearchResults(data.results);
-        onSearch(query, filters);
+        onSearch(query, filters, rerank);
       }
     } catch (error) {
       console.error('Search failed:', error);
@@ -122,8 +126,6 @@ const AdvancedSearch: React.FC<AdvancedSearchProps> = ({
   const removeFilter = (index: number) => {
     const newFilters = filters.filter((_, i) => i !== index);
     setFilters(newFilters);
-    
-    // Update active filters
     const removedFilter = filters[index];
     if (removedFilter) {
       const { [removedFilter.field as keyof typeof activeFilters]: _, ...rest } = activeFilters;
@@ -133,10 +135,8 @@ const AdvancedSearch: React.FC<AdvancedSearchProps> = ({
 
   const highlightText = (text: string, query: string) => {
     if (!query) return text;
-    
     const regex = new RegExp(`(${query})`, 'gi');
     const parts = text.split(regex);
-    
     return parts.map((part, index) => 
       regex.test(part) ? (
         <mark key={index} className="bg-yellow-200 dark:bg-yellow-800 px-1 rounded">
@@ -169,6 +169,8 @@ const AdvancedSearch: React.FC<AdvancedSearchProps> = ({
               className="w-full pl-10 pr-4 py-2 border border-border rounded-lg bg-surface text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
             />
           </div>
+
+          <RerankControls value={rerank} onChange={setRerank} />
           
           <Button
             onClick={() => setShowFilters(!showFilters)}
@@ -237,7 +239,6 @@ const AdvancedSearch: React.FC<AdvancedSearchProps> = ({
         <Card className="mt-2 p-4">
           <div className="space-y-4">
             <h3 className="text-sm font-semibold text-muted-foreground">Search Filters</h3>
-            
             {/* Domain Filter */}
             <div>
               <label className="text-xs font-medium text-muted-foreground mb-2 block">
@@ -294,7 +295,6 @@ const AdvancedSearch: React.FC<AdvancedSearchProps> = ({
             <h3 className="text-sm font-semibold text-muted-foreground">
               Search Results ({searchResults.length})
             </h3>
-            
             {searchResults.map((result, index) => (
               <div
                 key={index}
@@ -316,23 +316,17 @@ const AdvancedSearch: React.FC<AdvancedSearchProps> = ({
                       </span>
                     )}
                   </div>
-                  <span className="text-xs text-muted-foreground">
-                    Score: {result.score.toFixed(2)}
-                  </span>
+                  <span className="text-xs text-muted-foreground">Score: {result.score.toFixed(2)}</span>
                 </div>
-                
                 <div className="text-sm text-foreground mb-2">
                   {highlightText(result.content.substring(0, 200), query)}
                   {result.content.length > 200 && '...'}
                 </div>
-                
                 {result.highlights && result.highlights.length > 0 && (
                   <div className="text-xs text-muted-foreground">
                     <span className="font-medium">Highlights:</span>
-                    {result.highlights.map((highlight, idx) => (
-                      <div key={idx} className="mt-1 p-1 bg-muted rounded">
-                        "...{highlight}..."
-                      </div>
+                    {result.highlights.map((h, idx) => (
+                      <div key={idx} className="mt-1 p-1 bg-muted rounded">"...{h}..."</div>
                     ))}
                   </div>
                 )}

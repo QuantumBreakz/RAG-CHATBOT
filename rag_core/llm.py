@@ -36,39 +36,26 @@ class LLMHandler:
         logger.info(f"LLM Context for query: {repr(context)[:1000]}")
         logger.info(f"LLM Conversation History: {self._format_history(conversation_history)[:1000]}")
         
-        # Stricter prompt engineering with language-specific instructions
-        language_instruction = ""
-        if target_language and target_language != LanguageCode.ENGLISH:
-            language_instruction = f"\n- Respond in {target_language.value} language."
+        # Use the proper system prompt with anti-hallucination rules
+        user_prompt = f"""
+Context:
+{context}
+
+Conversation History (last 5 turns):
+{self._format_history(conversation_history)}
+
+Question:
+{prompt}
+"""
         
-        strict_prompt = f"""
-        Context:
-        {context}
-
-        Conversation History (last 5 turns):
-        {self._format_history(conversation_history)}
-
-        Question:
-        {prompt}
-
-        Instructions:
-        - Only answer using the information in the context above.
-        - For every fact you state, include the exact sentence from the context in quotes as a citation.
-        - If the answer is not present in the context, reply: 'I don't know.'{language_instruction}
-        """
         response_parts = []
         try:
-            for word in self.call_llm(strict_prompt, context, conversation_history):
+            for word in self.call_llm(user_prompt, context, conversation_history):
                 response_parts.append(word)
         except Exception as e:
             logger.error(f"Failed to generate response: {e}")
             return f"Error generating response: {str(e)}"
         answer = ''.join(response_parts)
-        # Post-check: ensure answer is grounded in context (simple string match)
-        context_lower = context.lower()
-        answer_sentences = [s.strip() for s in answer.split('.') if s.strip()]
-        if not any(sentence.lower() in context_lower for sentence in answer_sentences if len(sentence) > 10):
-            return "Cannot answer based on the provided context."
         return answer
     
     def process_multi_language_query(self, query: str, target_languages: List[LanguageCode] = None) -> Dict[str, Any]:
@@ -123,7 +110,7 @@ class LLMHandler:
 
     @staticmethod
     @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=4, max=10))
-    def call_llm(prompt: str, context: str, conversation_history=None):
+    def call_llm(prompt: str, context: str, conversation_history=None, *, model_name: str | None = None, temperature: float | None = None, max_tokens: int | None = None):
         """
         Generator: Call the LLM with the given prompt, context, and optional conversation history.
         Yields each token/word as it is generated.
@@ -162,8 +149,8 @@ class LLMHandler:
                         "content": content
                     })
             
-            # Use only the system prompt from config.py to avoid conflicts
-            user_prompt = f"""Context: {context}\n\nConversation History (last 5 turns):\n{LLMHandler._format_history_static(conversation_history)}\n\nQuestion: {prompt}"""
+            # Use the prompt parameter directly (which should already contain context and history)
+            user_prompt = prompt
             
             messages.append({
                 "role": "user",
@@ -175,10 +162,17 @@ class LLMHandler:
             print("[LLM CALL] Context:", context)
             print("[LLM CALL] Messages:", messages)
             
+            # Build options with overrides
+            opts = {"base_url": OLLAMA_BASE_URL}
+            if temperature is not None:
+                opts["temperature"] = float(temperature)
+            if max_tokens is not None:
+                opts["num_predict"] = int(max_tokens)
+
             response_chunks = ollama.chat(
-                model=OLLAMA_LLM_MODEL,
+                model=(model_name or OLLAMA_LLM_MODEL),
                 stream=True,
-                options={"base_url": OLLAMA_BASE_URL},
+                options=opts,
                 messages=messages,
             )
             for chunk in response_chunks:

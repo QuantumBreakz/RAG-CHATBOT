@@ -3,6 +3,7 @@ from fastapi.responses import StreamingResponse, FileResponse, JSONResponse
 from rag_core.document import DocumentProcessor, DEFAULT_CHUNK_SIZE, DEFAULT_CHUNK_OVERLAP
 from rag_core.vectorstore import VectorStore
 from rag_core.llm import LLMHandler
+from rag_core.online_llm import online_llm_handler
 from rag_core import history
 from rag_core.context_manager import context_manager
 from rag_core.multi_ocr import MultiOCREngine  # Add multi-OCR import
@@ -232,7 +233,11 @@ async def query_rag(
     filename: str = Form(None),
     domain_filter: str = Form(None),
     conversation_history: str = Form("[]"),
-    session_id: str = Form(None)
+    session_id: str = Form(None),
+    model: str = Form(None),
+    temperature: float = Form(None),
+    max_tokens: int = Form(None),
+    online_model: str = Form(None)
 ):
     try:
         try:
@@ -310,11 +315,27 @@ async def query_rag(
         # Use filtered sources for the response
         sources = filtered_chunks
         
-        # Generate answer using LLM
+        # Generate answer using LLM (online or local)
         answer = ""
         try:
-            for word in LLMHandler.call_llm(question, context_str):
-                answer += word
+            if online_model and online_model in online_llm_handler.get_available_providers():
+                # Use online model
+                online_llm_handler.set_provider(online_model)
+                answer = online_llm_handler.generate_response(
+                    prompt=question,
+                    context=context_str,
+                    conversation_history=history_list,
+                    temperature=temperature or 0.7,
+                    max_tokens=max_tokens or 1000
+                )
+            else:
+                # Use local model
+                llm_handler = LLMHandler()
+                answer = llm_handler.generate_response(
+                    prompt=question,
+                    context=context_str,
+                    conversation_history=history_list
+                )
         except Exception as e:
             logging.error(f"LLM call failed: {str(e)}")
             answer = f"Error generating response: {str(e)}"
@@ -332,30 +353,31 @@ async def query_rag(
                 role="assistant",
                 content=answer,
                 sources=sources
-        )
+            )
         
-        # Prepare detailed source information with chunks
-        detailed_sources = []
+        # Format sources for frontend display
+        formatted_sources = []
         for chunk, meta, source in filtered_chunks:
-            detailed_sources.append({
+            formatted_sources.append({
+                "title": meta.get('filename', 'Unknown Document'),
+                "page": meta.get('page'),
+                "section": meta.get('section'),
+                "domain": meta.get('domain', 'general'),
+                "attribution": f"From {meta.get('filename', 'Unknown Document')}",
                 "content": chunk,
-                "metadata": meta,
-                "source": source,
-                "filename": meta.get('filename', 'unknown'),
-                "page": meta.get('page', None),
-                "section": meta.get('section', None),
+                "filename": meta.get('filename'),
                 "document_type": meta.get('document_type', 'default'),
                 "is_master": meta.get('is_master', False),
-                "chunk_id": meta.get('chunk_id', None),
                 "confidence": source.get('confidence', 0.5) if source else 0.5
             })
         
         return {
             "answer": answer,
             "context": context_str,
-            "sources": sources,
-            "detailed_sources": detailed_sources,
-            "context_metadata": context_metadata
+            "sources": formatted_sources,
+            "detailed_sources": formatted_sources,
+            "context_metadata": context_metadata,
+            "model_used": online_model if online_model else "local"
         }
         
     except Exception as e:
@@ -374,7 +396,11 @@ async def query_rag_stream(
     domain_filter: str = Form(None),
     conversation_history: str = Form("[]"),
     session_id: str = Form(None),
-    file: UploadFile = File(None)
+    file: UploadFile = File(None),
+    model: str = Form(None),
+    temperature: float = Form(None),
+    max_tokens: int = Form(None),
+    online_model: str = Form(None)
 ):
     try:
         try:
@@ -457,6 +483,22 @@ async def query_rag_stream(
         
         # Use filtered sources for the response
         sources = filtered_chunks
+        
+        # Format sources for frontend display
+        formatted_sources = []
+        for chunk, meta, source in filtered_chunks:
+            formatted_sources.append({
+                "title": meta.get('filename', 'Unknown Document'),
+                "page": meta.get('page'),
+                "section": meta.get('section'),
+                "domain": meta.get('domain', 'general'),
+                "attribution": f"From {meta.get('filename', 'Unknown Document')}",
+                "content": chunk,
+                "filename": meta.get('filename'),
+                "document_type": meta.get('document_type', 'default'),
+                "is_master": meta.get('is_master', False),
+                "confidence": source.get('confidence', 0.5) if source else 0.5
+            })
         
         # --- NEW: Handle attached file (PDF/image) ---
         temp_chunks = []
@@ -553,19 +595,65 @@ async def query_rag_stream(
                 })
             return StreamingResponse(empty_stream(), media_type="application/json")
         def word_stream():
-            answer_accum = ""
             got_any = False
-            for word in LLMHandler.call_llm(question, context_str, conversation_history=history_list):
-                got_any = True
-                answer_accum += word
-                yield json.dumps({
-                    "answer": word, 
-                    "context": "", 
-                    "status": "streaming",
-                    "sources": sources,
-                    "query_classification": results.get('query_classification', {}),
-                    "context_metadata": context_metadata
-                }) + "\n"
+            answer_accum = ""
+            
+            # Format the prompt properly with context and history
+            formatted_prompt = f"""
+Context:
+{context_str}
+
+Conversation History (last 5 turns):
+{LLMHandler._format_history_static(history_list)}
+
+Question:
+{question}
+"""
+            
+            # Use online model if specified, otherwise use local model
+            if online_model and online_model in online_llm_handler.get_available_providers():
+                # Use online model for streaming
+                online_llm_handler.set_provider(online_model)
+                for word in online_llm_handler.generate_streaming_response(
+                    prompt=question,
+                    context=context_str,
+                    conversation_history=history_list,
+                    temperature=temperature or 0.7,
+                    max_tokens=max_tokens or 1000
+                ):
+                    got_any = True
+                    answer_accum += word
+                    yield json.dumps({
+                        "answer": word, 
+                        "context": "", 
+                        "status": "streaming",
+                        "sources": sources,
+                        "query_classification": results.get('query_classification', {}),
+                        "context_metadata": context_metadata,
+                        "model_used": online_model
+                    }) + "\n"
+            else:
+                # Use local model for streaming
+                for word in LLMHandler.call_llm(
+                    formatted_prompt,
+                    context_str,
+                    conversation_history=history_list,
+                    model_name=model,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                ):
+                    got_any = True
+                    answer_accum += word
+                    yield json.dumps({
+                        "answer": word, 
+                        "context": "", 
+                        "status": "streaming",
+                        "sources": formatted_sources,
+                        "query_classification": results.get('query_classification', {}),
+                        "context_metadata": context_metadata,
+                        "model_used": "local"
+                    }) + "\n"
+            
             if not got_any or not answer_accum.strip():
                 answer_accum = "[No answer could be generated. Please try rephrasing your question or uploading more documents.]"
             # Only yield the final status, not the complete answer again
@@ -573,9 +661,10 @@ async def query_rag_stream(
                 "answer": "", 
                 "context": "", 
                 "status": "success",
-                "sources": sources,
+                "sources": formatted_sources,
                 "query_classification": results.get('query_classification', {}),
-                "context_metadata": context_metadata
+                "context_metadata": context_metadata,
+                "model_used": online_model if online_model else "local"
             }) + "\n"
         return StreamingResponse(word_stream(), media_type="application/json")
     except Exception as e:
@@ -779,53 +868,53 @@ async def search_documents(
         logging.error(f"Search error: {str(e)}")
         return {"error": str(e), "results": []}
 
-@app.get("/search/suggestions")
-def get_search_suggestions(partial_query: str = ""):
-    """Get search suggestions based on partial query"""
-    try:
-        from rag_core.search import advanced_search
-        
-        suggestions = advanced_search.get_search_suggestions(partial_query)
-        return {
-            "suggestions": suggestions,
-            "query": partial_query
-        }
-    except Exception as e:
-        logging.error(f"Search suggestions error: {str(e)}")
-        return {"suggestions": [], "error": str(e)}
+# @app.get("/search/suggestions")
+# def get_search_suggestions(partial_query: str = ""):
+#     """Get search suggestions based on partial query"""
+#     try:
+#         from rag_core.search import advanced_search
+#         
+#         suggestions = advanced_search.get_search_suggestions(partial_query)
+#         return {
+#             "suggestions": suggestions,
+#             "query": partial_query
+#         }
+#     except Exception as e:
+#         logging.error(f"Search suggestions error: {str(e)}")
+#         return {"suggestions": [], "error": str(e)}
 
-@app.post("/search/conversations")
-async def search_conversations(
-    query: str = Form(...),
-    conversation_history: str = Form("[]"),
-    limit: int = Form(5)
-):
-    """Search within conversation history"""
-    try:
-        from rag_core.search import advanced_search
-        import json
-        
-        # Parse conversation history
-        try:
-            history = json.loads(conversation_history) if conversation_history else []
-        except json.JSONDecodeError:
-            history = []
-        
-        results = advanced_search.search_conversations(
-            query=query,
-            conversation_history=history,
-            limit=limit
-        )
-        
-        return {
-            "results": results,
-            "total": len(results),
-            "query": query
-        }
-        
-    except Exception as e:
-        logging.error(f"Conversation search error: {str(e)}")
-        return {"error": str(e), "results": []}
+# @app.post("/search/conversations")
+# async def search_conversations(
+#     query: str = Form(...),
+#     conversation_history: str = Form("[]"),
+#     limit: int = Form(5)
+# ):
+#     """Search within conversation history"""
+#     try:
+#         from rag_core.search import advanced_search
+#         import json
+#         
+#         # Parse conversation history
+#         try:
+#             history = json.loads(conversation_history) if conversation_history else []
+#         except json.JSONDecodeError:
+#             history = []
+#         
+#         results = advanced_search.search_conversations(
+#             query=query,
+#             conversation_history=history,
+#             limit=limit
+#         )
+#         
+#         return {
+#             "results": results,
+#             "total": len(results),
+#             "query": query
+#         }
+#         
+#     except Exception as e:
+#         logging.error(f"Conversation search error: {str(e)}")
+#         return {"error": str(e), "results": []}
 
 # Conversation Management Endpoints
 @app.get("/conversations/folders")
@@ -1133,32 +1222,32 @@ def get_conversation_analytics(conversation_id: str):
         return {"error": str(e)}
 
 # Vector Indexing and Performance Endpoints
-@app.post("/vectorstore/optimize")
-def optimize_vector_index():
-    """Optimize the vector index for large-scale operations"""
-    try:
-        from rag_core.vectorstore import VectorStore
-        
-        success = VectorStore.optimize_index_for_large_datasets()
-        if success:
-            return {"message": "Vector index optimization completed successfully"}
-        else:
-            return {"error": "Failed to optimize vector index"}
-    except Exception as e:
-        logging.error(f"Error optimizing vector index: {str(e)}")
-        return {"error": str(e)}
+# @app.post("/vectorstore/optimize")
+# def optimize_vector_index():
+#     """Optimize the vector index for large-scale operations"""
+#     try:
+#         from rag_core.vectorstore import VectorStore
+#         
+#         success = VectorStore.optimize_index_for_large_datasets()
+#         if success:
+#             return {"message": "Vector index optimization completed successfully"}
+#         else:
+#             return {"error": "Failed to optimize vector index"}
+#     except Exception as e:
+#         logging.error(f"Error optimizing vector index: {str(e)}")
+#         return {"error": str(e)}
 
-@app.get("/vectorstore/statistics")
-def get_vector_statistics():
-    """Get statistics about the vector index"""
-    try:
-        from rag_core.vectorstore import VectorStore
-        
-        stats = VectorStore.get_index_statistics()
-        return stats
-    except Exception as e:
-        logging.error(f"Error getting vector statistics: {str(e)}")
-        return {"error": str(e)}
+# @app.get("/vectorstore/statistics")
+# def get_vector_statistics():
+#     """Get statistics about the vector index"""
+#     try:
+#         from rag_core.vectorstore import VectorStore
+#         
+#         stats = VectorStore.get_index_statistics()
+#         return stats
+#     except Exception as e:
+#         logging.error(f"Error getting vector statistics: {str(e)}")
+#         return {"error": str(e)}
 
 @app.get("/vectorstore/performance")
 def get_vector_performance():
@@ -2969,3 +3058,254 @@ def clear_translation_cache():
     except Exception as e:
         logger.error(f"Failed to clear cache: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to clear cache: {str(e)}") 
+
+# Analytics Endpoints
+@app.get("/api/analytics/report")
+@app.get("/analytics/report")
+def get_analytics_report():
+    """Get comprehensive analytics report"""
+    try:
+        from rag_core.analytics import get_analytics, MetricType
+        
+        analytics = get_analytics()
+        
+        # Get query performance metrics
+        query_metrics = analytics.get_metrics_by_type(MetricType.QUERY_PERFORMANCE)
+        system_metrics = analytics.get_metrics_by_type(MetricType.SYSTEM_PERFORMANCE)
+        user_metrics = analytics.get_metrics_by_type(MetricType.USER_ACTIVITY)
+        error_metrics = analytics.get_metrics_by_type(MetricType.ERROR_TRACKING)
+        
+        # Calculate summary statistics
+        query_summary = {
+            "total_queries": len(query_metrics),
+            "avg_response_time": sum(m.value for m in query_metrics if 'response_time' in m.metadata) / max(len([m for m in query_metrics if 'response_time' in m.metadata]), 1),
+            "avg_processing_time": sum(m.value for m in query_metrics if 'processing_time' in m.metadata) / max(len([m for m in query_metrics if 'processing_time' in m.metadata]), 1),
+            "avg_chunk_count": sum(m.value for m in query_metrics if 'chunk_count' in m.metadata) / max(len([m for m in query_metrics if 'chunk_count' in m.metadata]), 1),
+            "cache_hit_rate": sum(m.value for m in query_metrics if 'cache_hit' in m.metadata) / max(len([m for m in query_metrics if 'cache_hit' in m.metadata]), 1)
+        }
+        
+        system_summary = {
+            "avg_cpu_usage": sum(m.value for m in system_metrics if 'cpu' in m.metadata) / max(len([m for m in system_metrics if 'cpu' in m.metadata]), 1),
+            "avg_memory_usage": sum(m.value for m in system_metrics if 'memory' in m.metadata) / max(len([m for m in system_metrics if 'memory' in m.metadata]), 1),
+            "avg_disk_usage": sum(m.value for m in system_metrics if 'disk' in m.metadata) / max(len([m for m in system_metrics if 'disk' in m.metadata]), 1),
+            "system_health_score": sum(m.value for m in system_metrics if 'health_score' in m.metadata) / max(len([m for m in system_metrics if 'health_score' in m.metadata]), 1)
+        }
+        
+        user_summary = {
+            "unique_users": len(set(m.user_id for m in user_metrics if m.user_id)),
+            "unique_sessions": len(set(m.session_id for m in user_metrics if m.session_id)),
+            "avg_activities_per_user": len(user_metrics) / max(len(set(m.user_id for m in user_metrics if m.user_id)), 1)
+        }
+        
+        error_summary = {
+            "total_errors": len(error_metrics),
+            "error_rate": len(error_metrics) / max(len(query_metrics), 1),
+            "most_common_errors": {}
+        }
+        
+        # Count error types
+        for metric in error_metrics:
+            error_type = metric.metadata.get('error_type', 'unknown')
+            error_summary["most_common_errors"][error_type] = error_summary["most_common_errors"].get(error_type, 0) + 1
+        
+        return {
+            "status": "success",
+            "timestamp": time.time(),
+            "query_analytics": query_summary,
+            "system_analytics": system_summary,
+            "user_analytics": user_summary,
+            "error_analytics": error_summary,
+            "total_metrics_collected": len(query_metrics) + len(system_metrics) + len(user_metrics) + len(error_metrics)
+        }
+        
+    except Exception as e:
+        logger.error(f"Failed to get analytics report: {e}")
+        return {
+            "status": "error",
+            "message": f"Failed to get analytics report: {str(e)}",
+            "timestamp": time.time()
+        }
+
+# Monitoring Endpoints
+@app.get("/api/monitor/health")
+@app.get("/monitor/health")
+def get_monitor_health():
+    """Get real-time health status of all components"""
+    try:
+        from rag_core.monitoring import get_monitor, HealthStatus
+        
+        monitor = get_monitor()
+        health_checks = monitor.get_health_status()
+        
+        # Calculate overall health
+        healthy_count = sum(1 for check in health_checks if check.status == HealthStatus.HEALTHY)
+        warning_count = sum(1 for check in health_checks if check.status == HealthStatus.WARNING)
+        critical_count = sum(1 for check in health_checks if check.status == HealthStatus.CRITICAL)
+        
+        overall_status = HealthStatus.HEALTHY
+        if critical_count > 0:
+            overall_status = HealthStatus.CRITICAL
+        elif warning_count > 0:
+            overall_status = HealthStatus.WARNING
+        
+        return {
+            "status": "success",
+            "timestamp": time.time(),
+            "overall_health": overall_status.value,
+            "health_checks": [
+                {
+                    "component": check.component,
+                    "status": check.status.value,
+                    "message": check.message,
+                    "timestamp": check.timestamp.isoformat() if check.timestamp else None,
+                    "details": check.details
+                }
+                for check in health_checks
+            ],
+            "summary": {
+                "healthy": healthy_count,
+                "warning": warning_count,
+                "critical": critical_count,
+                "total": len(health_checks)
+            }
+        }
+        
+    except Exception as e:
+        logger.error(f"Failed to get health status: {e}")
+        return {
+            "status": "error",
+            "message": f"Failed to get health status: {str(e)}",
+            "timestamp": time.time(),
+            "overall_health": "unknown"
+        }
+
+@app.get("/api/monitor/health/history")
+@app.get("/monitor/health/history")
+def get_monitor_health_history(hours: int = 24):
+    """Get health check history"""
+    try:
+        from rag_core.monitoring import get_monitor
+        
+        monitor = get_monitor()
+        history = monitor.get_health_history(hours=hours)
+        
+        return {
+            "status": "success",
+            "timestamp": time.time(),
+            "history_hours": hours,
+            "health_history": [
+                {
+                    "timestamp": entry.timestamp.isoformat(),
+                    "component": entry.component,
+                    "status": entry.status.value,
+                    "message": entry.message,
+                    "details": entry.details
+                }
+                for entry in history
+            ],
+            "total_entries": len(history)
+        }
+        
+    except Exception as e:
+        logger.error(f"Failed to get health history: {e}")
+        return {
+            "status": "error",
+            "message": f"Failed to get health history: {str(e)}",
+            "timestamp": time.time()
+        }
+
+@app.get("/api/monitor/alerts")
+@app.get("/monitor/alerts")
+def get_monitor_alerts():
+    """Get active alerts"""
+    try:
+        from rag_core.monitoring import get_monitor
+        
+        monitor = get_monitor()
+        alerts = monitor.get_active_alerts()
+        
+        return {
+            "status": "success",
+            "timestamp": time.time(),
+            "active_alerts": [
+                {
+                    "id": alert.id,
+                    "type": alert.type,
+                    "severity": alert.severity.value,
+                    "message": alert.message,
+                    "component": alert.component,
+                    "timestamp": alert.timestamp.isoformat(),
+                    "details": alert.details
+                }
+                for alert in alerts
+            ],
+            "total_alerts": len(alerts),
+            "critical_count": len([a for a in alerts if a.severity.value == "critical"]),
+            "warning_count": len([a for a in alerts if a.severity.value == "warning"]),
+            "info_count": len([a for a in alerts if a.severity.value == "info"])
+        }
+        
+    except Exception as e:
+        logger.error(f"Failed to get alerts: {e}")
+        return {
+            "status": "error",
+            "message": f"Failed to get alerts: {str(e)}",
+            "timestamp": time.time()
+        }
+
+# --- Online Model Management Endpoints ---
+@app.get("/api/models/online/available")
+def get_available_online_models():
+    """Get list of available online models"""
+    try:
+        providers = online_llm_handler.get_available_providers()
+        return {
+            "providers": providers,
+            "current_provider": online_llm_handler.current_provider.__class__.__name__.replace('Provider', '').lower() if online_llm_handler.current_provider else None
+        }
+    except Exception as e:
+        logger.error(f"Error getting available online models: {str(e)}")
+        return {"providers": [], "current_provider": None, "error": str(e)}
+
+@app.post("/api/models/online/set")
+def set_online_model(provider: str = Form(...)):
+    """Set the current online model provider"""
+    try:
+        success = online_llm_handler.set_provider(provider)
+        if success:
+            return {"status": "success", "provider": provider}
+        else:
+            return {"status": "error", "message": f"Provider {provider} not available"}
+    except Exception as e:
+        logger.error(f"Error setting online model: {str(e)}")
+        return {"status": "error", "message": str(e)}
+
+@app.post("/api/models/online/test")
+def test_online_model(provider: str = Form(...)):
+    """Test if an online model provider is working"""
+    try:
+        success = online_llm_handler.test_provider(provider)
+        return {"status": "success" if success else "error", "working": success}
+    except Exception as e:
+        logger.error(f"Error testing online model: {str(e)}")
+        return {"status": "error", "working": False, "message": str(e)}
+
+@app.get("/api/models/online/status")
+def get_online_model_status():
+    """Get the current online model status"""
+    try:
+        current_provider = None
+        if online_llm_handler.current_provider:
+            provider_name = online_llm_handler.current_provider.__class__.__name__.replace('Provider', '').lower()
+            current_provider = {
+                "name": provider_name,
+                "working": online_llm_handler.test_provider(provider_name)
+            }
+        
+        return {
+            "current_provider": current_provider,
+            "available_providers": online_llm_handler.get_available_providers()
+        }
+    except Exception as e:
+        logger.error(f"Error getting online model status: {str(e)}")
+        return {"current_provider": None, "available_providers": [], "error": str(e)}

@@ -8,6 +8,11 @@ export default defineConfig({
   },
   server: {
     proxy: {
+      '/api/models': {
+        target: 'http://127.0.0.1:8000',
+        changeOrigin: true,
+        // Don't rewrite: keep /api prefix for online model endpoints
+      },
       '/api': {
         target: 'http://127.0.0.1:8000',
         changeOrigin: true,

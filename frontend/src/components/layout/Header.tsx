@@ -11,6 +11,8 @@ const Header: React.FC = () => {
     { path: '/', label: 'Home' },
     { path: '/chat', label: 'Chat' },
     { path: '/conversation-manager', label: 'Conversation Manager' },
+    { path: '/analytics', label: 'Analytics' },
+    { path: '/monitoring', label: 'Monitoring' },
     { path: '/settings', label: 'Settings' },
     { path: '/about', label: 'About' }
   ];

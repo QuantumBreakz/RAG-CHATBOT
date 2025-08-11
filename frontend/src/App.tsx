@@ -8,6 +8,8 @@ import ChatInterface from './pages/ChatInterface';
 import ConversationManager from './pages/ConversationManager';
 import Settings from './pages/Settings';
 import About from './pages/About';
+import Analytics from './pages/Analytics';
+import Monitoring from './pages/Monitoring';
 
 // Global Loading Context
 const LoadingContext = createContext<{ loading: boolean; setLoading: (v: boolean) => void }>({ loading: false, setLoading: () => {} });
@@ -60,6 +62,8 @@ function App() {
                 <Route path="/" element={<Homepage />} />
                 <Route path="/chat" element={<ChatInterface />} />
                 <Route path="/conversation-manager" element={<ConversationManager />} />
+                <Route path="/analytics" element={<Analytics />} />
+                <Route path="/monitoring" element={<Monitoring />} />
                 <Route path="/settings" element={<Settings />} />
                 <Route path="/about" element={<About />} />
               </Routes>

@@ -9,41 +9,28 @@ import MessageActions from '../components/MessageActions';
 import AdvancedSearch from '../components/AdvancedSearch';
 import ReactMarkdown from 'react-markdown';
 import { 
-  Send, 
-  Upload, 
-  Trash2, 
-  Settings, 
-  Plus, 
-  MessageSquare, 
-  FileText, 
+  Send,
+  Upload,
+  Trash2,
+  Plus,
+  MessageSquare,
+  FileText,
   Sparkles,
-  Mic,
-  MicOff,
-  Volume2,
-  Search,
-  Filter,
   X,
   ChevronDown,
-  Edit,
-  RotateCcw,
-  Copy,
-  Eye,
-  EyeOff,
+  ChevronRight,
   Bot,
   User,
   Pencil,
-  ArrowRight,
-  Zap,
-  Brain
+  ArrowRight
 } from 'lucide-react';
 import { useGlobalLoading } from '../App';
 import debounce from 'lodash.debounce';
 import { v4 as uuidv4 } from 'uuid';
+import { logger } from '../lib/logger';
 
 const CHAT_STATE_KEY = 'xor_rag_chat_state';
 const CONVERSATIONS_KEY = 'xor_rag_conversations';
-
-const API_URL = 'http://localhost:8000';
 
 const ChatInterface: React.FC = () => {
   const [inputValue, setInputValue] = useState('');
@@ -63,15 +50,13 @@ const ChatInterface: React.FC = () => {
   const [editedTitle, setEditedTitle] = useState<string>("");
   const [showScrollButton, setShowScrollButton] = useState(false);
   const [renamingConvId, setRenamingConvId] = useState<string | null>(null);
-  const [lastSessionId, setLastSessionId] = useState<string | null>(null);
   const [attachedFile, setAttachedFile] = useState<File | null>(null);
-  const [fileProcessing, setFileProcessing] = useState(false);
-  const [fileError, setFileError] = useState<string | null>(null);
+  const [fileProcessing] = useState(false);
+  const [fileError] = useState<string | null>(null);
   const [isRecording, setIsRecording] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
-  const [audioDuration, setAudioDuration] = useState<number | null>(null);
   const [selectedDomain, setSelectedDomain] = useState<string | null>(null);
-  const [currentSources, setCurrentSources] = useState<any[]>([]);
+  const [/* currentSources */, setCurrentSources] = useState<any[]>([]);
   const [supportedFileTypes, setSupportedFileTypes] = useState<{[key: string]: string}>({});
   const [showFileTypeInfo, setShowFileTypeInfo] = useState(false);
   const [showContextPreview, setShowContextPreview] = useState(false);
@@ -83,6 +68,7 @@ const ChatInterface: React.FC = () => {
   });
   const [isResizing, setIsResizing] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [streamingState, setStreamingState] = useState({ status: 'idle', content: '' });
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const audioUrlRef = useRef<string | null>(null);
@@ -95,22 +81,24 @@ const ChatInterface: React.FC = () => {
     setSessions,
     currentSession,
     createSession,
-    createSessionFromPrevious,
+    // createSessionFromPrevious,
     selectSession,
     addMessage,
     clearHistory,
-    uploadedDocuments,
+    // uploadedDocuments,
     addDocument,
-    removeDocument,
+    // removeDocument,
     setCurrentSessionFromBackend,
-    updateStreamingMessage,
+    beginStreamingMessage,
+    appendStreamingContent,
+    finalizeStreamingMessage,
     renameSession
   } = useChat();
 
-  const { loading, setLoading } = useGlobalLoading();
-
-  // Replace separate streamingStatus and streamingContent with a single streamingState object
-  const [streamingState, setStreamingState] = useState({ status: 'idle', content: '' });
+  const { /* loading, */ setLoading } = useGlobalLoading();
+  // Provide a stable setter for lastSessionId even if we don't read the value
+  const setLastSessionId = useRef<(id: string | null) => void>();
+  setLastSessionId.current = (_id: string | null) => {};
 
   // Utility functions
   const showBanner = (message: string, type: 'success' | 'error') => {
@@ -145,31 +133,19 @@ const ChatInterface: React.FC = () => {
       const data = await apiCall('/api/supported-file-types');
       setSupportedFileTypes(data.supported_types || {});
     } catch (err) {
-      console.warn('Failed to fetch supported file types:', err);
+      console.error('Failed to fetch supported file types:', err);
     }
   };
 
   const fetchConversations = async () => {
     setOperationState(s => ({ ...s, loadingConversations: true }));
-    setLoading(true);
     try {
       const data = await apiCall('/api/history/list');
       setConversations(data.conversations || []);
-      // Update chat context sessions as well
-      if (data.conversations && Array.isArray(data.conversations)) {
-        setSessions(data.conversations.map(conv => ({
-          id: conv.id,
-          title: conv.title,
-          messages: [], // Optionally fetch messages for each conversation if needed
-          createdAt: conv.created_at ? new Date(conv.created_at) : new Date(),
-          documents: []
-        })));
-      }
     } catch (err) {
       showBanner('Failed to fetch conversations.', 'error');
     }
     setOperationState(s => ({ ...s, loadingConversations: false }));
-    setLoading(false);
   };
 
   const checkVectorstore = async () => {
@@ -181,251 +157,249 @@ const ChatInterface: React.FC = () => {
     }
   };
 
-  const resetStreaming = () => {
-    setOperationState(prev => ({ ...prev, sending: false }));
-    setStreamingState({ status: 'idle', content: '' });
-  };
+  // const resetStreaming = () => {
+  //   setStreamingState({ status: 'idle', content: '' });
+  // };
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!inputValue.trim() || operationState.sending || streamingState.status === 'streaming') return;
 
-    // Ensure a conversation is selected or created
-    let sessionToUse = currentSession;
-    if (!sessionToUse) {
-      await createSession();
-      // Wait for state to update
-      return; // User will need to re-send after session is created, or you can use useEffect to trigger send
-    }
-
     const userMessage = inputValue.trim();
+    setInputValue('');
     setOperationState(s => ({ ...s, sending: true }));
-    setInputValue("");
-    setFileError(null);
 
-    // Reset streaming state
-    resetStreaming();
-
-    // If this is a new conversation, ensure context is empty
-    const isNewConversation = !sessionToUse || (sessionToUse.messages && sessionToUse.messages.length === 0);
-
-    // Add user message immediately
-    addMessage(userMessage, 'user');
-
-    // Add a placeholder assistant message for streaming (remove any existing empty assistant message first)
-    if (sessionToUse && sessionToUse.messages.length > 0) {
-      const lastMsg = sessionToUse.messages[sessionToUse.messages.length - 1];
-      if (lastMsg.role === 'assistant' && !lastMsg.content) {
-        setCurrentSessionFromBackend({
-          ...sessionToUse,
-          messages: sessionToUse.messages.slice(0, -1)
-        });
+    // Ensure we have a current session - create one if needed
+    if (!currentSession) {
+      logger.info('No current session, creating new session');
+      createSession();
+      // Wait a bit for the session to be created and state to update
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
+      // Double-check if session was created
+      if (!currentSession) {
+        logger.error('Failed to create session after timeout');
+        setOperationState(s => ({ ...s, sending: false }));
+        return;
       }
     }
-    addMessage('', 'assistant');
 
+    // Now we should have a valid session, add the user message
+    logger.info('Adding user message', { message: userMessage, sessionId: currentSession?.id });
+    addMessage(userMessage, 'user');
+    
+    // Wait a moment for the message to be added
+    await new Promise(resolve => setTimeout(resolve, 50));
+    
+    logger.info('User message added', { sessionId: currentSession?.id, messageCount: currentSession?.messages?.length });
+
+    // Check settings for streaming toggle and online model
+    let streamingEnabled = true;
+    let useOnlineModel = false;
+    let onlineProvider = 'openai';
     try {
+      const settings = JSON.parse(localStorage.getItem('xor-rag-settings') || '{}');
+      if (typeof settings.streamingEnabled === 'boolean') streamingEnabled = settings.streamingEnabled;
+      if (typeof settings.useOnlineModel === 'boolean') useOnlineModel = settings.useOnlineModel;
+      if (typeof settings.onlineProvider === 'string') onlineProvider = settings.onlineProvider;
+    } catch {}
+    
+    if (streamingEnabled) {
       setStreamingState({ status: 'streaming', content: '' });
-      let streamed = '';
-      let contextMetadata = null;
-      let sources = [];
-      // Use only the current session's messages for context, and for new conversations, context is empty
-      // Limit to last 10 turns (user+assistant pairs)
-      let conversationHistory = [];
-      if (!isNewConversation && sessionToUse?.messages) {
-        const filtered = sessionToUse.messages.filter(m => m.role !== 'assistant' || m.content);
-        // Get last 20 messages (10 turns)
-        conversationHistory = filtered.slice(-20);
-      }
-      let response;
+      // Create placeholder assistant message that will be filled during streaming
+      logger.info('Starting streaming response', { sessionId: currentSession?.id });
+      beginStreamingMessage();
+      
+      // Remove the fallback that creates empty messages
+      // setTimeout(() => {
+      //   if (!currentSession?.messages?.some(m => m.role === 'assistant' && m.isStreaming)) {
+      //     logger.warn('Fallback: creating streaming message manually', { sessionId: currentSession?.id });
+      //     addMessage('', 'assistant');
+      //   }
+      // }, 100);
 
-      if (attachedFile) {
-        setFileProcessing(true);
-        // Use multipart/form-data if file is attached
+      try {
         const formData = new FormData();
         formData.append('question', userMessage);
         formData.append('n_results', '3');
         formData.append('expand', '2');
-        formData.append('filename', '');
-        formData.append('domain_filter', selectedDomain || '');
-        formData.append('conversation_history', JSON.stringify(conversationHistory));
-        formData.append('file', attachedFile);
-        response = await fetch('/api/query/stream', {
-          method: 'POST',
-          body: formData
-        });
-        setFileProcessing(false);
-        if (!response.ok) {
-          const err = await response.json();
-          setFileError(err.error || 'File processing failed.');
-          setOperationState(s => ({ ...s, sending: false }));
-          setStreamingState({ status: 'idle', content: '' });
-          setAttachedFile(null);
-          return;
+        formData.append('conversation_history', JSON.stringify(currentSession?.messages?.slice(-10) || []));
+        formData.append('session_id', currentSession?.id || '');
+        
+        // Add LLM settings
+        try {
+          const settings = JSON.parse(localStorage.getItem('xor-rag-settings') || '{}');
+          if (settings.modelName) formData.append('model', settings.modelName);
+          if (settings.temperature !== undefined) formData.append('temperature', settings.temperature.toString());
+          if (settings.maxTokens) formData.append('max_tokens', settings.maxTokens.toString());
+          if (useOnlineModel && onlineProvider) formData.append('online_model', onlineProvider);
+        } catch (e) {
+          logger.error('Failed to parse settings for API call:', e);
         }
-      } else {
-        // Use existing x-www-form-urlencoded flow
-        response = await fetch('/api/query/stream', {
+
+        const response = await fetch('/api/query/stream', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-          body: new URLSearchParams({
-            question: userMessage,
-            n_results: '3',
-            expand: '2',
-            filename: '',
-            domain_filter: selectedDomain || '',
-            conversation_history: JSON.stringify(conversationHistory)
-          })
+          body: formData,
+          headers: { 'Accept': 'application/json' }
         });
-      }
-      setAttachedFile(null); // Reset after sending
-      if (!response.body) throw new Error('No response body');
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let done = false;
-      let buffer = '';
-      let finished = false;
-      while (!done && !finished) {
-        const { value, done: doneReading } = await reader.read();
-        done = doneReading;
-        if (value) {
-          const chunk = decoder.decode(value, { stream: true });
-          buffer += chunk;
+
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const reader = response.body?.getReader();
+        if (!reader) {
+          throw new Error('No response body reader available');
+        }
+
+        const decoder = new TextDecoder();
+        let buffer = '';
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
           const lines = buffer.split('\n');
           buffer = lines.pop() || '';
+
           for (const line of lines) {
             if (line.trim()) {
               try {
                 const data = JSON.parse(line);
-                if (data.status === 'streaming' && data.answer !== undefined) {
-                  streamed += data.answer;
-                  setStreamingState(s => ({ ...s, content: streamed }));
-                  updateStreamingMessage(streamed); // Real-time update
-                }
-                if (data.status === 'success') {
-                  if (data.answer !== undefined) {
-                    streamed += data.answer;
-                    setStreamingState(s => ({ ...s, content: streamed }));
-                    updateStreamingMessage(streamed); // Final update
+                if (data.status === 'streaming' && data.answer) {
+                  appendStreamingContent(data.answer);
+                } else if (data.status === 'success') {
+                  // Finalize the streaming message with the complete response
+                  // Don't try to get content from currentSession as it might be stale
+                  // The content is already accumulated in the streaming message
+                  const finalContent = data.answer || '';
+                  finalizeStreamingMessage(finalContent, {
+                    sources: data.sources || [],
+                    contextMetadata: data.context_metadata || {}
+                  });
+                  
+                  // Wait a moment for the state to update before saving
+                  await new Promise(resolve => setTimeout(resolve, 100));
+                  
+                  // Save conversation state
+                  if (currentSession) {
+                    // ChatContext already handles localStorage saving, so we only need backend save
+                    // Also save to backend
+                    try {
+                      await apiCall('/api/history/save', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                          id: currentSession.id,
+                          title: currentSession.title,
+                          messages: currentSession.messages,
+                          created_at: currentSession.createdAt.toISOString(),
+                          uploads: currentSession.documents.map(filename => ({ filename }))
+                        })
+                      });
+                    } catch (err) {
+                      console.warn('Failed to save conversation to backend:', err);
+                    }
+                    
+                    logger.info('Streaming response finalized', { sessionId: currentSession.id });
                   }
-                  // Capture context metadata and sources
-                  if (data.context_metadata) {
-                    contextMetadata = data.context_metadata;
-                  }
-                  if (data.sources) {
-                    sources = data.sources;
-                  }
-                  finished = true;
-                  break;
                 }
-                if (data.status === 'error' && data.answer) {
-                  setFileError(data.answer);
-                  finished = true;
-                  break;
-                }
-              } catch (err) {
-                // Ignore parse errors for incomplete lines
+              } catch (e) {
+                logger.error('Failed to parse streaming response:', e);
               }
             }
           }
         }
+      } catch (error) {
+        logger.error('Streaming request failed:', error);
+        finalizeStreamingMessage(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`, {
+          sources: [],
+          contextMetadata: {}
+        });
+      } finally {
+        setStreamingState({ status: 'idle', content: '' });
+        setOperationState(s => ({ ...s, sending: false }));
       }
-      // Handle any remaining buffered line
-      if (buffer.trim() && !finished) {
+    } else {
+      // Non-streaming request
+      try {
+        const formData = new FormData();
+        formData.append('question', userMessage);
+        formData.append('n_results', '3');
+        formData.append('expand', '2');
+        formData.append('conversation_history', JSON.stringify(currentSession?.messages?.slice(-10) || []));
+        formData.append('session_id', currentSession?.id || '');
+        
+        // Add LLM settings
         try {
-          const data = JSON.parse(buffer);
-          if (data.status === 'streaming' && data.answer !== undefined) {
-            streamed += data.answer;
-            setStreamingState(s => ({ ...s, content: streamed }));
-            updateStreamingMessage(streamed);
-          }
-          if (data.status === 'success') {
-            if (data.answer !== undefined) {
-              streamed += data.answer;
-              setStreamingState(s => ({ ...s, content: streamed }));
-              updateStreamingMessage(streamed);
-            }
-            // Capture context metadata and sources
-            if (data.context_metadata) {
-              contextMetadata = data.context_metadata;
-            }
-            if (data.sources) {
-              sources = data.sources;
-            }
-          }
-          if (data.status === 'error' && data.answer) {
-            setFileError(data.answer);
-          }
-        } catch (err) {
-          // Ignore parse errors for incomplete lines
+          const settings = JSON.parse(localStorage.getItem('xor-rag-settings') || '{}');
+          if (settings.modelName) formData.append('model', settings.modelName);
+          if (settings.temperature !== undefined) formData.append('temperature', settings.temperature.toString());
+          if (settings.maxTokens) formData.append('max_tokens', settings.maxTokens.toString());
+          if (useOnlineModel && onlineProvider) formData.append('online_model', onlineProvider);
+        } catch (e) {
+          logger.error('Failed to parse settings for API call:', e);
         }
-      }
-      setStreamingState({ status: 'idle', content: '' });
-      // After streaming, update the session's messages by removing the placeholder and appending the real assistant message
-      if (sessionToUse) {
-        // Remove the last (empty) assistant message and append the real one
-        const filteredMessages = sessionToUse.messages.filter((m, idx, arr) => {
-          // Remove the last assistant message if it's empty
-          if (idx === arr.length - 1 && m.role === 'assistant' && !m.content) return false;
-          return true;
-        });
-        // Ensure the user's message is present before the assistant's response
-        let updatedMessages = [...filteredMessages];
-        // If the last message is not the user's message, add it
-        if (
-          updatedMessages.length === 0 ||
-          updatedMessages[updatedMessages.length - 1].role !== 'user' ||
-          updatedMessages[updatedMessages.length - 1].content !== userMessage
-        ) {
-          updatedMessages.push({ id: uuidv4(), role: 'user', content: userMessage, timestamp: new Date(), isStreaming: false });
-        }
-        // Only append the assistant message if it's not already present as the last message
-        const lastMsg = updatedMessages[updatedMessages.length - 1];
-        if (!(lastMsg && lastMsg.role === 'assistant' && lastMsg.content === streamed)) {
-          updatedMessages.push({ 
-            id: uuidv4(), 
-            role: 'assistant', 
-            content: streamed, 
-            timestamp: new Date(), 
-            isStreaming: false,
-            sources: sources,
-            contextMetadata: contextMetadata
-          });
-        }
-        setCurrentSessionFromBackend({
-          ...sessionToUse,
-          messages: updatedMessages
-        });
-        await apiCall('/api/history/save', {
+
+        const response = await fetch('/api/query', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            ...sessionToUse,
-            created_at: sessionToUse.createdAt instanceof Date ? sessionToUse.createdAt.toISOString() : sessionToUse.createdAt,
-            uploads: (sessionToUse.documents || []).map(filename => ({ filename })),
-            messages: updatedMessages
-          })
+          body: formData
         });
-      }
-    } catch (error) {
-      showBanner('Failed to send message.', 'error');
-      setFileError('Failed to send message.');
-      // Remove the empty assistant message on error
-      if (sessionToUse && sessionToUse.messages.length > 0) {
-        const messagesWithoutEmpty = sessionToUse.messages.filter((m, idx, arr) => !(idx === arr.length - 1 && m.role === 'assistant' && !m.content));
-        setCurrentSessionFromBackend({
-          ...sessionToUse,
-          messages: messagesWithoutEmpty
+
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const data = await response.json();
+        
+        if (data.status === 'success' || data.answer) {
+          addMessage(data.answer, 'assistant', {
+            sources: data.sources || [],
+            contextMetadata: data.context_metadata || {}
+          });
+          
+          // Wait a moment for the state to update before saving
+          await new Promise(resolve => setTimeout(resolve, 100));
+          
+          // Save conversation state
+          if (currentSession) {
+            // ChatContext already handles localStorage saving, so we only need backend save
+            // Also save to backend
+            try {
+              await apiCall('/api/history/save', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  id: currentSession.id,
+                  title: currentSession.title,
+                  messages: currentSession.messages,
+                  created_at: currentSession.createdAt.toISOString(),
+                  uploads: currentSession.documents.map(filename => ({ filename }))
+                })
+              });
+            } catch (err) {
+              console.warn('Failed to save conversation to backend:', err);
+            }
+            
+            logger.info('Non-streaming response received', { sessionId: currentSession.id });
+          }
+        } else {
+          throw new Error(data.error || 'Unknown error');
+        }
+      } catch (error) {
+        logger.error('Non-streaming request failed:', error);
+        addMessage(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`, 'assistant', {
+          sources: [],
+          contextMetadata: {}
         });
+      } finally {
+        setOperationState(s => ({ ...s, sending: false }));
       }
-    } finally {
-      setOperationState(s => ({ ...s, sending: false }));
-      setStreamingState({ status: 'idle', content: '' });
-      setFileProcessing(false);
     }
   };
 
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, documentType: string = 'default') => {
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, _documentType: string = 'default') => {
     const files = e.target.files;
     if (!files) return;
 
@@ -500,7 +474,7 @@ const ChatInterface: React.FC = () => {
         body: JSON.stringify({
           ...convToRename,
           title: updatedTitle,
-          created_at: convToRename.createdAt instanceof Date ? convToRename.createdAt.toISOString() : convToRename.createdAt,
+          created_at: convToRename.createdAt instanceof Date ? convToRename.createdAt.toISOString() : (convToRename as any).created_at || convToRename.createdAt,
           uploads: (convToRename.documents || []).map(filename => ({ filename })),
         })
       });
@@ -620,7 +594,7 @@ const ChatInterface: React.FC = () => {
           setCurrentSessionFromBackend(parsed.currentSession);
           localCurrentSessionId = parsed.currentSession.id;
           localCurrentSession = parsed.currentSession;
-          setLastSessionId(parsed.currentSession.id);
+          setLastSessionId.current && setLastSessionId.current(parsed.currentSession.id);
         }
         if (parsed.conversations) {
           setConversations(parsed.conversations);
@@ -631,7 +605,7 @@ const ChatInterface: React.FC = () => {
     // Fetch conversations from backend, but always fallback to local if missing
     (async () => {
       let backendConvs = [];
-      let backendCurrentSession = null;
+      // let backendCurrentSession = null;
       try {
         const data = await apiCall('/api/history/list');
         backendConvs = data.conversations || [];
@@ -643,29 +617,23 @@ const ChatInterface: React.FC = () => {
           ];
         }
         setConversations(backendConvs);
-        setSessions(backendConvs.map((conv: any) => ({
-          id: conv.id,
-          title: conv.title,
-          messages: [],
-          createdAt: conv.created_at ? new Date(conv.created_at) : new Date(),
-          documents: []
-        })));
         // Try to fetch the current session from backend
         if (localCurrentSessionId) {
           try {
             const data = await apiCall(`/api/history/get/${localCurrentSessionId}`);
             if (data.conversation) {
-              backendCurrentSession = data.conversation;
+              // backendCurrentSession = data.conversation;
               setCurrentSessionFromBackend(data.conversation);
-              setLastSessionId(data.conversation.id);
+              // track last session id if needed
+              setLastSessionId.current && setLastSessionId.current(data.conversation.id);
             } else if (localCurrentSession) {
               setCurrentSessionFromBackend(localCurrentSession);
-              setLastSessionId(localCurrentSession.id);
+              setLastSessionId.current && setLastSessionId.current(localCurrentSession.id);
             }
           } catch {
             if (localCurrentSession) {
               setCurrentSessionFromBackend(localCurrentSession);
-              setLastSessionId(localCurrentSession.id);
+              setLastSessionId.current && setLastSessionId.current(localCurrentSession.id);
             }
           }
         } else if (backendConvs.length > 0) {
@@ -676,14 +644,14 @@ const ChatInterface: React.FC = () => {
               const data = await apiCall(`/api/history/get/${firstConv.id}`);
               if (data.conversation) {
                 setCurrentSessionFromBackend(data.conversation);
-                setLastSessionId(data.conversation.id);
+                setLastSessionId.current && setLastSessionId.current(data.conversation.id);
               } else {
                 setCurrentSessionFromBackend(firstConv);
-                setLastSessionId(firstConv.id);
+                setLastSessionId.current && setLastSessionId.current(firstConv.id);
               }
             } catch {
               setCurrentSessionFromBackend(firstConv);
-              setLastSessionId(firstConv.id);
+              setLastSessionId.current && setLastSessionId.current(firstConv.id);
             }
           }
         }
@@ -691,7 +659,7 @@ const ChatInterface: React.FC = () => {
         // If backend fetch fails, always use the local copy
         if (localCurrentSession) {
           setCurrentSessionFromBackend(localCurrentSession);
-          setLastSessionId(localCurrentSession.id);
+          setLastSessionId.current && setLastSessionId.current(localCurrentSession.id);
         }
         if (localConversations.length > 0) {
           setConversations(localConversations);
@@ -748,7 +716,8 @@ const ChatInterface: React.FC = () => {
       currentSession: safeCurrentSession, 
       conversations: safeConversations
     }));
-    if (safeCurrentSession) setLastSessionId(safeCurrentSession.id);
+    // if (safeCurrentSession) track last session id if needed
+    // setLastSessionId.current && setLastSessionId.current(safeCurrentSession.id);
   }, [sessions, currentSession, conversations]);
 
   // Load conversations from localStorage on mount
@@ -771,38 +740,17 @@ const ChatInterface: React.FC = () => {
   //   fetchConversations();
   // }, [currentSession]);
 
-  // Render streaming assistant bubble - only show when actively streaming
-  const renderStreamingAssistantBubble = () => {
-    if (streamingState.status !== 'streaming' || !streamingState.content) return null;
-    return (
-      <div className="flex justify-start">
-        <div className="flex items-start space-x-3 max-w-2xl">
-          <div className="flex-shrink-0 w-8 h-8 rounded-full bg-surface-elevated border border-border flex items-center justify-center">
-            <Bot className="h-4 w-4 text-primary" />
-          </div>
-          <Card variant="elevated" className="p-4">
-            <ReactMarkdown components={{p: ({node, ...props}) => <p className="text-sm leading-relaxed whitespace-pre-line" {...props} />}}>
-              {streamingState.content}
-            </ReactMarkdown>
-            <span className="ml-1 animate-pulse">|</span>
-            <div className="text-xs mt-2 text-muted-foreground">
-              Streaming...
-            </div>
-          </Card>
-        </div>
-      </div>
-    );
-  };
+  // Streaming bubble is no longer needed; content streams directly into the assistant message.
 
   // Message action handlers - moved before memoizedMessages
   const handleEditMessage = (messageId: string, newContent: string) => {
     if (currentSession) {
-      const updatedMessages = currentSession.messages.map(msg => 
-        msg.id === messageId ? { ...msg, content: newContent } : msg
-      );
+      // const updatedMessages = currentSession.messages.map(msg => 
+      //   msg.id === messageId ? { ...msg, content: newContent } : msg
+      // );
       
       // Update the session with edited message
-      const updatedSession = { ...currentSession, messages: updatedMessages };
+      // const updatedSession = { ...currentSession, messages: updatedMessages };
       // This would typically update the backend and local storage
       console.log('Message edited:', messageId, newContent);
     }
@@ -833,8 +781,13 @@ const ChatInterface: React.FC = () => {
   };
 
   // Memoized messages
-  const memoizedMessages = useMemo(() =>
-    currentSession?.messages?.map((message, idx) => (
+  const memoizedMessages = useMemo(() => {
+    if (currentSession?.messages) {
+      currentSession.messages.forEach((msg, idx) => {
+      });
+    }
+    
+    return currentSession?.messages?.map((message, idx) => (
       <div key={message.id || idx} className={`flex w-full ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}>
         <div className={`flex items-start space-x-3 max-w-2xl w-full ${message.role === 'user' ? 'flex-row-reverse space-x-reverse' : ''}`}>
           <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${
@@ -887,7 +840,8 @@ const ChatInterface: React.FC = () => {
           </Card>
         </div>
       </div>
-    )) || [], [currentSession?.messages, showContextPreview, editingMessageId]);
+    )) || [];
+  }, [currentSession?.messages, showContextPreview, editingMessageId]);
 
   // Restore handleSelectSession and handleCreateNewConversation with correct logic
   const handleSelectSession = async (convId: string) => {
@@ -915,7 +869,7 @@ const ChatInterface: React.FC = () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         ...newConv,
-        created_at: newConv.created_at || newConv.createdAt,
+        created_at: newConv.created_at || (newConv as any).createdAt,
         uploads: (newConv.uploads || []).map(filename => ({ filename })),
       })
     });
@@ -935,57 +889,62 @@ const ChatInterface: React.FC = () => {
   };
 
   // Voice recording logic
-  const handleStartRecording = async () => {
-    setIsRecording(true);
-    setAudioDuration(null);
-    audioChunksRef.current = [];
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mediaRecorder = new MediaRecorder(stream);
-      mediaRecorderRef.current = mediaRecorder;
-      let startTime = Date.now();
-      mediaRecorder.ondataavailable = (e) => {
-        if (e.data.size > 0) audioChunksRef.current.push(e.data);
-      };
-      mediaRecorder.onstop = async () => {
-        setIsRecording(false);
-        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/wav' });
-        setAudioDuration((Date.now() - startTime) / 1000);
-        if (audioUrlRef.current) URL.revokeObjectURL(audioUrlRef.current);
-        audioUrlRef.current = URL.createObjectURL(audioBlob);
-        setIsTranscribing(true);
-        const formData = new FormData();
-        formData.append('file', audioBlob, 'voice.wav');
-        showBanner('Transcribing voice input...', 'success');
-        try {
-          const response = await fetch(`${API_URL}/transcribe`, {
-            method: 'POST',
-            body: formData
-          });
-          const data = await response.json();
-          setIsTranscribing(false);
-          if (data.text) {
-            setInputValue(data.text);
-            showBanner('Voice transcription complete.', 'success');
-          } else {
-            showBanner(data.error || 'Transcription failed.', 'error');
-          }
-        } catch (err) {
-          setIsTranscribing(false);
-          showBanner('Transcription failed.', 'error');
-        }
-      };
-      mediaRecorder.start();
-    } catch (err) {
-      setIsRecording(false);
-      showBanner('Microphone access denied or not available.', 'error');
+  const handleStopRecording = () => {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+      mediaRecorderRef.current.stop();
     }
+    setIsRecording(false);
   };
 
-  const handleStopRecording = () => {
-    if (mediaRecorderRef.current && isRecording) {
-      mediaRecorderRef.current.stop();
-      mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop());
+  const handleStartRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      mediaRecorderRef.current = new MediaRecorder(stream);
+      audioChunksRef.current = [];
+
+      mediaRecorderRef.current.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
+        }
+      };
+
+      mediaRecorderRef.current.onstop = async () => {
+        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/wav' });
+        setIsTranscribing(true);
+        
+        try {
+          const formData = new FormData();
+          formData.append('file', audioBlob, 'recording.wav');
+          
+          const response = await fetch('/api/transcribe', {
+            method: 'POST',
+            body: formData,
+          });
+          
+          if (response.ok) {
+            const data = await response.json();
+            setInputValue(data.text || '');
+          } else {
+            showBanner('Transcription failed.', 'error');
+          }
+        } catch (error) {
+          showBanner('Transcription failed.', 'error');
+        } finally {
+          setIsTranscribing(false);
+        }
+        
+        // Clean up
+        stream.getTracks().forEach(track => track.stop());
+        if (audioUrlRef.current) {
+          URL.revokeObjectURL(audioUrlRef.current);
+          audioUrlRef.current = null;
+        }
+      };
+
+      mediaRecorderRef.current.start();
+      setIsRecording(true);
+    } catch (error) {
+      showBanner('Failed to start recording.', 'error');
     }
   };
 
@@ -1252,9 +1211,9 @@ const ChatInterface: React.FC = () => {
                     <FileText className="h-4 w-4 text-primary flex-shrink-0" />
                     <div className="flex flex-col">
                       <span className="text-xs text-foreground truncate">{doc.filename}</span>
-                      {doc.file_type && (
-                        <span className="text-xs text-muted-foreground capitalize">{doc.file_type}</span>
-                      )}
+                                      {(doc as any).file_type && (
+                  <span className="text-xs text-muted-foreground capitalize">{(doc as any).file_type}</span>
+                )}
                     </div>
                   </div>
                   <Button onClick={() => handleDeleteDocument(doc.filename)} variant="ghost" size="sm" 
@@ -1373,7 +1332,6 @@ const ChatInterface: React.FC = () => {
           {memoizedMessages.length > 0 ? (
             <>
               {memoizedMessages}
-              {renderStreamingAssistantBubble()}
             </>
           ) : (
             <div className="flex items-center justify-center h-full">

@@ -366,7 +366,6 @@ class TemplateBasedChunker:
             chunk_overlap=template.chunk_overlap,
             separators=template.separators,
             keep_separator=template.keep_separator,
-            is_recursive=template.is_recursive,
             length_function=len
         )
         

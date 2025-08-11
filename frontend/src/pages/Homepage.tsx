@@ -1,10 +1,95 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { MessageCircle, Upload, Shield, Zap, Database, Brain, ArrowRight, Sparkles, Lock, Server } from 'lucide-react';
 import Button from '../components/ui/Button';
 import Card from '../components/ui/Card';
+import gsap from 'gsap';
+import { ScrollTrigger } from 'gsap/ScrollTrigger';
+
+gsap.registerPlugin(ScrollTrigger);
 
 const Homepage: React.FC = () => {
+  const heroRef = useRef<HTMLDivElement>(null);
+  const featuresRef = useRef<HTMLDivElement>(null);
+  const stepsRef = useRef<HTMLDivElement>(null);
+  const ctaRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const ctx = gsap.context(() => {
+      if (heroRef.current) {
+        const tl = gsap.timeline({ defaults: { ease: 'power3.out' } });
+        tl.fromTo(
+          heroRef.current.querySelectorAll('[data-hero-badge]'),
+          { y: -20, opacity: 0 },
+          { y: 0, opacity: 1, duration: 0.6 }
+        )
+          .fromTo(
+            heroRef.current.querySelectorAll('[data-hero-title-line]'),
+            { y: 40, opacity: 0 },
+            { y: 0, opacity: 1, duration: 0.7, stagger: 0.12 },
+            '-=0.2'
+          )
+          .fromTo(
+            heroRef.current.querySelectorAll('[data-hero-subtitle]'),
+            { y: 20, opacity: 0 },
+            { y: 0, opacity: 1, duration: 0.6 },
+            '-=0.2'
+          )
+          .fromTo(
+            heroRef.current.querySelectorAll('[data-hero-cta] a, [data-hero-cta] button'),
+            { y: 20, opacity: 0 },
+            { y: 0, opacity: 1, duration: 0.5, stagger: 0.1 },
+            '-=0.2'
+          );
+
+        // ClipPath reveal for hero gradient background
+        gsap.fromTo(
+          heroRef.current.querySelector('[data-hero-clip]'),
+          { clipPath: 'circle(0% at 50% 50%)' },
+          { clipPath: 'circle(75% at 50% 50%)', duration: 1.2, ease: 'power2.out' }
+        );
+      }
+
+      const makeReveal = (container: Element | null, selector: string, opts: { y?: number; duration?: number; stagger?: number } = {}) => {
+        if (!container) return;
+        const elements = container.querySelectorAll(selector);
+        if (!elements.length) return;
+        gsap.set(elements, { y: opts.y ?? 30, opacity: 0 });
+        ScrollTrigger.batch(elements, {
+          start: 'top 85%',
+          onEnter: (batch) => {
+            gsap.to(batch, { y: 0, opacity: 1, duration: opts.duration ?? 0.6, stagger: opts.stagger ?? 0.08, ease: 'power2.out' });
+          },
+          once: true
+        });
+      };
+
+      makeReveal(featuresRef.current, '[data-feature-card]');
+      makeReveal(stepsRef.current, '[data-step-item]');
+
+      if (ctaRef.current) {
+        ScrollTrigger.create({
+          trigger: ctaRef.current,
+          start: 'top 80%',
+          once: true,
+          onEnter: () => {
+            gsap.fromTo(
+              ctaRef.current?.querySelector('[data-cta-bg]'),
+              { clipPath: 'inset(100% round 24px)' },
+              { clipPath: 'inset(0% round 24px)', duration: 0.9, ease: 'power2.out' }
+            );
+            gsap.fromTo(
+              ctaRef.current?.querySelectorAll('[data-cta-content] > *'),
+              { y: 20, opacity: 0 },
+              { y: 0, opacity: 1, duration: 0.6, stagger: 0.08, ease: 'power2.out' }
+            );
+          }
+        });
+      }
+    });
+    return () => ctx.revert();
+  }, []);
+
   const features = [
     {
       icon: Brain,
@@ -63,35 +148,35 @@ const Homepage: React.FC = () => {
   return (
     <div className="min-h-screen bg-background">
       {/* Hero Section */}
-      <section className="relative px-4 sm:px-6 lg:px-8 py-20 overflow-hidden">
+      <section ref={heroRef} className="relative px-4 sm:px-6 lg:px-8 py-20 overflow-hidden">
         {/* Background Effects */}
-        <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-primary/10"></div>
+        <div data-hero-clip className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-primary/10"></div>
         <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-primary/10 rounded-full blur-3xl animate-pulse-slow"></div>
         <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-primary/5 rounded-full blur-3xl animate-pulse-slow" style={{animationDelay: '2s'}}></div>
         
         <div className="max-w-7xl mx-auto relative z-10">
           <div className="text-center mb-16">
-            <div className="inline-flex items-center space-x-2 bg-primary/10 border border-primary/20 rounded-full px-6 py-3 mb-8 backdrop-blur-sm">
+            <div data-hero-badge className="inline-flex items-center space-x-2 bg-primary/10 border border-primary/20 rounded-full px-6 py-3 mb-8 backdrop-blur-sm">
               <Sparkles className="h-4 w-4 text-primary animate-pulse" />
               <span className="text-sm text-primary font-semibold">Next-Gen Offline RAG Technology</span>
             </div>
             
             <h1 className="text-6xl md:text-7xl lg:text-8xl font-bold mb-8 leading-tight">
-              <span className="bg-gradient-to-r from-foreground via-primary to-foreground bg-clip-text text-transparent">
+              <span data-hero-title-line className="bg-gradient-to-r from-foreground via-primary to-foreground bg-clip-text text-transparent">
                 XOR RAG
               </span>
               <br />
-              <span className="text-4xl md:text-5xl lg:text-6xl bg-gradient-to-r from-primary via-primary-light to-primary bg-clip-text text-transparent">
+              <span data-hero-title-line className="text-4xl md:text-5xl lg:text-6xl bg-gradient-to-r from-primary via-primary-light to-primary bg-clip-text text-transparent">
                 Chatbot
               </span>
             </h1>
             
-            <p className="text-xl md:text-2xl text-muted-foreground mb-12 max-w-4xl mx-auto leading-relaxed">
+            <p data-hero-subtitle className="text-xl md:text-2xl text-muted-foreground mb-12 max-w-4xl mx-auto leading-relaxed">
               The most advanced offline Retrieval-Augmented Generation chatbot for secure, 
               multi-document Q&A. Built for high-stakes environments where privacy and reliability matter most.
             </p>
             
-            <div className="flex flex-col sm:flex-row gap-6 justify-center items-center">
+            <div data-hero-cta className="flex flex-col sm:flex-row gap-6 justify-center items-center">
               <Link to="/chat">
                 <Button size="xl" className="group min-w-[200px]">
                   <MessageCircle className="mr-3 h-5 w-5" />
@@ -111,7 +196,7 @@ const Homepage: React.FC = () => {
           {/* Stats */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-8 mb-20">
             {stats.map((stat, index) => (
-              <Card key={index} variant="glass" className="p-6 text-center group hover:scale-105 transition-transform duration-300">
+              <Card key={index} variant="glass" className="p-6 text-center group hover:scale-105 transition-transform duration-300" data-feature-card>
                 <div className="text-3xl md:text-4xl font-bold text-primary mb-2">{stat.value}</div>
                 <div className="text-foreground font-semibold">{stat.label}</div>
                 <div className="text-sm text-muted-foreground">{stat.sublabel}</div>
@@ -122,7 +207,7 @@ const Homepage: React.FC = () => {
       </section>
 
       {/* Features Section */}
-      <section className="px-4 sm:px-6 lg:px-8 py-20 bg-surface/30">
+      <section ref={featuresRef} className="px-4 sm:px-6 lg:px-8 py-20 bg-surface/30">
         <div className="max-w-7xl mx-auto">
           <div className="text-center mb-16">
             <h2 className="text-4xl md:text-5xl font-bold mb-6 bg-gradient-to-r from-foreground to-primary bg-clip-text text-transparent">
@@ -134,8 +219,8 @@ const Homepage: React.FC = () => {
           </div>
 
           <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8">
-            {features.map((feature, index) => (
-              <Card key={index} hover glow className="p-8 group">
+            {[{icon: Brain, title: 'Offline AI Intelligence', description: 'Powered by Ollama for complete privacy and security without internet dependency', color: 'from-primary to-primary-dark'}, {icon: Database, title: 'Vector Database', description: 'ChromaDB integration for efficient document retrieval and semantic search', color: 'from-blue-500 to-blue-600'}, {icon: Shield, title: 'Privacy First', description: 'All data stays on your infrastructure with zero external data transmission', color: 'from-emerald-500 to-emerald-600'}, {icon: Zap, title: 'Real-time Streaming', description: 'Experience natural conversations with word-by-word streaming responses', color: 'from-yellow-500 to-orange-500'}].map((feature, index) => (
+              <Card key={index} hover glow className="p-8 group" data-feature-card>
                 <div className="relative mb-6">
                   <div className={`inline-flex items-center justify-center w-16 h-16 bg-gradient-to-r ${feature.color} rounded-2xl shadow-lg group-hover:shadow-xl transition-all duration-300`}>
                     <feature.icon className="h-8 w-8 text-white" />
@@ -155,7 +240,7 @@ const Homepage: React.FC = () => {
       </section>
 
       {/* How It Works Section */}
-      <section className="px-4 sm:px-6 lg:px-8 py-20">
+      <section ref={stepsRef} className="px-4 sm:px-6 lg:px-8 py-20">
         <div className="max-w-7xl mx-auto">
           <div className="text-center mb-16">
             <h2 className="text-4xl md:text-5xl font-bold mb-6 bg-gradient-to-r from-foreground to-primary bg-clip-text text-transparent">
@@ -167,8 +252,8 @@ const Homepage: React.FC = () => {
           </div>
 
           <div className="grid md:grid-cols-3 gap-12">
-            {steps.map((step, index) => (
-              <div key={index} className="text-center group">
+            {[{number: '01', title: 'Upload Documents', description: 'Drag and drop your PDF or DOCX files to build your knowledge base', icon: Upload}, {number: '02', title: 'Process & Index', description: 'Our AI automatically chunks and indexes your documents for optimal retrieval', icon: Server}, {number: '03', title: 'Ask Questions', description: 'Chat naturally and get accurate answers based on your document context', icon: MessageCircle}].map((step, index) => (
+              <div key={index} className="text-center group" data-step-item>
                 <div className="relative mb-8">
                   <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-r from-primary to-primary-dark rounded-full text-2xl font-bold text-white shadow-neon-green group-hover:shadow-neon-green-intense transition-all duration-500 transform group-hover:scale-110">
                     {step.number}
@@ -225,12 +310,12 @@ const Homepage: React.FC = () => {
       </section>
 
       {/* CTA Section */}
-      <section className="px-4 sm:px-6 lg:px-8 py-20 relative overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-r from-primary/10 via-primary/5 to-primary/10"></div>
+      <section ref={ctaRef} className="px-4 sm:px-6 lg:px-8 py-20 relative overflow-hidden">
+        <div data-cta-bg className="absolute inset-0 bg-gradient-to-r from-primary/10 via-primary/5 to-primary/10"></div>
         <div className="absolute top-0 left-1/4 w-96 h-96 bg-primary/10 rounded-full blur-3xl"></div>
         <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-primary/5 rounded-full blur-3xl"></div>
         
-        <div className="max-w-5xl mx-auto text-center relative z-10">
+        <div className="max-w-5xl mx-auto text-center relative z-10" data-cta-content>
           <h2 className="text-4xl md:text-5xl font-bold mb-6 bg-gradient-to-r from-foreground to-primary bg-clip-text text-transparent">
             Ready to Transform Your Document Intelligence?
           </h2>
