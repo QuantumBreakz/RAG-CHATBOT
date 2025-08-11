@@ -706,3 +706,4 @@ def get_analytics(config: Dict[str, Any] = None) -> PerformanceAnalytics:
     if _analytics_instance is None:
         _analytics_instance = PerformanceAnalytics(config)
     return _analytics_instance
+

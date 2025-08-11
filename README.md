@@ -1,10 +1,44 @@
-# XOR RAG Chatbot – Secure, Fully Offline, Multi-Document Q&A
+# XOR RAG Chatbot – Secure, Fully Offline, Multi-Document Q&A with Advanced AI Features
 
-A robust, production-ready, **completely offline** RAG (Retrieval-Augmented Generation) chatbot for document Q&A, built with **React frontend**, **FastAPI backend**, **ChromaDB**, **Ollama**, and **Redis caching**. Designed for governmental and sensitive environments—**zero internet required after initial setup**.
+A robust, production-ready, **completely offline** RAG (Retrieval-Augmented Generation) chatbot for document Q&A, built with **React frontend**, **FastAPI backend**, **ChromaDB**, **Ollama with Mistral**, and **Redis caching**. Designed for governmental and sensitive environments—**zero internet required after initial setup**.
+
+**🚀 Now featuring advanced AI capabilities from RAGFlow integration including Agentic RAG, Multi-OCR with Layout Analysis, Web Search, Anti-Hallucination, and Cross-Language Support.**
 
 ---
 
 ## 🚀 Features
+
+### 🧠 Advanced AI Capabilities (RAGFlow Integration)
+- **Agentic RAG System**: Multi-agent architecture with query analysis, search, reasoning, and synthesis agents
+  - Intelligent query classification and routing
+  - Advanced reasoning with confidence scoring
+  - Tool calling capabilities for complex operations
+  - Performance tracking and metrics
+- **Enhanced Multi-OCR with Layout Analysis**: Advanced document processing pipeline
+  - Layout-aware text extraction with table detection
+  - Form field recognition and document structure analysis
+  - Multi-engine OCR with consensus validation
+  - Quality scoring for layout elements
+- **Web Search Integration**: Real-time web search capabilities via Tavily API
+  - Hybrid search combining local documents with web results
+  - News and academic search capabilities
+  - Source attribution for web results
+  - Intelligent caching for web search results
+- **Advanced Anti-Hallucination System**: Comprehensive fact verification
+  - Multi-type hallucination detection
+  - Source consistency checking
+  - Confidence scoring and validation
+  - Automatic correction suggestions
+- **Cross-Language Query Support**: Multi-language processing for 11+ languages
+  - Intelligent language detection
+  - Query translation and processing
+  - Multi-language embedding models
+  - Cross-language search capabilities
+- **Template-Based Chunking**: Intelligent document processing
+  - Semantic and structural chunking strategies
+  - Document-type specific templates
+  - Explainable chunking decisions
+  - Quality metrics and visualization
 
 ### Production-Ready Enhancements
 - **Dynamic Query Routing**: Queries are automatically classified and routed to relevant documents
@@ -58,7 +92,7 @@ A robust, production-ready, **completely offline** RAG (Retrieval-Augmented Gene
 - **Completely Offline**: Zero internet required after initial setup
 - **Local Data Storage**: All data stored locally in ChromaDB and file system
 - **Local AI Models**: All LLM, embedding, and reranking models run locally
-- **No External APIs**: No cloud services or external dependencies
+- **No External APIs**: No cloud services or external dependencies (except optional web search)
 - **Large File Support**: Up to 150MB file uploads
 - **CORS Protection**: Secure cross-origin request handling
 - **Input Validation**: Comprehensive file and input validation
@@ -92,7 +126,7 @@ pip install -r requirements.txt
 python -c "from sentence_transformers import CrossEncoder; CrossEncoder('cross-encoder/ms-marco-MiniLM-L-6-v2')"
 
 # Pull Ollama models (stored locally in Docker volumes)
-docker run --rm -v ollama_data:/root/.ollama ollama/ollama:latest ollama pull llama3.2:3b
+docker run --rm -v ollama_data:/root/.ollama ollama/ollama:latest ollama pull mistral:latest
 docker run --rm -v ollama_data:/root/.ollama ollama/ollama:latest ollama pull nomic-embed-text
 ```
 
@@ -117,12 +151,12 @@ curl http://localhost:8000/domains
 
 ### ✅ Offline Operation Confirmation
 After setup, the system runs **completely offline** with:
-- ✅ **Local LLM**: LLaMA 3.2:3B via Ollama
+- ✅ **Local LLM**: Mistral 7B via Ollama (default)
 - ✅ **Local Embeddings**: nomic-embed-text via Ollama  
 - ✅ **Local Reranking**: sentence-transformers cross-encoder
 - ✅ **Local Vector DB**: ChromaDB with persistent storage
 - ✅ **Local Caching**: Redis with persistent storage
-- ✅ **No External APIs**: Zero cloud dependencies
+- ✅ **No External APIs**: Zero cloud dependencies (except optional web search)
 - ✅ **No Internet Required**: All models and services local
 - ✅ **Robust Error Handling**: Graceful fallbacks for document processing issues
 
@@ -130,7 +164,7 @@ After setup, the system runs **completely offline** with:
 
 ## 🏗️ Architecture
 
-**Figure:** Modern architecture with React frontend, FastAPI backend, Redis caching, ChromaDB vector store, and Ollama LLM.
+**Figure:** Modern architecture with React frontend, FastAPI backend, Redis caching, ChromaDB vector store, and Ollama LLM with advanced AI features.
 
 ### System Components
 
@@ -147,6 +181,7 @@ After setup, the system runs **completely offline** with:
   - Vector store operations
   - LLM integration
   - Redis caching layer
+  - Advanced AI features (Agentic RAG, Multi-OCR, Web Search, etc.)
 
 - **Data Layer**:
   - **ChromaDB**: Persistent vector storage
@@ -155,8 +190,13 @@ After setup, the system runs **completely offline** with:
 
 - **AI/ML Layer**:
   - **Ollama**: Local LLM inference and embeddings
+  - **Mistral 7B**: Advanced language model (default)
   - **nomic-embed-text**: High-quality embeddings
-  - **llama3.2:3b**: Fast, efficient language model
+  - **Agentic RAG**: Multi-agent architecture
+  - **Multi-OCR**: Advanced document processing
+  - **Web Search**: Real-time information retrieval
+  - **Anti-Hallucination**: Fact verification system
+  - **Cross-Language**: Multi-language support
 
 ---
 
@@ -177,10 +217,17 @@ After setup, the system runs **completely offline** with:
 │   └── Dockerfile           # Frontend container
 ├── backend/                 # FastAPI backend
 │   └── api.py              # Main API endpoints with health monitoring
-├── rag_core/               # Core RAG logic
+├── rag_core/               # Core RAG logic with advanced features
+│   ├── agentic_rag.py      # Multi-agent RAG system
+│   ├── multi_ocr.py        # Advanced OCR with layout analysis
+│   ├── web_search.py       # Web search integration
+│   ├── anti_hallucination.py # Fact verification system
+│   ├── language_processor.py # Cross-language support
+│   ├── chunking_templates.py # Intelligent document chunking
+│   ├── conversation_manager.py # Advanced conversation management
 │   ├── vectorstore.py      # ChromaDB operations with hybrid search
 │   ├── document.py         # Document processing with semantic chunking
-│   ├── llm.py             # LLM integration
+│   ├── llm.py             # LLM integration with Mistral
 │   ├── reranker.py         # Cross-encoder reranking
 │   ├── utils.py            # Query/document classification
 │   ├── redis_cache.py     # Redis caching
@@ -269,7 +316,7 @@ After setup, the system runs **completely offline** with:
 | **Ollama Configuration** |                                                  |                                |
 | OLLAMA_BASE_URL          | Ollama server URL                                | http://localhost:11434         |
 | OLLAMA_EMBEDDING_MODEL   | Embedding model name                             | nomic-embed-text:latest        |
-| OLLAMA_LLM_MODEL         | LLM model name                                   | llama3.2:3b                    |
+| OLLAMA_LLM_MODEL         | LLM model name                                   | mistral:latest                 |
 | **Application Settings** |                                                  |                                |
 | MAX_FILE_SIZE            | Max file size in bytes                           | 157286400 (150MB)              |
 | CHUNK_SIZE               | Document chunk size                              | 400                            |
@@ -302,6 +349,17 @@ After setup, the system runs **completely offline** with:
 - `GET /health` - Health check endpoint
 - `GET /test_vectorstore` - Test vector store connectivity
 
+### Advanced AI Features
+- `POST /agentic/query` - Agentic RAG query with multi-agent processing
+- `POST /agentic/stream` - Streaming agentic RAG response
+- `POST /ocr/process` - Multi-OCR document processing
+- `POST /ocr/layout` - Layout analysis for documents
+- `POST /web/search` - Web search integration
+- `POST /anti-hallucination/validate` - Fact verification
+- `POST /language/detect` - Language detection
+- `POST /language/translate` - Text translation
+- `POST /chunking/template` - Template-based chunking
+
 ### Chat History
 - `GET /history/list` - List all conversations
 - `GET /history/get/{conv_id}` - Get specific conversation
@@ -315,6 +373,48 @@ After setup, the system runs **completely offline** with:
 ---
 
 ## 🎯 Advanced Features
+
+### Agentic RAG System
+- **Multi-Agent Architecture**: Query analyzer, search agent, reasoning agent, and synthesis agent
+- **Intelligent Query Classification**: Automatic routing to appropriate data sources
+- **Advanced Reasoning**: Complex problem-solving with confidence scoring
+- **Tool Calling**: Execute specific operations based on query requirements
+- **Performance Tracking**: Real-time metrics and optimization
+
+### Enhanced Multi-OCR with Layout Analysis
+- **Layout-Aware Processing**: Document structure detection and analysis
+- **Table Detection**: Automatic identification and extraction of tabular data
+- **Form Field Recognition**: Intelligent form processing and field extraction
+- **Multi-Engine Consensus**: Multiple OCR engines with validation
+- **Quality Scoring**: Confidence metrics for extracted content
+
+### Web Search Integration
+- **Real-time Information**: Access to current web data via Tavily API
+- **Hybrid Search**: Combine local documents with web results
+- **News Search**: Latest news and current events
+- **Academic Search**: Research papers and scholarly content
+- **Source Attribution**: Proper citation of web sources
+
+### Anti-Hallucination System
+- **Fact Verification**: Comprehensive validation of generated responses
+- **Source Consistency**: Cross-reference information across sources
+- **Confidence Scoring**: Reliability metrics for responses
+- **Contradiction Detection**: Identify conflicting information
+- **Automatic Correction**: Suggest improvements for uncertain responses
+
+### Cross-Language Support
+- **Multi-Language Detection**: Support for 11+ languages
+- **Query Translation**: Automatic translation of queries
+- **Cross-Language Search**: Search across documents in different languages
+- **Language-Specific Processing**: Optimized handling for each language
+- **Translation Caching**: Performance optimization for repeated translations
+
+### Template-Based Chunking
+- **Intelligent Chunking**: Document-type specific processing strategies
+- **Semantic Chunking**: Context-aware text segmentation
+- **Structural Chunking**: Layout-based document organization
+- **Quality Metrics**: Chunking effectiveness evaluation
+- **Visualization**: Chunking decision explanations
 
 ### Real-time Embedding Generation
 - **Instant Processing**: Documents are chunked and embedded immediately upon upload
@@ -399,7 +499,7 @@ docker-compose down
 
 **Slow response times:**
 - Increase Redis cache TTL
-- Optimize chunk size and overlap setctings
+- Optimize chunk size and overlap settings
 - Use smaller embedding model for faster processing
 
 **Memory issues:**
@@ -455,6 +555,7 @@ MIT License
 - [React](https://reactjs.org/) - Frontend framework
 - [FastAPI](https://fastapi.tiangolo.com/) - Backend framework
 - [Ollama](https://ollama.com/) - Local LLM inference
+- [Mistral AI](https://mistral.ai/) - Advanced language model
 - [ChromaDB](https://www.trychroma.com/) - Vector database
 - [Redis](https://redis.io/) - Caching layer
 - [Tailwind CSS](https://tailwindcss.com/) - Styling framework
@@ -480,8 +581,21 @@ See `frontend/README.md` and `backend/Dockerfile` for more details.
 
 ### Model Configuration
 Available models through Ollama:
-- `mistral:latest` (7B) - **Default**
-- `llama2` (7B)
-- `llama2:13b` (13B)
-- `codellama` (Code specialized)
-- `neural-chat` (7B) 
+- `mistral:latest` (7B) - **Default** - Advanced reasoning and instruction following
+- `llama3.2:3b` (3B) - Fast and efficient
+- `llama2` (7B) - Balanced performance
+- `llama2:13b` (13B) - Higher quality, more resource intensive
+- `codellama` (Code specialized) - Programming and technical tasks
+- `neural-chat` (7B) - Conversational AI optimized
+
+### Advanced Features Status
+- ✅ **Agentic RAG**: Multi-agent architecture with intelligent query processing
+- ✅ **Multi-OCR**: Advanced document processing with layout analysis
+- ✅ **Web Search**: Real-time information retrieval via Tavily API
+- ✅ **Anti-Hallucination**: Comprehensive fact verification system
+- ✅ **Cross-Language**: Multi-language support for 11+ languages
+- ✅ **Template Chunking**: Intelligent document processing strategies
+- ✅ **Conversation Management**: Advanced analytics and insights
+- 🟡 **Advanced Reranking**: Enhanced result ranking (partially implemented)
+- 🟡 **Performance Monitoring**: Comprehensive analytics (partially implemented)
+- 🔴 **MCP Support**: Model Context Protocol (planned) 
