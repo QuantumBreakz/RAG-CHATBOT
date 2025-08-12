@@ -294,10 +294,9 @@ const ChatInterface: React.FC = () => {
                   appendStreamingContent(data.answer);
                 } else if (data.status === 'success') {
                   // Finalize the streaming message with the complete response
-                  // Don't try to get content from currentSession as it might be stale
-                  // The content is already accumulated in the streaming message
-                  const finalContent = data.answer || '';
-                  finalizeStreamingMessage(finalContent, {
+                  // The content is already accumulated in the streaming message during streaming
+                  // data.answer is empty in the final response, so we don't use it
+                  finalizeStreamingMessage('', {
                     sources: data.sources || [],
                     contextMetadata: data.context_metadata || {}
                   });
