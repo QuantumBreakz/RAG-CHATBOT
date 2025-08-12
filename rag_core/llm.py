@@ -37,6 +37,7 @@ class LLMHandler:
         logger.info(f"LLM Conversation History: {self._format_history(conversation_history)[:1000]}")
         
         # Use the proper system prompt with anti-hallucination rules
+        
         user_prompt = f"""
 Context:
 {context}
@@ -46,6 +47,13 @@ Conversation History (last 5 turns):
 
 Question:
 {prompt}
+
+IMPORTANT INSTRUCTIONS:
+1. Carefully analyze ALL provided context before answering
+2. If asked about definitions or concepts, search through ALL chunks for relevant information
+3. Do not say information is not available if it exists in the context
+4. Extract definitions and explanations even if not explicitly labeled
+5. Provide comprehensive answers based on ALL available context
 """
         
         response_parts = []

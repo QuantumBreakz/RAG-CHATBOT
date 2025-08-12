@@ -142,7 +142,8 @@ async def upload_document(
     file: UploadFile = File(...),
     chunk_size: int = Form(DEFAULT_CHUNK_SIZE),
     chunk_overlap: int = Form(DEFAULT_CHUNK_OVERLAP),
-    document_type: str = Form("default")  # "default" or "master_document"
+    document_type: str = Form("default"),  # "default" or "master_document"
+    preferred_model: str = Form("local")  # "local" or "openai"
 ):
     # Validate file type before processing
     from rag_core.document import DocumentProcessor
@@ -158,6 +159,15 @@ async def upload_document(
     
     file_bytes = await file.read()
     file_hash = cache.get_file_hash(file_bytes)
+    
+    # Detect content type for model selection
+    from rag_core.content_detection import ContentDetector
+    detection_result = ContentDetector.detect_content_type(file_bytes, file.filename)
+    
+    # Override preferred_model if content detection suggests OpenAI
+    if preferred_model == "local" and ContentDetector.should_use_openai(detection_result):
+        logger.info(f"Content detection suggests OpenAI for {file.filename}: {detection_result['details']}")
+        # Don't override, let frontend handle the modal
     
     try:
         docs = DocumentProcessor.process_document(file_bytes, file.filename, chunk_size=chunk_size, chunk_overlap=chunk_overlap)
@@ -180,9 +190,27 @@ async def upload_document(
         # Add document type metadata to all chunks
         for doc in docs:
             doc.metadata['document_type'] = document_type
+            doc.metadata['preferred_model'] = preferred_model
             if document_type == "master_document":
                 doc.metadata['is_master'] = True
                 doc.metadata['master_document'] = file.filename
+        
+        # Determine which model to use based on preferred_model and file type
+        model_used = preferred_model
+        if preferred_model == "openai":
+            # Check if OpenAI is available
+            try:
+                # Test OpenAI connection
+                from rag_core.online_llm import online_llm_handler
+                if online_llm_handler.test_connection():
+                    model_used = "openai"
+                else:
+                    model_used = "local"
+                    logger.warning("OpenAI requested but not available, falling back to local model")
+            except Exception as e:
+                logger.warning(f"OpenAI requested but failed to connect: {e}, falling back to local model")
+                model_used = "local"
+        
         # Otherwise, create embeddings as usual
         success = VectorStore.add_to_vector_collection(docs, file.filename)
         if success:
@@ -193,14 +221,18 @@ async def upload_document(
                 "status": "uploaded and embedded",
                 "file_type": docs[0].metadata.get('file_type', 'unknown') if docs else 'unknown',
                 "document_type": document_type,
-                "processing": docs[0].metadata.get('processing', 'unknown') if docs else 'unknown'
+                "model_used": model_used,
+                "processing": docs[0].metadata.get('processing', 'unknown') if docs else 'unknown',
+                "content_detection": detection_result
             }
         else:
             return {
                 "num_chunks": len(docs), 
                 "status": "uploaded but embedding failed", 
                 "document_type": document_type,
-                "processing": docs[0].metadata.get('processing', 'unknown') if docs else 'unknown'
+                "model_used": model_used,
+                "processing": docs[0].metadata.get('processing', 'unknown') if docs else 'unknown',
+                "content_detection": detection_result
             }
     except ValueError as e:
         # Handle validation errors (unsupported file type, size limit, etc.)
@@ -228,7 +260,7 @@ def get_source_filename():
 @app.post("/query")
 async def query_rag(
     question: str = Form(...),
-    n_results: int = Form(3),
+    n_results: int = Form(10),
     expand: int = Form(2),
     filename: str = Form(None),
     domain_filter: str = Form(None),
@@ -237,13 +269,96 @@ async def query_rag(
     model: str = Form(None),
     temperature: float = Form(None),
     max_tokens: int = Form(None),
-    online_model: str = Form(None)
+    online_model: str = Form(None),
+    file: UploadFile = File(None)
 ):
     try:
         try:
             history_list = json.loads(conversation_history) if conversation_history else []
         except json.JSONDecodeError:
             history_list = []
+        
+        # Check if we have an attached file to process
+        if file:
+            logger.info(f"Processing attached file: {file.filename}")
+            try:
+                # Process the attached file directly
+                file_bytes = await file.read()
+                
+                # Use OCR or document processing to extract text
+                from rag_core.document import DocumentProcessor
+                from rag_core.multi_ocr import MultiOCREngine
+                
+                # Try to extract text from the file
+                if file.filename.lower().endswith(('.png', '.jpg', '.jpeg', '.pdf')):
+                    # Use OCR for images and PDFs
+                    ocr_engine = MultiOCREngine()
+                    extracted_text = ocr_engine.extract_text_from_file(file_bytes, file.filename)
+                else:
+                    # Use regular document processing
+                    docs = DocumentProcessor.process_document(file_bytes, file.filename)
+                    extracted_text = "\n".join([doc.page_content for doc in docs])
+                
+                # Create context from the extracted text
+                context_str = f"""
+Attached File: {file.filename}
+
+Content:
+{extracted_text}
+
+Question: {question}
+
+Please analyze the attached file and answer the question based on its content.
+"""
+                
+                # Generate answer using the appropriate model
+                answer = ""
+                if online_model and online_model in online_llm_handler.get_available_providers():
+                    # Use online model
+                    online_llm_handler.set_provider(online_model)
+                    answer = online_llm_handler.generate_response(
+                        prompt=question,
+                        context=context_str,
+                        conversation_history=history_list,
+                        temperature=temperature or 0.7,
+                        max_tokens=max_tokens or 1000
+                    )
+                else:
+                    # Use local model
+                    llm_handler = LLMHandler()
+                    answer = llm_handler.generate_response(
+                        prompt=question,
+                        context=context_str,
+                        conversation_history=history_list
+                    )
+                
+                # Return response for attached file
+                return {
+                    "answer": answer,
+                    "context": context_str,
+                    "sources": [{
+                        "title": f"Attached File: {file.filename}",
+                        "page": None,
+                        "section": None,
+                        "domain": "attached_file",
+                        "attribution": f"From attached file: {file.filename}",
+                        "content": extracted_text[:500] + "..." if len(extracted_text) > 500 else extracted_text,
+                        "filename": file.filename,
+                        "document_type": "attached_file",
+                        "is_master": False,
+                        "confidence": 1.0
+                    }],
+                    "detailed_sources": [],
+                    "context_metadata": {"source": "attached_file"},
+                    "model_used": online_model if online_model else "local"
+                }
+                
+            except Exception as e:
+                logger.error(f"Error processing attached file: {str(e)}")
+                return JSONResponse(
+                    status_code=500,
+                    content={"error": f"Failed to process attached file: {str(e)}"}
+                )
         
         # Check if knowledge base is empty
         if not VectorStore.list_documents():
@@ -256,9 +371,12 @@ async def query_rag(
             }
         
         # Enhanced query with domain filtering, source attribution, and session isolation
+        # Use higher n_results for better coverage
+        search_n_results = max(n_results, 50)  # Ensure we get at least 50 results for comprehensive search
+        
         results = VectorStore.query_with_expanded_context(
             question,
-            n_results=n_results,
+            n_results=search_n_results,
             expand=expand,
             filename=filename,
             domain_filter=domain_filter,
@@ -284,7 +402,7 @@ async def query_rag(
             source = sources[i] if i < len(sources) else {}
             
             confidence = source.get('confidence', 0.5)
-            if confidence > 0.3:  # Only include high-confidence sources
+            if confidence > 0.85:  # Only include high-confidence sources
                 filtered_chunks.append((chunk, meta, source))
         
         for chunk, meta, source in filtered_chunks:
@@ -390,7 +508,7 @@ async def query_rag(
 @app.post("/query/stream")
 async def query_rag_stream(
     question: str = Form(...),
-    n_results: int = Form(3),
+    n_results: int = Form(10),
     expand: int = Form(2),
     filename: str = Form(None),
     domain_filter: str = Form(None),
@@ -411,6 +529,109 @@ async def query_rag_stream(
         # Limit conversation history to prevent context pollution
         if len(history_list) > 5:  # Only keep last 5 exchanges
             history_list = history_list[-5:]
+        
+        # Check if we have an attached file to process
+        if file:
+            logger.info(f"Processing attached file in streaming: {file.filename}")
+            try:
+                # Process the attached file directly
+                file_bytes = await file.read()
+                
+                # Use OCR or document processing to extract text
+                from rag_core.document import DocumentProcessor
+                from rag_core.multi_ocr import MultiOCREngine
+                
+                # Try to extract text from the file
+                if file.filename.lower().endswith(('.png', '.jpg', '.jpeg', '.pdf')):
+                    # Use OCR for images and PDFs
+                    ocr_engine = MultiOCREngine()
+                    extracted_text = ocr_engine.extract_text_from_file(file_bytes, file.filename)
+                else:
+                    # Use regular document processing
+                    docs = DocumentProcessor.process_document(file_bytes, file.filename)
+                    extracted_text = "\n".join([doc.page_content for doc in docs])
+                
+                # Create context from the extracted text
+                context_str = f"""
+Attached File: {file.filename}
+
+Content:
+{extracted_text}
+
+Question: {question}
+
+Please analyze the attached file and answer the question based on its content.
+"""
+                
+                # Generate streaming response for attached file
+                def attached_file_stream():
+                    try:
+                        if online_model and online_model in online_llm_handler.get_available_providers():
+                            # Use online model
+                            online_llm_handler.set_provider(online_model)
+                            for chunk in online_llm_handler.generate_streaming_response(
+                                prompt=question,
+                                context=context_str,
+                                conversation_history=history_list,
+                                temperature=temperature or 0.7,
+                                max_tokens=max_tokens or 1000
+                            ):
+                                yield json.dumps({
+                                    "status": "streaming",
+                                    "answer": chunk
+                                }) + "\n"
+                        else:
+                            # Use local model
+                            llm_handler = LLMHandler()
+                            for chunk in llm_handler.call_llm(
+                                prompt=question,
+                                context=context_str,
+                                conversation_history=history_list
+                            ):
+                                yield json.dumps({
+                                    "status": "streaming",
+                                    "answer": chunk
+                                }) + "\n"
+                        
+                        # Final response
+                        yield json.dumps({
+                            "status": "success",
+                            "answer": "",
+                            "sources": [{
+                                "title": f"Attached File: {file.filename}",
+                                "page": None,
+                                "section": None,
+                                "domain": "attached_file",
+                                "attribution": f"From attached file: {file.filename}",
+                                "content": extracted_text[:500] + "..." if len(extracted_text) > 500 else extracted_text,
+                                "filename": file.filename,
+                                "document_type": "attached_file",
+                                "is_master": False,
+                                "confidence": 1.0
+                            }],
+                            "context_metadata": {"source": "attached_file"},
+                            "model_used": online_model if online_model else "local"
+                        }) + "\n"
+                        
+                    except Exception as e:
+                        error_msg = str(e)
+                        logger.error(f"Error in attached file streaming: {error_msg}")
+                        yield json.dumps({
+                            "status": "error",
+                            "answer": f"Error processing attached file: {error_msg}"
+                        }) + "\n"
+                
+                return StreamingResponse(attached_file_stream(), media_type="application/json")
+                
+            except Exception as e:
+                error_msg = str(e)
+                logger.error(f"Error processing attached file in streaming: {error_msg}")
+                def error_stream():
+                    yield json.dumps({
+                        "status": "error",
+                        "answer": f"Failed to process attached file: {error_msg}"
+                    }) + "\n"
+                return StreamingResponse(error_stream(), media_type="application/json")
         
         # Check if knowledge base is empty
         if not VectorStore.list_documents():
@@ -453,7 +674,7 @@ async def query_rag_stream(
             source = sources[i] if i < len(sources) else {}
             
             confidence = source.get('confidence', 0.5)
-            if confidence > 0.3:  # Only include high-confidence sources
+            if confidence > 0.85:  # Only include high-confidence sources
                 filtered_chunks.append((chunk, meta, source))
         
         for chunk, meta, source in filtered_chunks:
@@ -3309,3 +3530,80 @@ def get_online_model_status():
     except Exception as e:
         logger.error(f"Error getting online model status: {str(e)}")
         return {"current_provider": None, "available_providers": [], "error": str(e)}
+
+def improved_chunk_filtering(chunks, metas, sources, question, min_confidence=0.5):
+    """
+    Improved filtering function that considers relevance, confidence, and query terms.
+    
+    Args:
+        chunks: List of document chunks
+        metas: List of metadata for each chunk
+        sources: List of source information for each chunk
+        question: The user's question
+        min_confidence: Minimum confidence threshold (default 0.5)
+    
+    Returns:
+        List of filtered (chunk, meta, source) tuples
+    """
+    filtered_chunks = []
+    question_lower = question.lower()
+    query_terms = [term for term in question_lower.split() if len(term) > 2]
+    
+    # Special handling for specific query types
+    is_character_query = any(term in question_lower for term in ['who', 'what', 'character', 'person'])
+    is_definition_query = any(term in question_lower for term in ['what is', 'define', 'definition', 'meaning'])
+    
+    for i, (chunk, meta, source) in enumerate(zip(chunks, metas, sources)):
+        confidence = source.get('confidence', 0.5) if source else 0.5
+        chunk_lower = chunk.lower()
+        
+        # Skip low confidence chunks
+        if confidence < min_confidence:
+            continue
+        
+        # Calculate relevance score
+        relevance_score = 0
+        
+        # Check for query term matches
+        for term in query_terms:
+            if term in chunk_lower:
+                relevance_score += 1
+        
+        # Special handling for character queries (like "who was maman")
+        if is_character_query:
+            # Look for character names or pronouns
+            character_indicators = ['he', 'she', 'they', 'his', 'her', 'their', 'mother', 'father', 'sister', 'brother']
+            if any(indicator in chunk_lower for indicator in character_indicators):
+                relevance_score += 2
+        
+        # Special handling for definition queries
+        if is_definition_query:
+            # Look for definition patterns
+            definition_patterns = ['means', 'refers to', 'is defined as', 'definition', 'concept']
+            if any(pattern in chunk_lower for pattern in definition_patterns):
+                relevance_score += 2
+        
+        # Boost relevance for high confidence chunks
+        if confidence > 0.7:
+            relevance_score += 1
+        
+        # Boost relevance for chunks from the same document domain
+        filename = meta.get('filename', '').lower()
+        if any(term in filename for term in query_terms):
+            relevance_score += 1
+        
+        # Include chunk if it meets relevance criteria
+        if relevance_score >= 1 or confidence > 0.8:
+            filtered_chunks.append((chunk, meta, source))
+    
+    # Sort by relevance (confidence + relevance score)
+    filtered_chunks.sort(key=lambda x: (x[2].get('confidence', 0.5) if x[2] else 0.5, 
+                                       sum(1 for term in query_terms if term in x[0].lower())), 
+                         reverse=True)
+    
+    # Limit to top chunks to avoid overwhelming the LLM
+    max_chunks = 20
+    if len(filtered_chunks) > max_chunks:
+        filtered_chunks = filtered_chunks[:max_chunks]
+    
+    return filtered_chunks

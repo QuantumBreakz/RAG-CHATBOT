@@ -1,0 +1,70 @@
+{
+  "id": "6c2b1b49-ce1c-48c7-a1f2-35c4ab607947",
+  "title": "what are electronegativty differences?",
+  "messages": [
+    {
+      "id": "d04088a3-3e0c-4c8f-aae7-d476c1a26354",
+      "content": "what are electronegativty differences?",
+      "role": "user",
+      "timestamp": "2025-08-11T18:13:33.971Z",
+      "isStreaming": false,
+      "sources": [],
+      "contextMetadata": null
+    },
+    {
+      "id": "02af557f-ca36-4f45-bad2-a8d5ba29d17b",
+      "content": " According to the provided documents, I don't find any information about electronegativity differences. However, it is important to note that electronegativity is a scale that measures the attractiveness of an atom in a molecule for electrons. It was developed by Linus Pauling. A higher electronegativity value indicates a greater attraction for electrons, and this can affect the polarity of covalent bonds between atoms.",
+      "role": "assistant",
+      "timestamp": "2025-08-11T18:13:34.022Z",
+      "isStreaming": false,
+      "sources": [
+        {
+          "title": "10 Physics Full Book Punjab EM.pdf",
+          "page": null,
+          "section": null,
+          "domain": "science",
+          "attribution": "From 10 Physics Full Book Punjab EM.pdf",
+          "content": "the voltmeter and the negative terminal of the battery is \nconnected to the negative terminal of the voltmeter .\nAn ideal voltmeter should have very large value of resistance \nso that no current passes through it. Voltmeter is always \nconnected in parallel with the device across which the \npotential difference is to be measured . (Fig. 14.8)Fig.14.7: A voltmeter\nCURRENT ELECTRICITY\nNot For Sale \u2013 PESRPCharge\n96\nBattery Knife switch\nElectric current Voltmeter\nFig. 14.8: Schematic diagram for measuring potential difference in a \n                 circuitFor your information\nClosed circuit,\ncurrent flowsOpen circuit,\nno current flows\nSwitch SwitchW\nQor   E =\nIII\nThe Measurement of e.m.f\nIn general, e.m.f refers to the potential difference across the \nterminals of the battery when it is not driving current in the \nexternal circuit. So in order to measure e.m.f of the battery \nwe connect voltmeter directly with the terminals of the \nbattery as shown in Fig. 14.9.\nFig. 14.9:  Schematic diagram for measuring e.m.f. of the battery\n14.4       OHM'S LAW \nActivity 14.1:  Take a nichrome wire of about 50 cm length and \napply a potential difference of 1.5 V from a battery \n(Fig.14.10a). Measure the current flowing through the wire \nusing an ammeter connected to it in series. Also measure the \npotential difference across the wire using a voltmeter \nconnected across it. Obtain a set of readings for I and V, by \nincreasing the number of cells. Plot a graph between I and V. \nThis will be a straight line (Fig.14.10-b).\nIf V is the potential difference across the two ends of any \nconductor, then current  will flow through it. The value of the I\ncurrent changes with the changes in potential difference and \nis explained by Ohm's law, stated as:\nThe amount of current passing through a conductor is directly \nproportional to the potential difference applied across its \nends, provided the temperature and the physical state of the \nconductor does not change.\n i.e.,        I        V    or  V      I\n             or           V  =  RI\nwhere R is the constant of proportionality, and is the \nresistance of the conductors. Its SI unit is ohm, denoted by a \n97Fig. 14.10 CURRENT ELECTRICITY\nNot For Sale \u2013 PESRPBattery Knife switch\nVoltmeter\nVoltage\nCrurrent (A)(V)\n \u0000  \u0000\nV(a)\n(b)\u2013 +R\nsymbol \u2126. If a graph is plotted between the current I and the \npotential difference V, a straight line will be obtained.\nResistance: The property of a substance which offers \nopposition to the flow of current through it is called its \nresistance. \nThis opposition comes from the collisions of moving \nelectrons with atoms of the substance. \nUnit of Resistance: ohm\nThe SI unit of resistance R is ohm. If we put V = 1 V, and I = 1 A, \nthe value of R will be 1 . Thus \u2126\nWhen a potential difference of one volt is applied across the \nends of a conductor and one ampere of current passes \nthrough it, then its resistance will be one ohm.\nExample 14.2:  Reading on voltmeter connected across a",
+          "filename": "10 Physics Full Book Punjab EM.pdf",
+          "document_type": "master_document",
+          "is_master": true,
+          "confidence": 0.8747958421707154
+        },
+        {
+          "title": "10 Physics Full Book Punjab EM.pdf",
+          "page": null,
+          "section": null,
+          "domain": "science",
+          "attribution": "From 10 Physics Full Book Punjab EM.pdf",
+          "content": "is equal to the gravitational force \nthat the Earth exerts on a billion \nkilogram object at sea level!Quick Quiz\nIf we double the distance \nbetween two charges, what \nwill be the change in the force \nbetween the charges?\nas electric lines of force. These lines were introduced by \nMichael Faraday. The field lines are imaginary lines around a \nfield charge with an arrow head indicating the direction of \nforce. Field lines always directed from positive charge are \ntowards negative charge. The spacing between the field lines \nshows the strength of electric field. \n 13.6 ELECTROSTATIC  POTENTIAL\nThe gravitational potential at a point in the gravitational field \nis the gravitational potential energy of a unit mass placed at \nthat point. Similarly, the electric potential at any point in the \nelectric field is the electric potential energy of a unit positive \ncharge placed at that point. \nElectric Potential  : Electric potential at a point in an electric \nfield  is equal to the amount of work done in bringing a unit \npositive charge from infinity to that point.  \nIf W is the work done in moving a positive charge q from \ninfinity to a certain point in the field, the electric potential V \nat this point would be given by\n        .......... (13.6)\nIt implies that electric potential is measured relative to some \nreference point and like potential energy we can measure \nonly the change in potential between two points.\nElectric potential is a scalar quantity. Its SI unit is volt which is \n-1equal to J C .\nIf one joule of work is done against the electric field in bringing \none coulomb positive charge from infinity to a point in the \n76Physics Insight\nVariation of magnitude of \nCoulomb\u2019s force between two \nopposite charges of different \nmagnitudes. \nELECTROSTATICS\nNot For Sale \u2013 PESRPW\nqV  =\nelectric field then the potential at that point will be one volt.\nA body in gravitational field always tends to move from a \npoint of higher potential energy to a point of lower potential \nenergy. Similarly, when a charge is released in an electric \nfield, it moves from a point of higher potential say A to a point \nat lower potential say B (Fig.13.12). \nFig 13.12:  Potential difference between two points\nIf the potential of point A is V and that of point B is V, the a b \npotential energy of the charge at these points will be qV and a\nqVrespectively. The change in potential energy of the charge b \nwhen it moves from point A to B will be equal to qV- qV. This a b\nenergy is utilized in doing some useful work. Thus \nEnergy supplied by the charge = q (V - V)  .......... (13.7)a b\nIf \u2018q\u2019 is one coulomb, then the potential difference between \ntwo points becomes equal to the energy supplied by the \ncharge. Thus, we define potential difference between two \npoints as: \nThe energy supplied by a unit charge as it moves from one \npoint to the other in the direction of the field is called \npotential difference between two points.\nIf a positive charge is transferred from a point of lower",
+          "filename": "10 Physics Full Book Punjab EM.pdf",
+          "document_type": "master_document",
+          "is_master": true,
+          "confidence": 0.9056828796863556
+        },
+        {
+          "title": "10 Physics Full Book Punjab EM.pdf",
+          "page": null,
+          "section": null,
+          "domain": "science",
+          "attribution": "From 10 Physics Full Book Punjab EM.pdf",
+          "content": "difference of 1 V across a bulb means that each coulomb \nof charge or 1 ampere of current that passes through the \nbulb consumes 1 joule of energy. When a bulb is lit, the \nenergy is taken from the current and is transformed into \nlight and heat energy. \n14.3      ELECTROMOTIVE FORCE (e.m.f)\nA source of electromotive force (e.m.f.) converts non-\nelectrical energy (chemical, thermal, mechanical etc.) into \nelectrical energy. Examples of sources of e.m.f. are batteries, \nthermocouples and generators. When a conductor is \nconnected to a battery, current flows through it due to \npotential difference.\nFor the continuous flow of current through a wire, battery \nsupplies energy to the charges. The positive charge leaves the \npositive terminal of the battery, passes through the \nconductor and reaches the negative terminal of the battery.  \nAs a positive charge enters the battery at its lower potential \npoint (negative terminal), the battery must supply energy, \nsay  to the positive charge to drive it to a point of higher  W\n95CURRENT ELECTRICITY\nNot For Sale \u2013 PESRPFor your information\nIn a dry cell chemical energy \nchanges into electric energy.\nDo you know? \nThe volt is named after the \nItalian physicist Alessandro \nVolta (1745-1827), who \ndeveloped the first practical \nelectric battery, known as a \nvoltaic pile. Because potential \ndifference is measured in units \nof volts, it is sometimes \nreferred to as voltage.\nZinc can (-)\nCarbon rod (+)\nFor your information  \nA digital multimeter can be \nused to measure current, \nresistance and potential \nd i f f e r e n c e .  H e r e ,  t h e  \nmultimeter is in voltmeter \nm o d e  t o  m e a s u r e  t h e  \npotential difference across a \nbattery.\npotential i.e., positive terminal. Now we define e.m.f. of the \nsource as:\nIt is the energy supplied by a battery to a unit positive charge \nwhen it flows through the closed circuit. Or The energy \nconverted from non-electrical forms to electrical form when \none coulomb of positive charge passes through the battery.     \n       Energy Thus       e.m.f =\n                     ........ (14.2)\nwhere E is the e.m.f., W is energy converted from non-\nelectrical forms to electrical form and Q is positive charge. \n-1The unit for e.m.f. is JC  which is equal to volt (V) in SI system. \nHence, if the e.m.f. of the battery is 2 V, the total energy \nsupplied by the battery is 2 joules when one coulomb of \ncharge flows through the closed circuit. \nThe Measurement of Potential Difference\nThe potential difference across a circuit component (e.g. light \nbulb) can be measured by a voltmeter (Fig. 14.7) connected \ndirectly across the terminals of the component. The positive \nterminal of the battery is connected to the positive terminal of \nthe voltmeter and the negative terminal of the battery is \nconnected to the negative terminal of the voltmeter .\nAn ideal voltmeter should have very large value of resistance \nso that no current passes through it. Voltmeter is always",
+          "filename": "10 Physics Full Book Punjab EM.pdf",
+          "document_type": "master_document",
+          "is_master": true,
+          "confidence": 0.8710457563400269
+        }
+      ],
+      "contextMetadata": {
+        "total_chunks": 3,
+        "used_chunks": 3,
+        "history_messages": 0,
+        "has_summary": false,
+        "context_length": 9094,
+        "truncated": true
+      }
+    }
+  ],
+  "created_at": "2025-08-11T18:13:21.593Z",
+  "uploads": []
+}

@@ -49,8 +49,8 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# # System prompt for the LLM (importable by other modules)
-# SYSTEM_PROMPT = """
+# System prompt for the LLM (importable by other modules)
+SYSTEM_PROMPT = """
 # # XOR Enterprise AI - Industrial-Grade Assistant
 
 # You are XOR's enterprise AI system, built to compete with and exceed ChatGPT's capabilities for business-critical applications. You process information with surgical precision and deliver actionable insights across all professional domains.
@@ -179,6 +179,11 @@ logger = logging.getLogger(__name__)
 
 # **Standard Format**:
 # 1. **Direct Answer** (concise, actionable)
+# 2. **Context Analysis**: If the question asks about definitions or concepts, carefully analyze ALL provided context
+# 3. **Comprehensive Search**: Look for information across ALL retrieved chunks, not just the first few
+# 4. **Definition Extraction**: When asked for definitions, extract from context even if not explicitly labeled as "definition"
+# 5. **Related Concepts**: Include related terms and concepts found in the context
+
 # 2. **Supporting Evidence** (citations, calculations)
 # 3. **Confidence Level** (high/medium/low with reasoning)
 # 4. **Limitations** (missing data, assumptions made)

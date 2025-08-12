@@ -7,6 +7,8 @@ import SourceDisplay from '../components/SourceDisplay';
 import ContextPreview from '../components/ContextPreview';
 import MessageActions from '../components/MessageActions';
 import AdvancedSearch from '../components/AdvancedSearch';
+import ModelSelectionModal from '../components/ModelSelectionModal';
+import ModelToast from '../components/ModelToast';
 import ReactMarkdown from 'react-markdown';
 import { 
   Send,
@@ -28,6 +30,7 @@ import { useGlobalLoading } from '../App';
 import debounce from 'lodash.debounce';
 import { v4 as uuidv4 } from 'uuid';
 import { logger } from '../lib/logger';
+import { detectContentType, shouldShowModelSelection, type DetectedContentType } from '../lib/contentDetection';
 
 const CHAT_STATE_KEY = 'xor_rag_chat_state';
 const CONVERSATIONS_KEY = 'xor_rag_conversations';
@@ -69,6 +72,17 @@ const ChatInterface: React.FC = () => {
   const [isResizing, setIsResizing] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [streamingState, setStreamingState] = useState({ status: 'idle', content: '' });
+  
+  // Model selection modal state
+  const [showModelSelection, setShowModelSelection] = useState(false);
+  const [detectedContentType, setDetectedContentType] = useState<DetectedContentType>(null);
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
+  const [modelSelectionLoading, setModelSelectionLoading] = useState(false);
+  
+  // Session-level model tracking
+  const [sessionModel, setSessionModel] = useState<'local' | 'openai'>('local');
+  const [showModelToast, setShowModelToast] = useState(false);
+  
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const audioUrlRef = useRef<string | null>(null);
@@ -226,6 +240,15 @@ const ChatInterface: React.FC = () => {
         formData.append('conversation_history', JSON.stringify(currentSession?.messages?.slice(-10) || []));
         formData.append('session_id', currentSession?.id || '');
         
+        // Add session model and attached file
+        if (sessionModel === 'openai') {
+          formData.append('online_model', 'openai');
+        }
+        
+        if (attachedFile) {
+          formData.append('file', attachedFile);
+        }
+        
         // Add LLM settings
         try {
           const settings = JSON.parse(localStorage.getItem('xor-rag-settings') || '{}');
@@ -330,6 +353,15 @@ const ChatInterface: React.FC = () => {
         formData.append('expand', '2');
         formData.append('conversation_history', JSON.stringify(currentSession?.messages?.slice(-10) || []));
         formData.append('session_id', currentSession?.id || '');
+        
+        // Add session model and attached file
+        if (sessionModel === 'openai') {
+          formData.append('online_model', 'openai');
+        }
+        
+        if (attachedFile) {
+          formData.append('file', attachedFile);
+        }
         
         // Add LLM settings
         try {
@@ -445,6 +477,36 @@ const ChatInterface: React.FC = () => {
     setOperationState(s => ({ ...s, uploading: false }));
     setLoading(false);
     fetchDocuments();
+  };
+
+
+
+  const handleModelSelection = async (selectedModel: 'local' | 'openai') => {
+    if (!pendingFile) return;
+    
+    setModelSelectionLoading(true);
+    setShowModelSelection(false);
+    
+    try {
+      // Set the session model for this chat
+      setSessionModel(selectedModel);
+      
+      // Set the attached file
+      setAttachedFile(pendingFile);
+      
+      // Show toast notification
+      setShowModelToast(true);
+      setTimeout(() => setShowModelToast(false), 5000); // Hide after 5 seconds
+      
+      // Show banner with model selection
+      const modelName = selectedModel === 'openai' ? 'OpenAI' : 'Local';
+      showBanner(`Using ${modelName} model for this chat session.`, 'success');
+      
+    } finally {
+      setModelSelectionLoading(false);
+      setPendingFile(null);
+      setDetectedContentType(null);
+    }
   };
 
   const handleDeleteDocument = async (filename: string) => {
@@ -852,6 +914,10 @@ const ChatInterface: React.FC = () => {
         setCurrentSessionFromBackend(data.conversation);
       }
     } catch {}
+    
+    // Reset session model for different conversation
+    setSessionModel('local');
+    setShowModelToast(false);
   };
 
   const handleCreateNewConversation = async () => {
@@ -879,12 +945,30 @@ const ChatInterface: React.FC = () => {
       ...prev
     ]);
     await handleSelectSession(newConv.id);
+    
+    // Reset session model for new conversation
+    setSessionModel('local');
+    setShowModelToast(false);
   };
 
   // New handler for inline file attach
-  const handleInlineFileAttach = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleInlineFileAttach = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
-      setAttachedFile(e.target.files[0]);
+      const file = e.target.files[0];
+      
+      // Detect content type for chat attachments
+      const detectionResult = await detectContentType(file);
+      
+      // Check if we should show model selection modal
+      if (shouldShowModelSelection(detectionResult)) {
+        setPendingFile(file);
+        setDetectedContentType(detectionResult.type);
+        setShowModelSelection(true);
+        return; // Wait for user selection
+      } else {
+        // Process normally with local model
+        setAttachedFile(file);
+      }
     }
   };
 
@@ -1475,6 +1559,27 @@ const ChatInterface: React.FC = () => {
           </form>
         </div>
       </div>
+      
+      {/* Model Selection Modal */}
+      <ModelSelectionModal
+        isOpen={showModelSelection}
+        onClose={() => {
+          setShowModelSelection(false);
+          setPendingFile(null);
+          setDetectedContentType(null);
+        }}
+        onModelSelect={handleModelSelection}
+        detectedType={detectedContentType || 'image'}
+        fileName={pendingFile?.name || ''}
+        isLoading={modelSelectionLoading}
+      />
+      
+      {/* Model Toast Notification */}
+      <ModelToast
+        isVisible={showModelToast}
+        model={sessionModel}
+        onClose={() => setShowModelToast(false)}
+      />
     </div>
   );
 };

@@ -707,3 +707,5 @@ def get_analytics(config: Dict[str, Any] = None) -> PerformanceAnalytics:
         _analytics_instance = PerformanceAnalytics(config)
     return _analytics_instance
 
+
+
