@@ -1,0 +1,59 @@
+version: '3.8'
+services:
+  backend:
+    build:
+      context: ..
+      dockerfile: deployment/Dockerfile.backend
+    container_name: xor_rag_backend
+    restart: unless-stopped
+    env_file:
+      - ../enviornment/env.example
+    environment:
+      - LOG_FILE=./log/xor_rag_app.log
+      - OLLAMA_BASE_URL=http://ollama:11434
+      - CHROMA_DB_PATH=./demo-rag-chroma
+      - EMBEDDINGS_CACHE_PATH=./cache/embeddings
+    volumes:
+      - ../demo-rag-chroma:/app/demo-rag-chroma
+      - ../log:/app/log
+      - ../uploads:/app/uploads
+      - ../cache:/app/cache
+    ports:
+      - "8000:8000"
+    depends_on:
+      - ollama
+      - redis
+
+  frontend:
+    build:
+      context: ..
+      dockerfile: deployment/Dockerfile.frontend
+    container_name: xor_rag_frontend
+    restart: unless-stopped
+    ports:
+      - "5173:8080"
+    depends_on:
+      - backend
+
+  ollama:
+    image: ollama/ollama:0.3.14
+    container_name: xor_rag_ollama
+    restart: unless-stopped
+    volumes:
+      - /Users/aliahmed/.ollama:/root/.ollama
+    ports:
+      - "11434:11434"
+    environment:
+      - OLLAMA_MAX_LOADED_MODELS=1
+
+  redis:
+    image: redis:7-alpine
+    container_name: xor_rag_redis
+    restart: unless-stopped
+    volumes:
+      - redis-data:/data
+    ports:
+      - "6379:6379"
+
+volumes:
+  redis-data:

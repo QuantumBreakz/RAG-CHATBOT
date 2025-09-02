@@ -16,7 +16,6 @@ from . import conversation_manager
 from . import context_manager
 from . import cache
 from . import utils
-from . import ui
 
 # OCR modules
 from . import ocr
@@ -47,7 +46,6 @@ __all__ = [
     "context_manager",
     "cache",
     "utils",
-    "ui",
     "ocr",
     "multi_ocr",
     "ocr_config",

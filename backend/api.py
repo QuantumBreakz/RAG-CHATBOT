@@ -928,13 +928,14 @@ def export_history(conv_id: str):
     conv = history.load_conversation(conv_id)
     if not conv:
         raise HTTPException(status_code=404, detail="Conversation not found")
-    file_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'log', 'conversations', f"{conv_id}.json")
+    file_path = history._conv_path(conv_id)
     return FileResponse(file_path, media_type='application/json', filename=f"conversation_{conv_id}.json")
 
 @app.get("/api/history/file/{conv_id}")
 def get_history_file(conv_id: str):
     import os
-    file_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'log', 'conversations', f"{conv_id}.json")
+    from rag_core import history
+    file_path = history._conv_path(conv_id)
     if not os.path.exists(file_path):
         return JSONResponse(status_code=404, content={"error": "Conversation file not found"})
     with open(file_path, 'r') as f:

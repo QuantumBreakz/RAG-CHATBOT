@@ -1,0 +1,22 @@
+# Ignore Python virtual environments
+venv/
+
+# Ignore logs and local data
+log/
+*.log
+
+# Ignore ChromaDB persistent data (optional, can be mounted as a volume)
+demo-rag-chroma/
+
+# Ignore OS and editor files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.swp
+*.swo
+.DS_Store
+.idea/
+.vscode/
+.env
+.env.* 

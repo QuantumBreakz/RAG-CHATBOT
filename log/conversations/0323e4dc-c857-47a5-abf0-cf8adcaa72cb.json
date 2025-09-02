@@ -1,7 +1,70 @@
 {
   "id": "0323e4dc-c857-47a5-abf0-cf8adcaa72cb",
-  "title": "New Conversation",
+  "title": "list Building Height, FAR and Ground Coverage",
+  "messages": [
+    {
+      "id": "c7161dcc-6c3a-4445-90dd-eaadeb8d6149",
+      "content": "list Building Height, FAR and Ground Coverage",
+      "role": "user",
+      "timestamp": "2025-08-12T11:17:59.432Z",
+      "isStreaming": false,
+      "sources": [],
+      "contextMetadata": null
+    },
+    {
+      "id": "2cca68f9-0a4d-45a6-870f-b0fb89f7d320",
+      "content": " Based on the provided information from the Model Building Regulations rules 2007 for Town Municipal Administration, here is a list of building height, FAR (Floor Area Ratio), and ground coverage for different areas:\n\n1. Plots of 6 kanals and Above Located on Roads with Minimum 80 ft Right of Way:\n   - Height: Up to 200 ft (60.97 m) - 1:8 FAR - 65% ground coverage\n     - Between 201 ft (61.28 m) and 400 ft (121.95 m) - 1:12 FAR - 65% ground coverage\n     - Above 400 ft (121.95 m) - 1:16 FAR - 65% ground coverage\n   - Mandatory Open Spaces: 30 ft (9.15m) at building line, 13 ft (3.96 m) on both sides\n   - Set back on Upper Floors: Architect shall provide set backs at upper floors after appropriate height intervals for beautification.\n\n2. Central Business District:\n   - No mandatory open spaces are required in plots reserved for commercial / office use.\n   - Building Height: The height of any building in Central Area shall not exceed 1.5 times the width of the right of way plus the width of the building line in front of the plot / width of the setback.\n   - Ground Coverage and FAR: a) Maximum coverage of the ground floor is 7/8th, subsequent floors are 3/4th with maximum FAR of 1:8. b) One basement is allowed with a maximum depth of 12ft from the road level for plot area upto 1 kanal.\n\n3. Main Civic and Commercial Centres:\n   - No mandatory open spaces are required in commercial / office buildings use in the main Civic and Commercial Centres including Divisional and District Centres.\n   - Building Height: The height of any building including parapet wall shall not exceed 70ft (21.34m).\n   - Ground Coverage and FAR: a) Maximum coverage of the ground floor is 7/8th, subsequent floors are 3/4th with maximum FAR of 1:5. b) One basement is allowed with a maximum depth of 12ft (3.66m) from the road level for plot area upto 1 kanal.\n\n4. Neighborhood Commercial Areas:\n   - No mandatory open spaces are required for commercial / office buildings to be erected in these areas.\n   - Building Height: The maximum height of the building varies based on the plot size:\n     - Less than 3 Marlas (538 sq ft or approximately 49 m\u00b2) - 25 ft (7.62 m) or 2 floors\n     - 3 Marlas & above but less than 10 Marlas (1077 sq ft or approximately 100 m\u00b2) - 40 ft (12.19 m) or 3 floors\n     - 10 Marlas & above - 60 ft (18.29 m) or 5 floors",
+      "role": "assistant",
+      "timestamp": "2025-08-12T11:17:59.483Z",
+      "isStreaming": false,
+      "sources": [
+        {
+          "title": "Model Building Regulations rules 2007 for Town Municipal Administration.pdf",
+          "page": null,
+          "section": null,
+          "domain": "government",
+          "attribution": "From Model Building Regulations rules 2007 for Town Municipal Administration.pdf",
+          "content": "3.1 Plots of 6 kanals and Above Located on Roads with Minimum 80 ft Right \nof Way  \n(For plots less than 6 Kanal respective Building Byelaws under section 3.2, 3.5 and 3.6 shall be \napplicable depending on its location).  \n \n3.1.1  Building Height, FAR and Ground Coverage  \n \nHeight  FAR  Ground Coverage  \nUp to 200 ft (60.97 m)  1:8* 65% \n201 ft (61.28 m) to 400 \nft (121.95 m)  1:12*  65% \nAbove 400 ft (121.95 m)  1:16*  65% \n * The increase in FAR shall be proportionate to the actual proposed height.  \n \n3.1.2  Mandatory Open Spaces  \n \nHeight  Building Line  Rear Space  Both Side Spaces  \nUnlimited  30 ft (9.15m)  13 ft  (3.96 m)  13 ft (3.96 m)  \n \n3.1.3  Set back on Upper Floors  \nInstead of constructing boxes Architect shall provide set backs at upper floors after appropriate \nheight intervals for beautification.  \n3.1    Central Business District  \n \nExcluding  the areas under 3.1  \n \n3.2.1  Mandatory Open Spaces  \n \nNo mandatory open spaces are required in plots reserved for commercial / office use in the \nCentral Area.  \n \n3.2.2  Building Height  \n \nThe height of any building in Central Area shall not exceed 1.5 times the width of the right of \nway plus the width of the building line in front of the plot / width of the setback.  \n \n3.2.3  Ground Coverage and Floor Area Ratio (FAR)  \n \na. The maximum coverag e of the plot area shall be7/8th on the ground floor and 3/4th on the \nsubsequent floors with maximum FAR of 1:8.  \n \nb. Only one basement is allowed with a maximum depth of 12ft from the road level for plot area \nupto 1 kanal. However, plots having area more than one kanal may have more than one basement.  \n3.2 Main Civic and Commercial Centres  \n \n3.2.1  Mandatory Open Spaces  \n \nNo mandatory open spaces are required in commercial / office buildings use in the main Civic \nand Commercial Centres including Divisional and  District Centres.  \n \n3.2.2  Building Height  \n \nThe height of any building including parapet wall shall not exceed 70ft (21.34m).  \n \n3.2.3  Ground Coverage and Floor Area Ratio (FAR)  \n \na. The maximum coverage of the plot area shall be7/8th on the ground floor and 3/4th on the \nsubsequent floors with maximum FAR of 1:5.  \n \nb. Only one basement is allowed with a maximum depth of 12ft (3.66m) from the road level for plot \narea upto 1 kanal. Howev er, plots having area more than one kanal may have more than one \nbasement.  \n3.3  Neighborhood Commercial Areas  \n \n3.3.1  Mandatory Open Spaces  \n \nNo mandatory open spaces are required for commercial / office buildings to be erected in these \nareas.    \n \n3.3.2  Building Height  \n \nThe maximum height of the building shall be as follows:  \nPlot Size  Maximum Building Height  \nLess than 3 Marlas  25 ft (7.62 m)   or 2 floors                              \n3 Marlas & above  but less than   10 Marlas  40 ft (12.19 m) or 3 floors  \n10 Marlas & above  60 ft (18.29 m) or 5 floors  \n \n3.3.3  Ground Coverage and Floor Area Ratio (FAR)",
+          "filename": "Model Building Regulations rules 2007 for Town Municipal Administration.pdf",
+          "document_type": "master_document",
+          "is_master": true,
+          "confidence": 1
+        },
+        {
+          "title": "Model Building Regulations rules 2007 for Town Municipal Administration.pdf",
+          "page": null,
+          "section": null,
+          "domain": "government",
+          "attribution": "From Model Building Regulations rules 2007 for Town Municipal Administration.pdf",
+          "content": "Plot Size  Maximum Building Height  \nLess than 3 Marlas  25 ft (7.62 m)   or 2 floors                              \n3 Marlas & above  but less than   10 Marlas  40 ft (12.19 m) or 3 floors  \n10 Marlas & above  60 ft (18.29 m) or 5 floors  \n \n3.3.3  Ground Coverage and Floor Area Ratio (FAR)  \n \nThe maximum ground coverage and FAR shall be as follows:  \n \nPlot Size  Ground Floor \nCoverage including \nArcade  Subsequent Floors Coverage  FAR  \nLess than 3 Marlas  7/8th of plot area  3/4th of plot area  1:1.6  \n3 Marlas & above  but \nless than   10 Marlas  7/8th of plot area  3/4th of plot area  1:2.3  \n10 Marlas & above  7/8th of plot area  3/4th of plot area  1:4 \n \na. Only one basement is allowed with maximum depth of 12ft (3.66m) from the road level if the \narea of plot is upto 1 kanal.  \n3.4  Other Commercial Areas  \n \nIn all other commercial areas / roads specified in the Master Plan, of the city, the building height, \ncoverage & Floor Area Ratio shall be as specified by the TMA for the particular area.   \n3.5 To the Converted Plots under Commercialization Rules  \nThe following building bye laws shall be applicable to all the converted plots excluding the areas \nunder 3.1  \n \n3.5.1  Mandatory Open Spaces  \n \nThe building lines for all categories of converted plots shall be as specified by the \nCommercialization Committee. Th e other mandatory open spaces shall be as follows:  \n \nPlot Size  Rear Space  Side Space  \nLess than 5 Marlas  5 ft (1.52 m)  Not required  \n5 Marlas & above but less than 10 \nMarlas  5 ft (1.52 m)  Not required  \n10 Marlas & above but up to 1 \nkanal  7 ft (2.13 m)  5 ft (1.52 m)  \n(on one side)  \nAbove 1 kanal but less than 2 \nkanals  7 ft (2.13 m)  5 ft (1.52 m)  \n(on both sides)  \n2 kanals & above  13 ft (3.96 m)  13 ft (3.96 m)  \n(on both sides)  \n \n3.5.2  Building Height  \n \nThe height of any building shall not exceed 1.5 times the width of the right of way plus the width \nof the building line in front of the plot plus width of the setback. However, extra height charges \nwill have to be paid above 38 ft (11.58m) height.  \n \n \n \n3.5.3 Ground Coverage and Floor Area Ratio (FAR)  \n \nThe maximum ground coverage shall be 65% of the plot area. The FAR up to 38ft (11.58 m) \nheight shall not exceed 1:1.4. However, the FAR shall increase proportionate to the increase in \nheight subject to maximum of 1: 8.   \n \n3.5.4  Additional Bye laws  \n \nFollowing additional bye laws shall also be applicable:  \n \na. The floor level of mandatory open spaces for all buildings shall not be more than 6 inches higher \nor lower than the adjoining road level.  \n \nb. No side wall between two adjoining commercial buildings to improve access of utility vehicles.  \n \nc. Only one vehicular entry and exit shall be provided.  \n \nd. No window and other openings on the upper floors shall be allowed, which may adversely affect \nthe privacy of adjoining properties.  \n \ne. Parking shall be provided as laid down in these Building bye laws.",
+          "filename": "Model Building Regulations rules 2007 for Town Municipal Administration.pdf",
+          "document_type": "master_document",
+          "is_master": true,
+          "confidence": 1
+        },
+        {
+          "title": "Model Building Regulations rules 2007 for Town Municipal Administration.pdf",
+          "page": null,
+          "section": null,
+          "domain": "government",
+          "attribution": "From Model Building Regulations rules 2007 for Town Municipal Administration.pdf",
+          "content": "FAR  Max  \nGround  \nCoverage  \nLess than 1 kanal  10 ft  \n(3.05 m)  5 ft \n(1.52 m)  5 ft \n(1.52 m)  1:3 65% \nAbove 1 kanal but \nless than 2 kanals  20 ft  \n(6.1m)  10 ft  \n(3.05 m)  10 ft  \n(3.05 m)  1:3 60% \n2 kanal and above  30 ft \n(9.15m)  15 ft  \n(4.57 m)  15 ft  \n(4.57 m)  1:3 55% \n \n Note:   a.  Notwithstanding the provision under section 3.9.1 no mandatory open    spaces  \nshall be required in case of mosques.  \n                    b.   In case of educational institutions, a separate lane for pick up and drop \npurposes shall be provided within the plot out side the boundary wall.  \n \n3.8.2  Building Height  \n \nThe height of any building measured from the crown of the road  to the top of the parapet wall \nshall not exceed 70 ft (21.34m) except chimney stacks, lift heads and water tower and it shall \nconsist of not more than 6 -storeys.  \n \nNotChapter -4 \nSITE REQUIREMENTS:  \nINDUSTRIAL  \n \n4.1 Industrial Estates and Industrial Areas in Approved Schemes  \n \n4.1.1  Mandatory Open Spaces , Maximum Coverage Area & FAR  \n \n \nPlot Size  Front \nSpace  Rear \nSpace  \n Side Space  \nOn both sides  Max \nFAR  Max  \nGround  \nCoverage  \nUpto 1 kanal  10ft \n(3.05 m)  5 ft \n(1.52m)  5 ft \n(1.52m)  1:2 55% \nAbove 1 kanal but less \nthan 4 kanals  20 ft \n(6.1m)  13ft  \n(3.96m)  13 ft \n(3.96m)  1:2 55% \n4 kanals & above but less \nthan 1 acre  30 ft \n(9.15m)  13 ft \n(3.96m)  13 ft \n(3.96m)  1:2  55% \n1 acre & above but less \nthan 5 acre  50 ft \n(15.24m)  20 ft \n(6.1m)  20 ft \n(6.1m)  1:2 55% \n5 acre and above  70 ft \n(21.34m)  20 ft \n(6.1m)  20 ft \n(6.1m)   1:2 55% \n \n4.1.2  Building Height  \n \nThe height of any building measured from the crown of the road to the top of parapet wall (except \nchimney stacks, lift heads and water tower) shall not exceed 65ft (19.81 m) and it shall consist of \nnot more than six storeys.  \n4.2 Industrial Zones in Establi shed Built -Up Areas  \n \n4.2.1  Mandatory Open Spaces, Maximum Coverage Area & FAR  \n \n \n \n \n \n \n \n \n \n \nPlot Size  Front \nSpace  Rear \nSpace  \n Side Space  \nOn both sides  Max \nFAR  Max  \nGround  \nCoverage  \nLess than 10 marlas  5 ft \n(1.52m)  5 ft \n(1.52m)  5 ft \n(1.52m)  1:2 65% \n10 marlas & above but \nupto 1 kanal  10ft \n(3.05 m)  5 ft \n(1.52m)  5 ft \n(1.52m)  1:2 60% \nAbove 1 kanal  but upto \n2 kanals  15ft \n(4.57 m)  7ft \n(2.13 m)  7ft \n(2.13 m)  1:2 55% \nAbove 2 kanals but less \nthan 4 kanals  20 ft \n(6.1m)  13ft  \n(3.96m)  13 ft \n(3.96m)  1:2 55% \n4 kanals & above but less \nthan 1 acre  30 ft \n(9.15m)  13 ft \n(3.96m)  13 ft \n(3.96m)  1:2  55% \n1 acre & above but less \nthan 5 acre  50 ft \n(15.24m)  20 ft \n(6.1m)  20 ft \n(6.1m)  1:2 55% \n5 acre and above  70 ft \n(21.34m)  20 ft \n(6.1m)  20 ft \n(6.1m)   1:2 55% \n \n4.2.2  Building Height  \n \nThe height of any building measured from the top of the crown of the road to the top of parapet \nwall (except chimney stacks, lift heads and water tower) shall not exceed 38ft (11.58 m) and it \nshall consist of not more than three storeys.",
+          "filename": "Model Building Regulations rules 2007 for Town Municipal Administration.pdf",
+          "document_type": "master_document",
+          "is_master": true,
+          "confidence": 0.9700732409954071
+        }
+      ],
+      "contextMetadata": {
+        "total_chunks": 3,
+        "used_chunks": 3,
+        "history_messages": 0,
+        "has_summary": false,
+        "context_length": 9159,
+        "truncated": true
+      }
+    }
+  ],
   "created_at": "2025-08-12T10:09:29.995Z",
-  "messages": [],
   "uploads": []
 }
