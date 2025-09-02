@@ -11,6 +11,7 @@ services:
     environment:
       - LOG_FILE=./log/xor_rag_app.log
       - OLLAMA_BASE_URL=http://ollama:11434
+      - OLLAMA_HOST=http://ollama:11434
       - CHROMA_DB_PATH=./demo-rag-chroma
       - EMBEDDINGS_CACHE_PATH=./cache/embeddings
     volumes:

@@ -53,11 +53,17 @@ const AnalyticsPage: React.FC = () => {
     setErrorMsg(null);
     try {
       // These endpoints should be implemented in backend to return analytics snapshots
-      const report = await Api.get<any>('/api/analytics/report');
-      setQuery(report?.query_analytics || {});
-      setSystem(report?.system_analytics || {});
-      setUser(report?.user_analytics || {});
-      setErrors(report?.error_analytics || {});
+      const summary = await Api.get<any>('/api/analytics/summary');
+      const timeseries = await Api.get<any>('/api/analytics/timeseries');
+      const top = await Api.get<any>('/api/analytics/top');
+      setQuery({
+        total_queries: summary?.total_queries ?? 0,
+        avg_response_time: (summary?.avg_latency_ms ?? 0) / 1000,
+        cache_hit_rate: 0,
+      });
+      setSystem({ system_health_score: 100 });
+      setUser({});
+      setErrors({});
     } catch (e: any) {
       setErrorMsg(e?.message || 'Failed to load analytics');
     } finally {

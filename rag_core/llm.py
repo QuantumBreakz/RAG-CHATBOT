@@ -170,19 +170,31 @@ IMPORTANT INSTRUCTIONS:
             print("[LLM CALL] Context:", context)
             print("[LLM CALL] Messages:", messages)
             
-            # Build options with overrides
-            opts = {"base_url": OLLAMA_BASE_URL}
+            # Build options with overrides (model generation params only)
+            opts = {}
             if temperature is not None:
                 opts["temperature"] = float(temperature)
             if max_tokens is not None:
                 opts["num_predict"] = int(max_tokens)
 
-            response_chunks = ollama.chat(
-                model=(model_name or OLLAMA_LLM_MODEL),
-                stream=True,
-                options=opts,
-                messages=messages,
-            )
+            # Use client with explicit host for dockerized environments
+            host = OLLAMA_BASE_URL or "http://ollama:11434"
+            try:
+                client = ollama.Client(host=host)
+                response_chunks = client.chat(
+                    model=(model_name or OLLAMA_LLM_MODEL),
+                    stream=True,
+                    options=opts,
+                    messages=messages,
+                )
+            except Exception:
+                # Fallback to module-level call (relies on OLLAMA_HOST env)
+                response_chunks = ollama.chat(
+                    model=(model_name or OLLAMA_LLM_MODEL),
+                    stream=True,
+                    options=opts,
+                    messages=messages,
+                )
             for chunk in response_chunks:
                 print("[LLM CHUNK]", chunk)
                 if chunk["done"] is False:

@@ -1,5 +1,6 @@
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Request
 from fastapi.responses import StreamingResponse, FileResponse, JSONResponse
+from datetime import datetime, timedelta
 from rag_core.document import DocumentProcessor, DEFAULT_CHUNK_SIZE, DEFAULT_CHUNK_OVERLAP
 from rag_core.vectorstore import VectorStore
 from rag_core.llm import LLMHandler
@@ -28,8 +29,78 @@ from datetime import datetime, timedelta
 # from rag_core.agentic_rag import AgenticRAG, QueryType, DataSourceType
 from rag_core.config import logger
 import asyncio
+from rag_core.swarm import SwarmOrchestrator
+from rag_core.config import SWARM_ENABLED
+from rag_core.telemetry import emit_event
 
 app = FastAPI()
+# --- Analytics Endpoints ---
+
+@app.get("/analytics/summary")
+def analytics_summary():
+    from rag_core.telemetry import read_events
+    cutoff = datetime.utcnow() - timedelta(hours=24)
+    events = read_events()
+    last24 = [e for e in events if _parse_ts(e.get('ts')) >= cutoff]
+    total = len(last24)
+    latencies = [e.get('latency_ms') or 0 for e in last24]
+    providers = {}
+    for e in last24:
+        p = e.get('provider') or 'unknown'
+        providers[p] = providers.get(p, 0) + 1
+    return {
+        'total_queries': total,
+        'avg_latency_ms': (sum(latencies) / total) if total else 0,
+        'providers': providers
+    }
+
+@app.get("/analytics/timeseries")
+def analytics_timeseries():
+    from rag_core.telemetry import read_events
+    cutoff = datetime.utcnow() - timedelta(hours=24)
+    events = read_events()
+    buckets = {}
+    for e in events:
+        ts = _parse_ts(e.get('ts'))
+        if ts < cutoff:
+            continue
+        hour = ts.replace(minute=0, second=0, microsecond=0).isoformat() + 'Z'
+        buckets[hour] = buckets.get(hour, 0) + 1
+    hours = sorted(buckets.keys())
+    return {
+        'hours': hours,
+        'counts': [buckets[h] for h in hours]
+    }
+
+@app.get("/analytics/top")
+def analytics_top():
+    from rag_core.telemetry import read_events
+    cutoff = datetime.utcnow() - timedelta(hours=24)
+    events = read_events()
+    doc_counts = {}
+    domain_counts = {}
+    for e in events:
+        ts = _parse_ts(e.get('ts'))
+        if ts < cutoff:
+            continue
+        for d in e.get('docs') or []:
+            doc_counts[d] = doc_counts.get(d, 0) + 1
+        for d in e.get('domains') or []:
+            domain_counts[d] = domain_counts.get(d, 0) + 1
+    top_docs = sorted(doc_counts.items(), key=lambda x: x[1], reverse=True)[:10]
+    top_domains = sorted(domain_counts.items(), key=lambda x: x[1], reverse=True)[:10]
+    return {
+        'top_docs': [{'name': k, 'count': v} for k, v in top_docs],
+        'top_domains': [{'name': k, 'count': v} for k, v in top_domains]
+    }
+
+def _parse_ts(ts_str: str) -> datetime:
+    try:
+        if ts_str and ts_str.endswith('Z'):
+            ts_str = ts_str[:-1]
+        return datetime.fromisoformat(ts_str)
+    except Exception:
+        return datetime.utcnow()
 
 # Enable CORS for frontend
 frontend_origin = os.environ.get("FRONTEND_ORIGIN", "http://localhost:5173")
@@ -313,24 +384,37 @@ Please analyze the attached file and answer the question based on its content.
                 
                 # Generate answer using the appropriate model
                 answer = ""
-                if online_model and online_model in online_llm_handler.get_available_providers():
-                    # Use online model
-                    online_llm_handler.set_provider(online_model)
-                    answer = online_llm_handler.generate_response(
-                        prompt=question,
-                        context=context_str,
-                        conversation_history=history_list,
-                        temperature=temperature or 0.7,
-                        max_tokens=max_tokens or 1000
-                    )
-                else:
-                    # Use local model
-                    llm_handler = LLMHandler()
-                    answer = llm_handler.generate_response(
-                        prompt=question,
-                        context=context_str,
-                        conversation_history=history_list
-                    )
+                try:
+                    if SWARM_ENABLED:
+                        answer = SwarmOrchestrator().generate(
+                            question,
+                            context=context_str,
+                            conversation_history=history_list,
+                            temperature=temperature,
+                            max_tokens=max_tokens,
+                            preferred_provider=online_model
+                        )
+                    elif online_model and online_model in online_llm_handler.get_available_providers():
+                        # Use online model
+                        online_llm_handler.set_provider(online_model)
+                        answer = online_llm_handler.generate_response(
+                            prompt=question,
+                            context=context_str,
+                            conversation_history=history_list,
+                            temperature=temperature or 0.7,
+                            max_tokens=max_tokens or 1000
+                        )
+                    else:
+                        # Use local model
+                        llm_handler = LLMHandler()
+                        answer = llm_handler.generate_response(
+                            prompt=question,
+                            context=context_str,
+                            conversation_history=history_list
+                        )
+                except Exception as e:
+                    logging.error(f"LLM call failed: {str(e)}")
+                    answer = f"Error generating response: {str(e)}"
                 
                 # Return response for attached file
                 return {
@@ -435,8 +519,20 @@ Please analyze the attached file and answer the question based on its content.
         
         # Generate answer using LLM (online or local)
         answer = ""
+        t0 = time.time()
+        provider_used = None
         try:
-            if online_model and online_model in online_llm_handler.get_available_providers():
+            if SWARM_ENABLED:
+                answer = SwarmOrchestrator().generate(
+                    question,
+                    context=context_str,
+                    conversation_history=history_list,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                    preferred_provider=online_model
+                )
+                provider_used = online_model or 'auto'
+            elif online_model and online_model in online_llm_handler.get_available_providers():
                 # Use online model
                 online_llm_handler.set_provider(online_model)
                 answer = online_llm_handler.generate_response(
@@ -446,6 +542,7 @@ Please analyze the attached file and answer the question based on its content.
                     temperature=temperature or 0.7,
                     max_tokens=max_tokens or 1000
                 )
+                provider_used = online_model
             else:
                 # Use local model
                 llm_handler = LLMHandler()
@@ -454,9 +551,33 @@ Please analyze the attached file and answer the question based on its content.
                     context=context_str,
                     conversation_history=history_list
                 )
+                provider_used = 'ollama'
         except Exception as e:
             logging.error(f"LLM call failed: {str(e)}")
             answer = f"Error generating response: {str(e)}"
+        finally:
+            latency_ms = int((time.time() - t0) * 1000)
+            try:
+                # Extract doc filenames/domains used
+                doc_names = [m.get('filename') for _, m, _ in filtered_chunks if isinstance(m, dict)]
+                domains = [m.get('domain') for _, m, _ in filtered_chunks if isinstance(m, dict)]
+            except Exception:
+                doc_names, domains = [], []
+            emit_event(
+                event='query',
+                session_id=session_id,
+                provider=provider_used,
+                latency_ms=latency_ms,
+                tokens=None,
+                status='ok' if not answer.startswith('Error') else 'error',
+                question=question,
+                docs=[d for d in doc_names if d],
+                domains=[d for d in domains if d],
+                extra={
+                    'n_results': n_results,
+                    'expand': expand
+                }
+            )
         
         # Add message to context manager history
         if session_id:
@@ -527,8 +648,13 @@ async def query_rag_stream(
             history_list = []
         
         # Limit conversation history to prevent context pollution
-        if len(history_list) > 5:  # Only keep last 5 exchanges
-            history_list = history_list[-5:]
+        try:
+            from rag_core.config import HISTORY_MAX_TURNS
+            max_turns = max(1, int(HISTORY_MAX_TURNS))
+        except Exception:
+            max_turns = 10
+        if len(history_list) > max_turns:
+            history_list = history_list[-max_turns:]
         
         # Check if we have an attached file to process
         if file:
@@ -566,7 +692,20 @@ Please analyze the attached file and answer the question based on its content.
                 # Generate streaming response for attached file
                 def attached_file_stream():
                     try:
-                        if online_model and online_model in online_llm_handler.get_available_providers():
+                        if SWARM_ENABLED:
+                            for chunk in SwarmOrchestrator().stream(
+                                prompt=question,
+                                context=context_str,
+                                conversation_history=history_list,
+                                temperature=temperature,
+                                max_tokens=max_tokens,
+                                preferred_provider=online_model
+                            ):
+                                yield json.dumps({
+                                    "status": "streaming",
+                                    "answer": chunk
+                                }) + "\n"
+                        elif online_model and online_model in online_llm_handler.get_available_providers():
                             # Use online model
                             online_llm_handler.set_provider(online_model)
                             for chunk in online_llm_handler.generate_streaming_response(
@@ -832,7 +971,15 @@ Question:
 """
             
             # Use online model if specified, otherwise use local model
-            if online_model and online_model in online_llm_handler.get_available_providers():
+            if SWARM_ENABLED:
+                answer = SwarmOrchestrator().generate(
+                    question,
+                    context=context_str,
+                    conversation_history=history_list,
+                    temperature=temperature,
+                    max_tokens=max_tokens
+                )
+            elif online_model and online_model in online_llm_handler.get_available_providers():
                 # Use online model for streaming
                 online_llm_handler.set_provider(online_model)
                 for word in online_llm_handler.generate_streaming_response(

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Save, RotateCcw, Database, Brain, Settings as SettingsIcon, Palette, Shield, Zap, Download, Trash2, Globe, Server } from 'lucide-react';
+import { Save, RotateCcw, Database, Brain, Settings as SettingsIcon, Palette, Shield, Zap, Download, Trash2, Globe, Server, Info, CheckCircle2, XCircle } from 'lucide-react';
 import Button from '../components/ui/Button';
 import Card from '../components/ui/Card';
 import { useChat } from '../contexts/ChatContext';
@@ -27,6 +27,7 @@ const Settings: React.FC = () => {
   // Logs state
   const [showLogs, setShowLogs] = useState(false);
   const [logs, setLogs] = useState<string[]>([]);
+  const [showSaveBar, setShowSaveBar] = useState(false);
 
   // Load settings on mount
   useEffect(() => {
@@ -54,6 +55,9 @@ const Settings: React.FC = () => {
   useEffect(() => {
     if (autoSave) {
       saveSettings();
+      setShowSaveBar(false);
+    } else {
+      setShowSaveBar(true);
     }
   }, [modelName, temperature, maxTokens, streamingEnabled, useOnlineModel, onlineProvider, autoSave]);
 
@@ -69,6 +73,7 @@ const Settings: React.FC = () => {
     };
     localStorage.setItem('xor-rag-settings', JSON.stringify(settings));
     logger.info('Settings saved');
+    setShowSaveBar(false);
   };
 
   const loadAvailableProviders = async () => {
@@ -158,6 +163,31 @@ const Settings: React.FC = () => {
         <h1 className="text-3xl font-bold">Settings</h1>
       </div>
 
+      {/* Top summary */}
+      <Card className="mb-6 p-4">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+          <div>
+            <div className="text-sm text-muted-foreground">Current Configuration</div>
+            <div className="mt-1 text-sm">
+              <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-200 mr-2">
+                {useOnlineModel ? <Globe className="w-4 h-4"/> : <Server className="w-4 h-4"/>}
+                {useOnlineModel ? 'Online' : 'Local'}
+              </span>
+              <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-gray-50 text-gray-700 border border-gray-200 mr-2">
+                {useOnlineModel ? `Provider: ${onlineProvider}` : `Model: ${modelName}`}
+              </span>
+              <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-gray-50 text-gray-700 border border-gray-200">
+                Temp: {temperature} · Max Tokens: {maxTokens}
+              </span>
+            </div>
+          </div>
+          <div className="text-xs text-gray-500 flex items-center gap-2">
+            <Info className="w-4 h-4"/>
+            Changes are saved automatically unless you disable Auto-save.
+          </div>
+        </div>
+      </Card>
+
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Model Configuration */}
         <Card>
@@ -165,6 +195,7 @@ const Settings: React.FC = () => {
             <Brain className="w-5 h-5 text-blue-600" />
             <h2 className="text-xl font-semibold">Model Configuration</h2>
           </div>
+          <p className="text-sm text-gray-500 mb-4">Choose which model to use, either a local Ollama model or an online provider. You can tune creativity and output length below.</p>
           
           {/* Model Type Toggle */}
           <div className="mb-6">
@@ -200,13 +231,15 @@ const Settings: React.FC = () => {
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium mb-2">Local Model</label>
-                <input
-                  type="text"
+                <select
                   value={modelName}
                   onChange={(e) => setModelName(e.target.value)}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="e.g., mistral:latest"
-                />
+                >
+                  <option value="mistral:latest">mistral:latest</option>
+                  <option value="llama3.2:3b">llama3.2:3b</option>
+                </select>
+                <p className="text-xs text-gray-500 mt-1">Pick an installed Ollama model. You can still type a custom one if needed.</p>
               </div>
             </div>
           ) : (
@@ -242,7 +275,7 @@ const Settings: React.FC = () => {
           )}
 
           {/* Common Model Settings */}
-          <div className="mt-6 space-y-4">
+          <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium mb-2">Temperature</label>
               <input
@@ -260,7 +293,6 @@ const Settings: React.FC = () => {
                 <span>Creative (2)</span>
               </div>
             </div>
-
             <div>
               <label className="block text-sm font-medium mb-2">Max Tokens</label>
               <input
@@ -271,19 +303,22 @@ const Settings: React.FC = () => {
                 onChange={(e) => setMaxTokens(parseInt(e.target.value))}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
+              <p className="text-xs text-gray-500 mt-1">Higher values allow longer answers but may be slower.</p>
             </div>
-
-            <div className="flex items-center">
-              <input
-                type="checkbox"
-                id="streaming"
-                checked={streamingEnabled}
-                onChange={(e) => setStreamingEnabled(e.target.checked)}
-                className="mr-2"
-              />
-              <label htmlFor="streaming" className="text-sm font-medium">
-                Enable Streaming Responses
-              </label>
+            <div className="col-span-1 md:col-span-2 flex items-center justify-between p-3 border rounded-lg bg-gray-50">
+              <div className="flex items-center">
+                <input
+                  type="checkbox"
+                  id="streaming"
+                  checked={streamingEnabled}
+                  onChange={(e) => setStreamingEnabled(e.target.checked)}
+                  className="mr-2"
+                />
+                <label htmlFor="streaming" className="text-sm font-medium">
+                  Enable Streaming Responses
+                </label>
+              </div>
+              <span className="text-xs text-gray-500">See tokens as they generate</span>
             </div>
           </div>
         </Card>
@@ -397,6 +432,18 @@ const Settings: React.FC = () => {
           </div>
         </Card>
       </div>
+
+      {/* Sticky save bar when auto-save is off */}
+      {showSaveBar && (
+        <div className="fixed bottom-4 left-0 right-0 flex justify-center z-50">
+          <div className="flex items-center gap-3 bg-white border shadow-lg rounded-full px-4 py-2">
+            <span className="text-sm text-gray-700">You have unsaved changes</span>
+            <Button onClick={saveSettings}>
+              <Save className="w-4 h-4 mr-2"/> Save
+            </Button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

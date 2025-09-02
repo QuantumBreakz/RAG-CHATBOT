@@ -41,6 +41,15 @@ CHROMA_COLLECTION_NAME = get_env_value("CHROMA_COLLECTION_NAME")
 CACHE_TTL = int(get_env_value("CACHE_TTL"))
 EMBEDDINGS_CACHE_PATH = get_env_value("EMBEDDINGS_CACHE_PATH", "./cache/embeddings")  # Default cache path
 
+# Optional: Swarm/orchestration config and online API keys
+SWARM_ENABLED = get_env_value("SWARM_ENABLED", "false").lower() in ("1", "true", "yes")
+PROVIDER_PRIORITY = [p.strip() for p in get_env_value("PROVIDER_PRIORITY", "ollama,openai,gemini").split(",")]
+OPENAI_API_KEY = get_env_value("OPENAI_API_KEY")
+GEMINI_API_KEY = get_env_value("GEMINI_API_KEY")
+
+# Conversation/history configuration
+HISTORY_MAX_TURNS = int(get_env_value("HISTORY_MAX_TURNS", "10"))
+
 # Set up logging
 logging.basicConfig(
     filename=LOG_FILE,
