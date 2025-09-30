@@ -214,7 +214,9 @@ async def upload_document(
     chunk_size: int = Form(DEFAULT_CHUNK_SIZE),
     chunk_overlap: int = Form(DEFAULT_CHUNK_OVERLAP),
     document_type: str = Form("default"),  # "default" or "master_document"
-    preferred_model: str = Form("local")  # "local" or "openai"
+    preferred_model: str = Form("local"),  # "local" or "openai"
+    domain: str = Form(None),
+    version: str = Form(None)
 ):
     # Validate file type before processing
     from rag_core.document import DocumentProcessor
@@ -258,10 +260,14 @@ async def upload_document(
                     "processing": docs[0].metadata.get('processing', 'unknown') if docs else 'unknown'
                 }
             
-        # Add document type metadata to all chunks
+        # Add document type and domain/version metadata to all chunks
         for doc in docs:
             doc.metadata['document_type'] = document_type
             doc.metadata['preferred_model'] = preferred_model
+            if domain:
+                doc.metadata['domain'] = domain
+            if version:
+                doc.metadata['version'] = version
             if document_type == "master_document":
                 doc.metadata['is_master'] = True
                 doc.metadata['master_document'] = file.filename

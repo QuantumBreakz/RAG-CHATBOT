@@ -9,6 +9,9 @@ import MessageActions from '../components/MessageActions';
 import AdvancedSearch from '../components/AdvancedSearch';
 import ModelSelectionModal from '../components/ModelSelectionModal';
 import ModelToast from '../components/ModelToast';
+import DirectoryUploader from '../components/DirectoryUploader';
+import UploadQueuePanel from '../components/UploadQueuePanel';
+import { UploadQueue } from '../lib/uploadQueue';
 import ReactMarkdown from 'react-markdown';
 import { 
   Send,
@@ -63,7 +66,6 @@ const ChatInterface: React.FC = () => {
   const [supportedFileTypes, setSupportedFileTypes] = useState<{[key: string]: string}>({});
   const [showFileTypeInfo, setShowFileTypeInfo] = useState(false);
   const [showContextPreview, setShowContextPreview] = useState(false);
-  const [contextMetadata, setContextMetadata] = useState<any>(null);
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [sidebarWidth, setSidebarWidth] = useState(() => {
     const saved = localStorage.getItem('xor-rag-sidebar-width');
@@ -149,6 +151,39 @@ const ChatInterface: React.FC = () => {
     } catch (err) {
       console.error('Failed to fetch supported file types:', err);
     }
+  };
+
+  // Prefilter unsupported extensions client-side
+  const isSupportedClientExt = (name: string) => {
+    const ext = name.substring(name.lastIndexOf('.')).toLowerCase();
+    return supportedFileTypes && Object.keys(supportedFileTypes).length > 0
+      ? Object.keys(supportedFileTypes).includes(ext)
+      : true; // if unknown from backend, allow and let server validate
+  };
+
+  const handleFolderFiles = async (files: FileList) => {
+    if (!files || files.length === 0) return;
+
+    // Filter unsupported
+    const fileArray = Array.from(files);
+    const supported = fileArray.filter(f => isSupportedClientExt(f.name));
+    const skipped = fileArray.filter(f => !isSupportedClientExt(f.name));
+    if (skipped.length > 0) {
+      showBanner(`Skipping ${skipped.length} unsupported files.`, 'error');
+    }
+
+    // Get chunk size from settings
+    let chunkSize = 1000;
+    try {
+      const settings = JSON.parse(localStorage.getItem('xor-rag-settings') || '{}');
+      if (settings.chunkSize) chunkSize = settings.chunkSize;
+    } catch {}
+
+    const selectedDocType = localStorage.getItem('xor-rag-document-type') || 'default';
+
+    // Enqueue jobs to IndexedDB-backed queue
+    await UploadQueue.addFiles(supported, { chunk_size: chunkSize, document_type: selectedDocType });
+    showBanner(`Queued ${supported.length} files for upload.`, 'success');
   };
 
   const fetchConversations = async () => {
@@ -843,11 +878,6 @@ const ChatInterface: React.FC = () => {
 
   // Memoized messages
   const memoizedMessages = useMemo(() => {
-    if (currentSession?.messages) {
-      currentSession.messages.forEach((msg, idx) => {
-      });
-    }
-    
     return currentSession?.messages?.map((message, idx) => (
       <div key={message.id || idx} className={`flex w-full ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}>
         <div className={`flex items-start space-x-3 max-w-2xl w-full ${message.role === 'user' ? 'flex-row-reverse space-x-reverse' : ''}`}>
@@ -1228,6 +1258,10 @@ const ChatInterface: React.FC = () => {
                 <Button onClick={() => fileInputRef.current?.click()} variant="ghost" size="sm" className="p-2">
                   <Upload className="h-4 w-4" />
                 </Button>
+                <DirectoryUploader 
+                  onSelectFiles={handleFolderFiles} 
+                  disabled={operationState.uploading}
+                />
               </div>
             </div>
           )}
@@ -1282,6 +1316,11 @@ const ChatInterface: React.FC = () => {
               }}
               placeholder="Search documents..."
             />
+          </div>
+
+          {/* Upload Queue */}
+          <div className="mt-4">
+            <UploadQueuePanel />
           </div>
           
           <div className="space-y-2 max-h-40 overflow-y-auto">
@@ -1579,6 +1618,7 @@ const ChatInterface: React.FC = () => {
         model={sessionModel}
         onClose={() => setShowModelToast(false)}
       />
+
     </div>
   );
 };

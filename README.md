@@ -507,7 +507,9 @@ docker-compose down
 - Limit concurrent document processing
 - Monitor system resources during large uploads
 
----
+--- Live stream: cd deployment && docker compose logs -f backend
+Recent only: cd deployment && docker compose logs --tail=200 backend
+
 
 ## 🛠️ Development
 
