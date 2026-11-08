@@ -601,3 +601,10 @@ Available models through Ollama:
 - 🟡 **Advanced Reranking**: Enhanced result ranking (partially implemented)
 - 🟡 **Performance Monitoring**: Comprehensive analytics (partially implemented)
 - 🔴 **MCP Support**: Model Context Protocol (planned) 
+
+## Write-ups
+
+- [How to build a fully offline RAG chatbot with Ollama, Mistral, ChromaDB and Redis](https://aliahmed.si/blog/offline-rag-chatbot-ollama/)
+- [RAG chunking strategies](https://aliahmed.si/blog/rag-chunking-strategies/)
+
+By [Ali Ahmed](https://aliahmed.si), AI engineer.
